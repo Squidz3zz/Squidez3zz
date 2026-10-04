@@ -1,6 +1,5 @@
 -- Run in Edit datamodel. Verifies the static main-menu UI tree built by studio/build_main_menu_ui.luau.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local StarterGui = game:GetService("StarterGui")
 local SoundService = game:GetService("SoundService")
 
 local menu = ReplicatedStorage:FindFirstChild("MainMenu")
@@ -74,9 +73,9 @@ assert(get("Root.Buttons.Settings").LayoutOrder == 2, "Settings.LayoutOrder must
 assert(get("Root.Buttons.Credits").LayoutOrder == 3, "Credits.LayoutOrder must be 3")
 assert(get("Root.CharacterView").BackgroundTransparency == 1, "CharacterView must be transparent")
 
--- Placeholder + moved-from-StarterGui cleanup
+-- The build script no longer touches StarterGui, so nothing is asserted about it (a ScreenGui of the developer's own
+-- there is fine).
 assert(menu:FindFirstChildWhichIsA("ImageLabel", true) == nil, "placeholder ImageLabel must be removed")
-assert(StarterGui:FindFirstChild("ScreenGui") == nil, "StarterGui.ScreenGui must be moved out")
 
 -- Music group
 local music = SoundService:FindFirstChild("Music")

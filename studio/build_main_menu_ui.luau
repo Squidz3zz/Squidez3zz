@@ -1,8 +1,10 @@
 -- One-shot build script: run in the Edit datamodel via execute_luau.
--- Moves StarterGui.ScreenGui to ReplicatedStorage.MainMenu and builds the static main-menu tree.
--- After it runs, Studio is the source of truth for the UI; this script refuses to run a second time.
+-- Builds the static main-menu tree from scratch as ReplicatedStorage.MainMenu, and creates SoundService.Music
+-- unless a Music instance is already there. It never adopts, moves or edits anything in StarterGui, so a ScreenGui
+-- of your own stays untouched.
+-- After it runs, Studio is the source of truth for the UI. The script refuses to run while ReplicatedStorage.MainMenu
+-- exists, so as a recovery baseline it only works once the live MainMenu has been deleted (or renamed).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local StarterGui = game:GetService("StarterGui")
 local SoundService = game:GetService("SoundService")
 
 if ReplicatedStorage:FindFirstChild("MainMenu") then
@@ -19,25 +21,8 @@ local WHITE = Color3.new(1, 1, 1)
 local CORNER = UDim.new(0.15, 0)
 local PILL = UDim.new(0.5, 0)
 
--- Adopt the user's existing placeholder UI where there is one, otherwise build fresh.
-local gui = StarterGui:FindFirstChild("ScreenGui") or Instance.new("ScreenGui")
-local root = gui:FindFirstChild("Frame") or Instance.new("Frame")
-local title = root:FindFirstChildWhichIsA("TextLabel")
-local placeholderButtons = {}
-for _, child in root:GetChildren() do
-	if child:IsA("ImageLabel") then
-		child:Destroy()
-	elseif child:IsA("TextButton") then
-		table.insert(placeholderButtons, child)
-	end
-end
--- Top-to-bottom order of the user's placeholder buttons becomes Play / Settings / Credits.
-table.sort(placeholderButtons, function(a, b)
-	return a.Position.Y.Scale < b.Position.Y.Scale
-end)
-
--- One font for the whole menu: the Title's existing font (new text objects default to Legacy).
-local FONT = if title then title.Font else Enum.Font.SourceSans
+-- One font for the whole menu (new text objects default to Legacy).
+local FONT = Enum.Font.SourceSans
 
 local function apply(inst, props, parent)
 	for key, value in props do
@@ -53,9 +38,8 @@ local function make(className, props, parent)
 	return apply(Instance.new(className), props, parent)
 end
 
--- inst may be an existing TextLabel to adopt; pass nil to create one.
-local function label(inst, props, parent)
-	inst = inst or Instance.new("TextLabel")
+local function label(props, parent)
+	local inst = Instance.new("TextLabel")
 	inst.BackgroundTransparency = 1
 	inst.BorderSizePixel = 0
 	inst.Font = FONT
@@ -64,9 +48,8 @@ local function label(inst, props, parent)
 	return apply(inst, props, parent)
 end
 
--- inst may be an existing TextButton to adopt; pass nil to create one.
-local function button(inst, props, parent)
-	inst = inst or Instance.new("TextButton")
+local function button(props, parent)
+	local inst = Instance.new("TextButton")
 	inst.BackgroundColor3 = PANEL_COLOR
 	inst.BackgroundTransparency = PANEL_TRANSPARENCY
 	inst.BorderSizePixel = 0
@@ -78,14 +61,14 @@ local function button(inst, props, parent)
 	return inst
 end
 
-apply(gui, {
+local gui = make("ScreenGui", {
 	ResetOnSpawn = false,
 	IgnoreGuiInset = true,
 	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	DisplayOrder = 10,
 })
 
-apply(root, {
+local root = make("Frame", {
 	Name = "Root",
 	Position = UDim2.fromScale(0, 0),
 	Size = UDim2.fromScale(1, 1),
@@ -94,7 +77,7 @@ apply(root, {
 }, gui)
 
 -- Title
-label(title, {
+label({
 	Name = "Title",
 	Text = "GAME TITLE",
 	TextXAlignment = Enum.TextXAlignment.Left,
@@ -117,7 +100,7 @@ make("UIListLayout", {
 	Padding = UDim.new(0.05, 0),
 }, buttons)
 for index, name in { "Play", "Settings", "Credits" } do
-	button(placeholderButtons[index], {
+	button({
 		Name = name,
 		Text = name,
 		LayoutOrder = index,
@@ -153,7 +136,7 @@ local function makePanel(name, headerText)
 		ZIndex = 5,
 	}, root)
 	make("UICorner", { CornerRadius = CORNER }, panel)
-	label(nil, {
+	label({
 		Name = "Header",
 		Text = headerText,
 		TextXAlignment = Enum.TextXAlignment.Left,
@@ -161,7 +144,7 @@ local function makePanel(name, headerText)
 		Size = UDim2.fromScale(0.8, 0.18),
 	}, panel)
 	-- Square, and at least 40px on a phone in landscape (0.12 of the panel width is about 40px at 844x390).
-	local close = button(nil, {
+	local close = button({
 		Name = "Close",
 		Text = "X",
 		AnchorPoint = Vector2.new(1, 0),
@@ -173,7 +156,7 @@ local function makePanel(name, headerText)
 end
 
 local settingsPanel = makePanel("SettingsPanel", "Settings")
-label(nil, {
+label({
 	Name = "MusicLabel",
 	Text = "Music Volume",
 	TextXAlignment = Enum.TextXAlignment.Left,
@@ -208,7 +191,7 @@ make("UICorner", { CornerRadius = PILL }, knob)
 make("UIAspectRatioConstraint", { AspectRatio = 1 }, knob)
 
 local creditsPanel = makePanel("CreditsPanel", "Credits")
-label(nil, {
+label({
 	Name = "Body",
 	Text = "Made by YOUR NAME",
 	Position = UDim2.fromScale(0.1, 0.35),
@@ -227,7 +210,9 @@ make("Frame", {
 }, gui)
 
 -- Everything built: publish. Rename + move last so a mid-build error never leaves a half-made MainMenu.
-make("SoundGroup", { Name = "Music", Volume = 0.5 }, SoundService)
+if not SoundService:FindFirstChild("Music") then
+	make("SoundGroup", { Name = "Music", Volume = 0.5 }, SoundService)
+end
 apply(gui, { Name = "MainMenu" }, ReplicatedStorage)
 
 return "built MainMenu"
