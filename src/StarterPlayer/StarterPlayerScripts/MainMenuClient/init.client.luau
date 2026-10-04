@@ -1,6 +1,16 @@
 -- MainMenuClient: shows the main menu at join, wires the Settings/Credits panels and the Play button.
 -- The menu lives in ReplicatedStorage (not StarterGui) because the server holds players without a character
 -- until PlayPressed; it is cloned into PlayerGui here and destroyed once the player has spawned.
+--
+-- UI names this script depends on (all under ReplicatedStorage.MainMenu). Restyle anything, but keep these names:
+--   Root
+--   Root.Buttons.Play, Root.Buttons.Settings, Root.Buttons.Credits
+--   Root.SettingsPanel (with Close and Slider), Root.CreditsPanel (with Close)
+--   Root.CharacterView
+--   Fader
+-- Root.Title is never looked up, so it can be renamed or restyled freely.
+-- If the UI is broken or never appears, setup warns and the player is spawned straight away instead: nobody
+-- spawns until PlayPressed (CharacterAutoLoads is off), so a menu that cannot open must not trap the player.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -8,6 +18,7 @@ local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local FADE_TIME = 0.4
+local MENU_TIMEOUT = 10
 local CHARACTER_TIMEOUT = 10
 local AVATAR_TIMEOUT = 15
 local AVATAR_PARTS_TIMEOUT = 10
@@ -35,13 +46,8 @@ local ButtonEffects = loadModule("ButtonEffects")
 local CharacterPreview = loadModule("CharacterPreview")
 local VolumeSlider = loadModule("VolumeSlider")
 
-local menu = ReplicatedStorage:WaitForChild("MainMenu"):Clone()
-local root = menu.Root
-local fader = menu.Fader
-local panels = {
-	Settings = root.SettingsPanel,
-	Credits = root.CreditsPanel,
-}
+-- Set by setupMenu.
+local menu, root, fader, panels
 
 local playing = false
 
@@ -129,45 +135,70 @@ local function play()
 	return true
 end
 
-root.Buttons.Play.Activated:Connect(play)
-root.Buttons.Settings.Activated:Connect(function()
-	openPanel("Settings")
-end)
-root.Buttons.Credits.Activated:Connect(function()
-	openPanel("Credits")
-end)
-root.SettingsPanel.Close.Activated:Connect(closePanels)
-root.CreditsPanel.Close.Activated:Connect(closePanels)
-
-if ButtonEffects then
-	local buttons = {
-		root.Buttons.Play,
-		root.Buttons.Settings,
-		root.Buttons.Credits,
-		root.SettingsPanel.Close,
-		root.CreditsPanel.Close,
+-- Clones the menu, wires it up and shows it. Throws if the UI tree is not what this script expects.
+local function setupMenu()
+	local template = ReplicatedStorage:WaitForChild("MainMenu", MENU_TIMEOUT)
+	assert(template, "ReplicatedStorage.MainMenu did not appear within " .. MENU_TIMEOUT .. "s")
+	menu = template:Clone()
+	root = menu.Root
+	fader = menu.Fader
+	panels = {
+		Settings = root.SettingsPanel,
+		Credits = root.CreditsPanel,
 	}
-	-- Guarded: a failing effect must never keep the menu from opening (and the player from spawning).
-	for _, button in buttons do
-		local ok, err = pcall(ButtonEffects.attach, button)
-		if not ok then
-			warn("MainMenuClient: ButtonEffects.attach failed for " .. button.Name .. ": " .. tostring(err))
+
+	root.Buttons.Play.Activated:Connect(play)
+	root.Buttons.Settings.Activated:Connect(function()
+		openPanel("Settings")
+	end)
+	root.Buttons.Credits.Activated:Connect(function()
+		openPanel("Credits")
+	end)
+	root.SettingsPanel.Close.Activated:Connect(closePanels)
+	root.CreditsPanel.Close.Activated:Connect(closePanels)
+
+	if ButtonEffects then
+		local buttons = {
+			root.Buttons.Play,
+			root.Buttons.Settings,
+			root.Buttons.Credits,
+			root.SettingsPanel.Close,
+			root.CreditsPanel.Close,
+		}
+		-- Guarded: a failing effect must never keep the menu from opening (and the player from spawning).
+		for _, button in buttons do
+			local ok, err = pcall(ButtonEffects.attach, button)
+			if not ok then
+				warn("MainMenuClient: ButtonEffects.attach failed for " .. button.Name .. ": " .. tostring(err))
+			end
 		end
 	end
-end
 
--- Guarded like ButtonEffects: a broken slider must never keep the menu from opening.
-if VolumeSlider then
-	local ok, err = pcall(function()
-		VolumeSlider.attach(root.SettingsPanel.Slider, SoundService.Music)
-	end)
-	if not ok then
-		warn("MainMenuClient: VolumeSlider.attach failed: " .. tostring(err))
+	-- Guarded like ButtonEffects: a broken slider must never keep the menu from opening.
+	if VolumeSlider then
+		local ok, err = pcall(function()
+			VolumeSlider.attach(root.SettingsPanel.Slider, SoundService.Music)
+		end)
+		if not ok then
+			warn("MainMenuClient: VolumeSlider.attach failed: " .. tostring(err))
+		end
 	end
+
+	menu.Parent = playerGui
+	playerGui:SetAttribute("MenuOpen", true)
 end
 
-menu.Parent = playerGui
-playerGui:SetAttribute("MenuOpen", true)
+local setupOk, setupError = pcall(setupMenu)
+if not setupOk then
+	warn("MainMenuClient: the menu could not be set up (" .. tostring(setupError) .. "); spawning without it")
+	-- setupMenu parents the menu last, but never leave a half-built one on screen.
+	if menu then
+		menu:Destroy()
+	end
+	playerGui:SetAttribute("MenuOpen", false)
+	playPressed:FireServer()
+	return
+end
 
 if MenuCamera then
 	local ok, err = pcall(MenuCamera.start)
