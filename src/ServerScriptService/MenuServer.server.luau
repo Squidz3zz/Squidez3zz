@@ -102,7 +102,11 @@ local function onPlayPressed(player)
 	sessions[userId] = "playing"
 	destroyAvatar(userId)
 	wireRespawn(player)
-	player:LoadCharacter()
+	-- The latch above stays set even if this fails, so a repeated PlayPressed cannot spawn twice.
+	local ok, err = pcall(player.LoadCharacter, player)
+	if not ok then
+		warn("MenuServer: LoadCharacter failed for " .. player.Name .. ": " .. tostring(err))
+	end
 end
 
 local function onPlayerAdded(player)
