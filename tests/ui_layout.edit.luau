@@ -63,6 +63,9 @@ assert(get("Root.SettingsPanel").Visible == false, "SettingsPanel must start hid
 assert(get("Root.CreditsPanel").Visible == false, "CreditsPanel must start hidden")
 assert(get("Fader").BackgroundTransparency == 1, "Fader must start transparent")
 assert(get("Fader").ZIndex == 100, "Fader.ZIndex must be 100")
+assert(get("Root.SettingsPanel").ZIndex == 5, "SettingsPanel.ZIndex must be 5 (above CharacterView)")
+assert(get("Root.CreditsPanel").ZIndex == 5, "CreditsPanel.ZIndex must be 5 (above CharacterView)")
+assert(get("Root.CharacterView").ZIndex < 5, "CharacterView must sit below the panels")
 
 -- Layout structure (text and fonts are deliberately not asserted: Studio is the source of truth and gets restyled)
 assert(get("Root.Buttons.UIListLayout").FillDirection == Enum.FillDirection.Vertical, "Buttons layout must be vertical")

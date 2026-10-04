@@ -148,6 +148,9 @@ local function makePanel(name, headerText)
 		BackgroundColor3 = PANEL_COLOR,
 		BackgroundTransparency = PANEL_TRANSPARENCY,
 		BorderSizePixel = 0,
+		-- Above CharacterView (ZIndex 1, and it overlaps the panels), so an open panel is never drawn under the avatar.
+		-- The panel's children still draw on top of it: ZIndexBehavior is Sibling.
+		ZIndex = 5,
 	}, root)
 	make("UICorner", { CornerRadius = CORNER }, panel)
 	label(nil, {
