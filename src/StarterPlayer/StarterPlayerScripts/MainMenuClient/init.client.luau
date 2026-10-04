@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 
 local FADE_TIME = 0.4
 local CHARACTER_TIMEOUT = 10
+local AVATAR_TIMEOUT = 15
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -29,6 +30,7 @@ end
 
 local MenuCamera = loadModule("MenuCamera")
 local ButtonEffects = loadModule("ButtonEffects")
+local CharacterPreview = loadModule("CharacterPreview")
 
 local menu = ReplicatedStorage:WaitForChild("MainMenu"):Clone()
 local root = menu.Root
@@ -142,6 +144,23 @@ end
 
 menu.Parent = playerGui
 playerGui:SetAttribute("MenuOpen", true)
+
+-- The server builds the avatar a few seconds after join (web calls), so it is shown whenever it arrives.
+-- Its own thread, and guarded: a slow or broken preview must never delay the menu or the Play path.
+if CharacterPreview then
+	task.spawn(function()
+		local avatars = ReplicatedStorage:WaitForChild("MenuAvatars", AVATAR_TIMEOUT)
+		local avatar = avatars and avatars:WaitForChild(tostring(player.UserId), AVATAR_TIMEOUT)
+		-- Play may have destroyed the menu while waiting.
+		if not avatar or not root:IsDescendantOf(playerGui) then
+			return
+		end
+		local ok, err = pcall(CharacterPreview.show, root.CharacterView, avatar)
+		if not ok then
+			warn("MainMenuClient: CharacterPreview.show failed: " .. tostring(err))
+		end
+	end)
+end
 
 if RunService:IsStudio() then
 	-- Test hook for tests/menu_client.client.luau (execute_luau cannot reach this script's locals).
