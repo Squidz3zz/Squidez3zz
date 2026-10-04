@@ -24,6 +24,7 @@ local MENU_TIMEOUT = 10
 local CHARACTER_TIMEOUT = 10
 local AVATAR_TIMEOUT = 15
 local AVATAR_PARTS_TIMEOUT = 10
+local AVATAR_DESCENDANTS_TIMEOUT = 5
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -216,6 +217,28 @@ if MenuCamera then
 	end
 end
 
+-- Waits until the client copy of `model` has as many descendants as the server counted just before it parented the
+-- model (the DescendantCount attribute), i.e. every part has replicated, or until `timeout` seconds pass.
+-- A timeout (or a missing attribute) just returns: a slightly incomplete avatar beats none.
+local function waitForDescendants(model, timeout)
+	local expected = model:GetAttribute("DescendantCount")
+	if type(expected) ~= "number" then
+		return true
+	end
+	local deadline = os.clock() + timeout
+	while #model:GetDescendants() < expected do
+		if os.clock() >= deadline then
+			return false
+		end
+		-- Play may have destroyed the menu while waiting.
+		if not root:IsDescendantOf(playerGui) then
+			return true
+		end
+		task.wait(0.1)
+	end
+	return true
+end
+
 -- The server builds the avatar a few seconds after join (web calls), so it is shown whenever it arrives.
 -- Its own thread, and guarded: a slow or broken preview must never delay the menu or the Play path.
 if CharacterPreview then
@@ -232,6 +255,13 @@ if CharacterPreview then
 		then
 			warn("MainMenuClient: avatar never got its Humanoid / HumanoidRootPart; skipping the preview")
 			return
+		end
+		-- Humanoid and root part are not enough: show() clones the whole model, so wait for the rest of it too.
+		local waited, complete = pcall(waitForDescendants, avatar, AVATAR_DESCENDANTS_TIMEOUT)
+		if not waited then
+			warn("MainMenuClient: waiting for the avatar's parts failed: " .. tostring(complete))
+		elseif not complete then
+			warn("MainMenuClient: avatar still incomplete after " .. AVATAR_DESCENDANTS_TIMEOUT .. "s; showing it anyway")
 		end
 		-- Play may have destroyed the menu while waiting.
 		if not root:IsDescendantOf(playerGui) then

@@ -63,6 +63,8 @@ local function buildAvatar(player)
 		return
 	end
 	model.Name = tostring(userId)
+	-- Lets the client wait until every part has replicated before it clones the model (see MainMenuClient).
+	model:SetAttribute("DescendantCount", #model:GetDescendants())
 	model.Parent = menuAvatars
 end
 
