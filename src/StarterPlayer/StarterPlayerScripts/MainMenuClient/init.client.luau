@@ -10,6 +10,7 @@ local TweenService = game:GetService("TweenService")
 local FADE_TIME = 0.4
 local CHARACTER_TIMEOUT = 10
 local AVATAR_TIMEOUT = 15
+local AVATAR_PARTS_TIMEOUT = 10
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -174,8 +175,19 @@ if CharacterPreview then
 	task.spawn(function()
 		local avatars = ReplicatedStorage:WaitForChild("MenuAvatars", AVATAR_TIMEOUT)
 		local avatar = avatars and avatars:WaitForChild(tostring(player.UserId), AVATAR_TIMEOUT)
+		if not avatar then
+			return
+		end
+		-- The model can appear before its children have replicated; show() needs both of these.
+		if
+			not avatar:WaitForChild("Humanoid", AVATAR_PARTS_TIMEOUT)
+			or not avatar:WaitForChild("HumanoidRootPart", AVATAR_PARTS_TIMEOUT)
+		then
+			warn("MainMenuClient: avatar never got its Humanoid / HumanoidRootPart; skipping the preview")
+			return
+		end
 		-- Play may have destroyed the menu while waiting.
-		if not avatar or not root:IsDescendantOf(playerGui) then
+		if not root:IsDescendantOf(playerGui) then
 			return
 		end
 		local ok, err = pcall(CharacterPreview.show, root.CharacterView, avatar)
