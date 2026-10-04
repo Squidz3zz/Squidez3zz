@@ -19,17 +19,16 @@ end
 local playPressed = getOrCreate("RemoteEvent", "PlayPressed")
 local menuAvatars = getOrCreate("Folder", "MenuAvatars")
 
--- Where the menu camera orbits: an anchored Part named MenuCameraFocus in Workspace, if there is one, else the origin.
--- Published as the Workspace attribute MenuCameraFocus (a Vector3) because the part itself may not have streamed to
--- a client yet (StreamingEnabled); attributes replicate with Workspace, so MenuCamera can read it without waiting.
-local focusPart = workspace:FindFirstChild("MenuCameraFocus")
-if focusPart and focusPart:IsA("BasePart") then
-	workspace:SetAttribute("MenuCameraFocus", focusPart.Position)
+-- Where the menu camera sits: an anchored Part named MenuCameraShot in Workspace, if there is one, else the client's
+-- default angle. Published as the Workspace attribute MenuCameraShot (the part's CFrame, because the camera needs the
+-- part's orientation as well as its position) since the part itself may not have streamed to a client yet
+-- (StreamingEnabled); attributes replicate with Workspace, so MenuCamera can read it without waiting.
+local shotPart = workspace:FindFirstChild("MenuCameraShot")
+if shotPart and shotPart:IsA("BasePart") then
+	workspace:SetAttribute("MenuCameraShot", shotPart.CFrame)
 end
-local focusPosition = workspace:GetAttribute("MenuCameraFocus")
-if typeof(focusPosition) ~= "Vector3" then
-	focusPosition = Vector3.zero
-end
+local shotCFrame = workspace:GetAttribute("MenuCameraShot")
+local shotPosition = if typeof(shotCFrame) == "CFrame" then shotCFrame.Position else Vector3.zero
 
 -- userId -> "menu" (waiting on the menu) or "playing" (Play was pressed). nil once the player is gone.
 local sessions = {}
@@ -125,7 +124,7 @@ local function onPlayerAdded(player)
 	sessions[player.UserId] = "menu"
 	-- A player without a character streams nothing, so ask for the area the menu camera shows. Its own thread: it
 	-- yields while content streams and must not hold up the avatar build. Errors (StreamingEnabled off) are ignored.
-	task.spawn(pcall, player.RequestStreamAroundAsync, player, focusPosition)
+	task.spawn(pcall, player.RequestStreamAroundAsync, player, shotPosition)
 	buildAvatar(player)
 end
 

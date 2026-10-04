@@ -44,6 +44,8 @@ local function loadModule(name)
 	return result
 end
 
+-- MenuCamera requires MenuSettings itself; loading it here first makes a broken MenuSettings warn at join.
+loadModule("MenuSettings")
 local MenuCamera = loadModule("MenuCamera")
 local ButtonEffects = loadModule("ButtonEffects")
 local CharacterPreview = loadModule("CharacterPreview")
