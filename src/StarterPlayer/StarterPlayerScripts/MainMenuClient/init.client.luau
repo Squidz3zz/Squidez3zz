@@ -131,8 +131,12 @@ if ButtonEffects then
 		root.SettingsPanel.Close,
 		root.CreditsPanel.Close,
 	}
+	-- Guarded: a failing effect must never keep the menu from opening (and the player from spawning).
 	for _, button in buttons do
-		ButtonEffects.attach(button)
+		local ok, err = pcall(ButtonEffects.attach, button)
+		if not ok then
+			warn("MainMenuClient: ButtonEffects.attach failed for " .. button.Name .. ": " .. tostring(err))
+		end
 	end
 end
 
