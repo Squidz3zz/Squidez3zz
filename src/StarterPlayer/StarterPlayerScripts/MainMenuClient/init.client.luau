@@ -11,11 +11,13 @@
 -- Root.Title is never looked up, so it can be renamed or restyled freely.
 -- If the UI is broken or never appears, setup warns and the player is spawned straight away instead: nobody
 -- spawns until PlayPressed (CharacterAutoLoads is off), so a menu that cannot open must not trap the player.
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local FADE_TIME = 0.4
 local MENU_TIMEOUT = 10
@@ -102,6 +104,7 @@ end
 
 local function runPlay()
 	closePanels()
+	GuiService.SelectedObject = nil
 	local fadeIn = fadeTo(0)
 	-- Guarded: a throw here must never stop the Play press from reaching the server.
 	if MenuCamera then
@@ -198,6 +201,12 @@ if not setupOk then
 	playerGui:SetAttribute("MenuOpen", false)
 	playPressed:FireServer()
 	return
+end
+
+-- Gamepad players have no cursor, so start them on Play (ButtonEffects pops it, so it shows as focused).
+-- runPlay clears the selection again.
+if UserInputService.GamepadEnabled then
+	GuiService.SelectedObject = root.Buttons.Play
 end
 
 if MenuCamera then
