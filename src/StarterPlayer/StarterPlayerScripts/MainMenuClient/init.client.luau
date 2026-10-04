@@ -28,6 +28,7 @@ local function loadModule(name)
 end
 
 local MenuCamera = loadModule("MenuCamera")
+local ButtonEffects = loadModule("ButtonEffects")
 
 local menu = ReplicatedStorage:WaitForChild("MainMenu"):Clone()
 local root = menu.Root
@@ -121,6 +122,19 @@ root.Buttons.Credits.Activated:Connect(function()
 end)
 root.SettingsPanel.Close.Activated:Connect(closePanels)
 root.CreditsPanel.Close.Activated:Connect(closePanels)
+
+if ButtonEffects then
+	local buttons = {
+		root.Buttons.Play,
+		root.Buttons.Settings,
+		root.Buttons.Credits,
+		root.SettingsPanel.Close,
+		root.CreditsPanel.Close,
+	}
+	for _, button in buttons do
+		ButtonEffects.attach(button)
+	end
+end
 
 menu.Parent = playerGui
 playerGui:SetAttribute("MenuOpen", true)
