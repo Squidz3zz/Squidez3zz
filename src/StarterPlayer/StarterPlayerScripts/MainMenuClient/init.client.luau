@@ -49,6 +49,13 @@ local function closePanels()
 	for _, panel in panels do
 		panel.Visible = false
 	end
+	-- A hidden button may never get its MouseLeave / touch-up, so reset the Close buttons here or they would
+	-- reopen still popped. Guarded: a missing or broken ButtonEffects must never stop the panels closing.
+	if ButtonEffects then
+		for _, panel in panels do
+			pcall(ButtonEffects.setState, panel.Close, "idle")
+		end
+	end
 end
 
 -- Opening a panel closes the other one.
