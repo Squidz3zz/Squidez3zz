@@ -58,8 +58,9 @@ assert(blur and blur:IsA("BlurEffect"), "Lighting.MenuBlur (BlurEffect) missing"
 assert(near(blur.Size, 16, 0.01), "MenuBlur.Size should be 16, got " .. blur.Size)
 assert(blur.Enabled, "MenuBlur should be enabled")
 
-local focusPart = workspace:FindFirstChild("MenuCameraFocus")
-local focus = if focusPart and focusPart:IsA("BasePart") then focusPart.Position else Vector3.zero
+-- The orbit centre is published by MenuServer as a Workspace attribute (see MenuCamera); the origin when unset.
+local focusAttribute = workspace:GetAttribute("MenuCameraFocus")
+local focus = if typeof(focusAttribute) == "Vector3" then focusAttribute else Vector3.zero
 
 local function orbitSample()
 	local position = camera.CFrame.Position

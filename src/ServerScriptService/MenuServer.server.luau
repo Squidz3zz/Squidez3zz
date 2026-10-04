@@ -19,6 +19,18 @@ end
 local playPressed = getOrCreate("RemoteEvent", "PlayPressed")
 local menuAvatars = getOrCreate("Folder", "MenuAvatars")
 
+-- Where the menu camera orbits: an anchored Part named MenuCameraFocus in Workspace, if there is one, else the origin.
+-- Published as the Workspace attribute MenuCameraFocus (a Vector3) because the part itself may not have streamed to
+-- a client yet (StreamingEnabled); attributes replicate with Workspace, so MenuCamera can read it without waiting.
+local focusPart = workspace:FindFirstChild("MenuCameraFocus")
+if focusPart and focusPart:IsA("BasePart") then
+	workspace:SetAttribute("MenuCameraFocus", focusPart.Position)
+end
+local focusPosition = workspace:GetAttribute("MenuCameraFocus")
+if typeof(focusPosition) ~= "Vector3" then
+	focusPosition = Vector3.zero
+end
+
 -- userId -> "menu" (waiting on the menu) or "playing" (Play was pressed). nil once the player is gone.
 local sessions = {}
 
@@ -111,6 +123,9 @@ end
 
 local function onPlayerAdded(player)
 	sessions[player.UserId] = "menu"
+	-- A player without a character streams nothing, so ask for the area the menu camera shows. Its own thread: it
+	-- yields while content streams and must not hold up the avatar build. Errors (StreamingEnabled off) are ignored.
+	task.spawn(pcall, player.RequestStreamAroundAsync, player, focusPosition)
 	buildAvatar(player)
 end
 

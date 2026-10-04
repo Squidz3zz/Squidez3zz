@@ -1,6 +1,11 @@
 -- MenuCamera: the slowly orbiting, blurred camera behind the main menu.
 -- start() takes over the camera and adds a BlurEffect to Lighting; stop() gives the camera back and fades the blur out.
 -- stop() never yields: it is on the Play path, which must not wait for the fade.
+--
+-- Where it orbits: add an anchored Part named MenuCameraFocus to Workspace and the camera circles that part's position;
+-- without one it circles the origin. MenuServer reads the part at startup and publishes its position as the Workspace
+-- attribute MenuCameraFocus, which is what this module reads (the part itself may not be streamed in yet, because
+-- StreamingEnabled is on), so move the part in Studio, not while the game runs.
 local Lighting = game:GetService("Lighting")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -24,8 +29,9 @@ function MenuCamera.start()
 	local camera = workspace.CurrentCamera
 	assert(camera, "MenuCamera.start: workspace.CurrentCamera is missing")
 
-	local focusPart = workspace:FindFirstChild("MenuCameraFocus")
-	local focus = if focusPart and focusPart:IsA("BasePart") then focusPart.Position else Vector3.zero
+	-- Never yields: the menu must open at once, even if the server has not published a focus point.
+	local focusAttribute = workspace:GetAttribute("MenuCameraFocus")
+	local focus = if typeof(focusAttribute) == "Vector3" then focusAttribute else Vector3.zero
 
 	-- A blur left over from an earlier run (still fading out) must not linger beside the new one.
 	local oldBlur = Lighting:FindFirstChild("MenuBlur")
