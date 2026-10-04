@@ -4,6 +4,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 
 local FADE_TIME = 0.4
@@ -31,6 +32,7 @@ end
 local MenuCamera = loadModule("MenuCamera")
 local ButtonEffects = loadModule("ButtonEffects")
 local CharacterPreview = loadModule("CharacterPreview")
+local VolumeSlider = loadModule("VolumeSlider")
 
 local menu = ReplicatedStorage:WaitForChild("MainMenu"):Clone()
 local root = menu.Root
@@ -87,8 +89,12 @@ end
 local function runPlay()
 	closePanels()
 	local fadeIn = fadeTo(0)
+	-- Guarded: a throw here must never stop the Play press from reaching the server.
 	if MenuCamera then
-		MenuCamera.stop()
+		local ok, err = pcall(MenuCamera.stop)
+		if not ok then
+			warn("MainMenuClient: MenuCamera.stop failed: " .. tostring(err))
+		end
 	end
 	playPressed:FireServer()
 
@@ -142,8 +148,25 @@ if ButtonEffects then
 	end
 end
 
+-- Guarded like ButtonEffects: a broken slider must never keep the menu from opening.
+if VolumeSlider then
+	local ok, err = pcall(function()
+		VolumeSlider.attach(root.SettingsPanel.Slider, SoundService.Music)
+	end)
+	if not ok then
+		warn("MainMenuClient: VolumeSlider.attach failed: " .. tostring(err))
+	end
+end
+
 menu.Parent = playerGui
 playerGui:SetAttribute("MenuOpen", true)
+
+if MenuCamera then
+	local ok, err = pcall(MenuCamera.start)
+	if not ok then
+		warn("MainMenuClient: MenuCamera.start failed: " .. tostring(err))
+	end
+end
 
 -- The server builds the avatar a few seconds after join (web calls), so it is shown whenever it arrives.
 -- Its own thread, and guarded: a slow or broken preview must never delay the menu or the Play path.
