@@ -4,17 +4,24 @@
 -- reflows to the Frame. At each size it reads the rectangles of Title, Buttons and CharacterView and checks that
 --   * they stay inside the screen and do not overlap each other,
 --   * the Play / Settings / Credits buttons are at least MIN_BUTTON_SIZE px tall and wide, stay inside their
---     Buttons frame and do not overlap each other.
+--     Buttons frame and do not overlap each other,
+--   * the Close button of the Settings and Credits panels (each made Visible in the clone, they start hidden) is at
+--     least MIN_BUTTON_SIZE px tall and wide and stays inside its panel,
+--   * on the landscape phone, the Title starts below Roblox's topbar (where the menu and chat icons sit).
 -- Asserted: phone landscape (844x390, an iPhone 14) and the current window. Portrait (390x844) is only reported
 -- (printed), because Roblox phones play in landscape.
 -- KEEP = true leaves the landscape simulation on screen for a screen_capture; run again with KEEP = false to clean up.
 local KEEP = false
 
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MIN_BUTTON_SIZE = 40
 local EPSILON = 0.5 -- px of rounding slack
+-- Bottom of the topbar band on a phone in landscape, in px. GuiService.TopbarInset describes the real window (the
+-- simulated frame has no topbar of its own), so the Title must clear whichever of the two is larger.
+local PHONE_TOPBAR_BOTTOM = 58
 
 local TEST_GUI_NAME = "PhoneLayoutTest"
 
@@ -47,8 +54,11 @@ local function describe(rect)
 	return ("(%.0f,%.0f %.0fx%.0f)"):format(rect.x, rect.y, rect.w, rect.h)
 end
 
+local PANEL_NAMES = { "SettingsPanel", "CreditsPanel" }
+
 -- Builds the simulated screen, measures it and returns { problems = {string}, details = string }.
-local function measure(label, size, keep)
+-- checkTopbar: also require the Title to start below the topbar.
+local function measure(label, size, keep, checkTopbar)
 	local gui = Instance.new("ScreenGui")
 	gui.Name = TEST_GUI_NAME
 	gui.ResetOnSpawn = false
@@ -61,6 +71,13 @@ local function measure(label, size, keep)
 	screen.BorderSizePixel = 0
 	screen.Parent = gui
 	local root = template.Root:Clone()
+	-- The panels start hidden; show them so their Close buttons get a layout to measure.
+	for _, panelName in PANEL_NAMES do
+		local panel = root:FindFirstChild(panelName)
+		if panel then
+			panel.Visible = true
+		end
+	end
 	root.Parent = screen
 	gui.Parent = playerGui
 
@@ -106,6 +123,14 @@ local function measure(label, size, keep)
 		end
 	end
 
+	if checkTopbar and rects.Title then
+		local minTop = math.max(GuiService.TopbarInset.Height, PHONE_TOPBAR_BOTTOM)
+		table.insert(details, ("Title top %.0f (topbar band ends at %.0f)"):format(rects.Title.y, minTop))
+		if rects.Title.y < minTop - EPSILON then
+			table.insert(problems, ("Title top %.0f is inside the topbar band, which ends at %.0f"):format(rects.Title.y, minTop))
+		end
+	end
+
 	local buttonNames = { "Play", "Settings", "Credits" }
 	local buttonRects = {}
 	for _, name in buttonNames do
@@ -133,6 +158,26 @@ local function measure(label, size, keep)
 		end
 	end
 
+	for _, panelName in PANEL_NAMES do
+		local panel = root:FindFirstChild(panelName)
+		local close = panel and panel:FindFirstChild("Close")
+		if not close then
+			table.insert(problems, panelName .. ".Close missing")
+		else
+			local rect = rectOf(close)
+			table.insert(details, panelName .. ".Close " .. describe(rect))
+			if rect.h < MIN_BUTTON_SIZE or rect.w < MIN_BUTTON_SIZE then
+				table.insert(
+					problems,
+					("%s.Close is %.0fx%.0f px, under the %d px tap target"):format(panelName, rect.w, rect.h, MIN_BUTTON_SIZE)
+				)
+			end
+			if not inside(rect, rectOf(panel)) then
+				table.insert(problems, panelName .. ".Close " .. describe(rect) .. " spills out of " .. panelName)
+			end
+		end
+	end
+
 	if not keep then
 		gui:Destroy()
 	end
@@ -142,9 +187,9 @@ local function measure(label, size, keep)
 	}
 end
 
-local landscape = measure("landscape 844x390", UDim2.fromOffset(844, 390), KEEP)
-local window = measure("current window", UDim2.fromScale(1, 1), false)
-local portrait = measure("portrait 390x844", UDim2.fromOffset(390, 844), false)
+local landscape = measure("landscape 844x390", UDim2.fromOffset(844, 390), KEEP, true)
+local window = measure("current window", UDim2.fromScale(1, 1), false, false)
+local portrait = measure("portrait 390x844", UDim2.fromOffset(390, 844), false, false)
 
 print("phone_layout: " .. landscape.details)
 print("phone_layout: " .. window.details)

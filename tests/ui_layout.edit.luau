@@ -29,10 +29,12 @@ local EXPECTED = {
 	{ "Root.SettingsPanel.Slider.Fill", "Frame" },
 	{ "Root.SettingsPanel.Slider.Knob", "Frame" },
 	{ "Root.SettingsPanel.Close", "TextButton" },
+	{ "Root.SettingsPanel.Close.UIAspectRatioConstraint", "UIAspectRatioConstraint" },
 	{ "Root.CreditsPanel", "Frame" },
 	{ "Root.CreditsPanel.Header", "TextLabel" },
 	{ "Root.CreditsPanel.Body", "TextLabel" },
 	{ "Root.CreditsPanel.Close", "TextButton" },
+	{ "Root.CreditsPanel.Close.UIAspectRatioConstraint", "UIAspectRatioConstraint" },
 	{ "Fader", "Frame" },
 }
 

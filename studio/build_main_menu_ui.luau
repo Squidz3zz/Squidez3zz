@@ -98,14 +98,15 @@ label(title, {
 	Name = "Title",
 	Text = "GAME TITLE",
 	TextXAlignment = Enum.TextXAlignment.Left,
-	Position = UDim2.fromScale(0.05, 0.08),
+	-- Y 0.15 keeps the Title below Roblox's topbar (menu / chat icons) on phones in landscape (about 58pt at 844x390).
+	Position = UDim2.fromScale(0.05, 0.15),
 	Size = UDim2.fromScale(0.45, 0.12),
 }, root)
 
 -- Menu buttons
 local buttons = make("Frame", {
 	Name = "Buttons",
-	Position = UDim2.fromScale(0.05, 0.26),
+	Position = UDim2.fromScale(0.05, 0.30),
 	Size = UDim2.fromScale(0.28, 0.42),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
@@ -156,13 +157,15 @@ local function makePanel(name, headerText)
 		Position = UDim2.fromScale(0.05, 0.05),
 		Size = UDim2.fromScale(0.8, 0.18),
 	}, panel)
-	button(nil, {
+	-- Square, and at least 40px on a phone in landscape (0.12 of the panel width is about 40px at 844x390).
+	local close = button(nil, {
 		Name = "Close",
 		Text = "X",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.fromScale(0.97, 0.03),
-		Size = UDim2.fromScale(0.1, 0.16),
+		Size = UDim2.fromScale(0.12, 0.28),
 	}, panel)
+	make("UIAspectRatioConstraint", { AspectRatio = 1 }, close)
 	return panel
 end
 
