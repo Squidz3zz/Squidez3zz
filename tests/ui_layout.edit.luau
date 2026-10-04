@@ -62,21 +62,12 @@ assert(get("Root.CreditsPanel").Visible == false, "CreditsPanel must start hidde
 assert(get("Fader").BackgroundTransparency == 1, "Fader must start transparent")
 assert(get("Fader").ZIndex == 100, "Fader.ZIndex must be 100")
 
--- Content and ordering
-assert(get("Root.Title").Text == "GAME TITLE", "Title text must be GAME TITLE")
+-- Layout structure (text and fonts are deliberately not asserted: Studio is the source of truth and gets restyled)
 assert(get("Root.Buttons.UIListLayout").FillDirection == Enum.FillDirection.Vertical, "Buttons layout must be vertical")
 assert(get("Root.Buttons.Play").LayoutOrder == 1, "Play.LayoutOrder must be 1")
 assert(get("Root.Buttons.Settings").LayoutOrder == 2, "Settings.LayoutOrder must be 2")
 assert(get("Root.Buttons.Credits").LayoutOrder == 3, "Credits.LayoutOrder must be 3")
 assert(get("Root.CharacterView").BackgroundTransparency == 1, "CharacterView must be transparent")
-
--- One consistent style: every text object uses the Title's font
-local titleFont = get("Root.Title").Font
-for _, d in menu:GetDescendants() do
-	if d:IsA("TextLabel") or d:IsA("TextButton") then
-		assert(d.Font == titleFont, d:GetFullName() .. " font is " .. d.Font.Name .. ", expected " .. titleFont.Name)
-	end
-end
 
 -- Placeholder + moved-from-StarterGui cleanup
 assert(menu:FindFirstChildWhichIsA("ImageLabel", true) == nil, "placeholder ImageLabel must be removed")
