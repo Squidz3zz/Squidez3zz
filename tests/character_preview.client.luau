@@ -8,6 +8,12 @@
 --        Uses the Studio-only MainMenuClient.TestHook, because execute_luau cannot reach the script's locals.
 --   "C": CharacterPreview.show returns nil, without error, when the viewport has already been destroyed.
 --        Requires the ModuleScript directly (a separate copy of the module, so it only touches the Instances passed in).
+--   "D": the avatar waves again every WAVE_INTERVAL (6 s) while the menu is showing. Over 14 s the wave plays at least
+--        twice on the real clone's Animator (counted as rising edges of "the wave is among GetPlayingAnimationTracks",
+--        polled every frame), always as the same AnimationTrack (reused, not loaded anew), never two at once, and
+--        replays start about 6 s apart.
+--   "E": after Invoke("play") the repeat loop ends quietly: once the avatar is gone, and for a full WAVE_INTERVAL
+--        after (so the loop wakes at least once with the clone destroyed), no error and no CharacterPreview warning is logged.
 local CASE = "A"
 
 local LogService = game:GetService("LogService")
@@ -17,6 +23,7 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 local AVATAR_TIMEOUT = 15
+local WAVE_INTERVAL = 6 -- mirrors CharacterPreview.WAVE_INTERVAL (a local of that module)
 
 local function waitFor(predicate, timeout)
 	local deadline = os.clock() + timeout
@@ -30,13 +37,16 @@ local function waitFor(predicate, timeout)
 	return predicate()
 end
 
--- Counts MessageError entries from now on.
+-- Counts MessageError entries from now on, and keeps the warnings that come from CharacterPreview.
 local errorCount = 0
 local errorLog = {}
+local previewWarnings = {}
 local logConnection = LogService.MessageOut:Connect(function(message, messageType)
 	if messageType == Enum.MessageType.MessageError then
 		errorCount += 1
 		table.insert(errorLog, message)
+	elseif messageType == Enum.MessageType.MessageWarning and message:find("CharacterPreview", 1, true) then
+		table.insert(previewWarnings, message)
 	end
 end)
 
@@ -204,6 +214,94 @@ elseif CASE == "C" then
 	assert(ok, "show threw on a destroyed viewport: " .. tostring(result))
 	assert(result == nil, "show should return nil for a destroyed viewport")
 	assert(errorCount == 0, "errors while calling show: " .. table.concat(errorLog, " | "))
+elseif CASE == "D" then
+	assert(player.Character == nil, "player already has a character; run this in a fresh playtest")
+
+	local model = waitFor(function()
+		return worldModel:FindFirstChildOfClass("Model")
+	end, AVATAR_TIMEOUT)
+	assert(model, "no model in WorldModel")
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	assert(humanoid, "preview model has no Humanoid")
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	assert(animator, "preview Humanoid has no Animator")
+	local waveId = if humanoid.RigType == Enum.HumanoidRigType.R15 then "507770239" else "128777973"
+
+	-- The wave track playing on the clone's Animator (nil if none), and how many wave tracks are playing. The engine
+	-- rewrites an Animation's AnimationId ("rbxassetid://N" reads back as "http://www.roblox.com/asset/?id=N"), so compare
+	-- the number.
+	local function playingWave()
+		local found, count = nil, 0
+		for _, track in animator:GetPlayingAnimationTracks() do
+			if track.Animation and track.Animation.AnimationId:match("%d+$") == waveId then
+				found, count = track, count + 1
+			end
+		end
+		return found, count
+	end
+
+	-- Watch for 14 s from now (the avatar has only just appeared) and note each time the wave starts playing. A wave that
+	-- is already playing at the first check counts as one start.
+	local OBSERVE = 14
+	local starts, tracks, trackCount, mostAtOnce = {}, {}, 0, 0
+	local was = false
+	local t0 = os.clock()
+	while os.clock() - t0 < OBSERVE do
+		local track, count = playingWave()
+		mostAtOnce = math.max(mostAtOnce, count)
+		if track and not was then
+			table.insert(starts, os.clock() - t0)
+			if not tracks[track] then
+				tracks[track] = true
+				trackCount += 1
+			end
+		end
+		was = track ~= nil
+		RunService.Heartbeat:Wait()
+	end
+
+	local startsText = {}
+	for _, at in starts do
+		table.insert(startsText, ("%.1f"):format(at))
+	end
+	startsText = table.concat(startsText, ", ")
+	assert(#starts >= 2, ("the wave should play at least twice in %ds, it played %d time(s) (starts at: %s)"):format(OBSERVE, #starts, startsText))
+	assert(trackCount == 1, ("the wave should be one reused AnimationTrack, saw %d different ones"):format(trackCount))
+	assert(mostAtOnce == 1, ("never more than one wave track at a time, saw %d"):format(mostAtOnce))
+	for i = 2, #starts do
+		local gap = starts[i] - starts[i - 1]
+		-- The first start can be late (the animation loads asynchronously), which shortens the gap after it.
+		local lowest = if i == 2 then 1 else WAVE_INTERVAL - 1
+		assert(gap >= lowest and gap <= WAVE_INTERVAL + 1, ("waves %d and %d started %.1fs apart, expected about %ds (starts at: %s)"):format(i - 1, i, gap, WAVE_INTERVAL, startsText))
+	end
+	assert(errorCount == 0, "errors while the avatar waved: " .. table.concat(errorLog, " | "))
+	print(("character_preview D: %d waves in %ds, starts at %s s, one track"):format(#starts, OBSERVE, startsText))
+elseif CASE == "E" then
+	assert(player.Character == nil, "player already has a character; run this in a fresh playtest")
+
+	local hook = clientScript:WaitForChild("TestHook", 10)
+	assert(hook and hook:IsA("BindableFunction"), "MainMenuClient.TestHook (BindableFunction) missing")
+	local model = waitFor(function()
+		return worldModel:FindFirstChildOfClass("Model")
+	end, AVATAR_TIMEOUT)
+	assert(model, "no model in WorldModel")
+
+	-- The avatar is on screen and its repeat loop is running when Play is pressed.
+	task.wait(1)
+	assert(hook:Invoke("play") == true, "play() should start the Play flow")
+	assert(
+		waitFor(function()
+			return not model:IsDescendantOf(game)
+		end, 20),
+		"the preview avatar was still in the game 20s after play()"
+	)
+
+	-- The loop wakes every WAVE_INTERVAL: stay a full interval (plus slack) after the clone is gone, so it wakes at
+	-- least once with nothing left to wave, and must end without an error or a warning.
+	task.wait(WAVE_INTERVAL + 1)
+	assert(player.Character ~= nil, "player.Character is nil after play()")
+	assert(errorCount == 0, "errors after play(): " .. table.concat(errorLog, " | "))
+	assert(#previewWarnings == 0, "CharacterPreview warned after play(): " .. table.concat(previewWarnings, " | "))
 else
 	error("unknown CASE " .. tostring(CASE))
 end

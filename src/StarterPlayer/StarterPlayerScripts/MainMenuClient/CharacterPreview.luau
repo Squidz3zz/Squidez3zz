@@ -1,8 +1,11 @@
 -- CharacterPreview: shows a copy of the player's avatar in the menu's ViewportFrame, idling and facing the
--- camera, and waves once when it appears. The camera shows the avatar from the waist up.
+-- camera, and waves when it appears and again every WAVE_INTERVAL seconds for as long as the menu shows it. The camera
+-- shows the avatar from the waist up.
 -- show(viewport, source) returns the clone, or nil if the viewport was already destroyed.
 -- clonePosed and playIdle are the two halves of "a still copy of an avatar that idles": show uses them for the menu, and
--- CreditsRoom uses them for the avatars standing in the Credits room.
+-- CreditsRoom uses them for the avatars standing in the Credits room (which do not wave).
+-- Seconds between the starts of two waves. The wave clip is 2 to 3 s long, so the avatar idles in between.
+local WAVE_INTERVAL = 6
 local CAMERA_FOV = 30
 -- The shot is a window on the avatar, not a margin around it: its bottom edge sits just under the waist (the bottom of
 -- Torso, or of LowerTorso on R15) and its top edge is above the head, high enough for the hand the wave raises. The
@@ -24,18 +27,39 @@ local ANIMATIONS = {
 	R6 = { idle = "rbxassetid://180435571", wave = "rbxassetid://128777973" },
 }
 
--- Loads and plays one animation. A failure leaves the bind pose and never throws.
+-- Loads and plays one animation and returns its track. A failure leaves the bind pose, warns, returns nil and never throws.
 local function playAnimation(animator, animationId, looped, priority)
-	local ok, err = pcall(function()
+	local ok, result = pcall(function()
 		local animation = Instance.new("Animation")
 		animation.AnimationId = animationId
 		local track = animator:LoadAnimation(animation)
 		track.Looped = looped
 		track.Priority = priority
 		track:Play()
+		return track
 	end)
 	if not ok then
-		warn("CharacterPreview: could not play " .. animationId .. ": " .. tostring(err))
+		warn("CharacterPreview: could not play " .. animationId .. ": " .. tostring(result))
+		return nil
+	end
+	return result
+end
+
+-- Plays `track` (the wave the avatar already waved with) again every WAVE_INTERVAL seconds, until `clone` has left the
+-- game (Play destroyed the menu, or the viewport went). Reusing the one track keeps tracks from piling up on the Animator.
+-- Meant for a thread of its own: it waits. The clone is checked before each replay and the replay is guarded, so it ends
+-- quietly once the menu is gone.
+local function repeatWave(clone, track)
+	while true do
+		task.wait(WAVE_INTERVAL)
+		if not clone:IsDescendantOf(game) then
+			return
+		end
+		local ok, err = pcall(track.Play, track)
+		if not ok then
+			warn("CharacterPreview: could not replay the wave: " .. tostring(err))
+			return
+		end
 	end
 end
 
@@ -142,7 +166,11 @@ function CharacterPreview.show(viewport, source)
 
 	CharacterPreview.playIdle(clone, idleId)
 	local animator, fallback = animationTools(humanoid)
-	playAnimation(animator, fallback.wave, false, Enum.AnimationPriority.Action)
+	local wave = playAnimation(animator, fallback.wave, false, Enum.AnimationPriority.Action)
+	if wave then
+		-- Its own thread: show never yields.
+		task.spawn(repeatWave, clone, wave)
+	end
 
 	return clone
 end
