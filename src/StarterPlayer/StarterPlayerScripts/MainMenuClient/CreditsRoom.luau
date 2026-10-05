@@ -10,8 +10,12 @@
 --                          room was exited or disposed
 --   exit(room)             stops hover tracking and removes the highlight and label
 --   dispose(room)          stops hover tracking and destroys the folder
---   hoverAt(room, camera, point)  decorates the avatar under a screen point (and only it); returns its name, or nil
---   tap(room, camera, touchPositions, processed)  the touch handler: hoverAt at the first touch position
+--   hoverAt(room, camera, point, space?)  decorates the avatar under a point (and only it); returns its name, or nil.
+--                          `space` says what the point is: "viewport" (default, what UserInputService:GetMouseLocation()
+--                          returns) or "screen" (what touch events and GUI positions use: the viewport minus the top
+--                          bar's inset, which is about 58 px higher up). Mixing them up misses by that inset.
+--   tap(room, camera, touchPositions, processed)  the touch handler: hoverAt, in "screen" space, at the first touch
+--                          position
 --
 -- Scene hooks run behind the black screen or on the Play path, so none of these yields, and exit and dispose are safe to
 -- repeat. hoverAt keeps no state of its own (the decorations are Instances in the room), so any copy of this module
@@ -26,7 +30,8 @@ local AMBER = Color3.fromRGB(255, 150, 30)
 local PLATE = Color3.fromRGB(38, 36, 34)
 local FONT = Font.new(Font.fromEnum(Enum.Font.Oswald).Family, Enum.FontWeight.Bold)
 local RAY_LENGTH = 200
-local NAME_OFFSET = Vector3.new(0, 2.5, 0) -- above the head's centre
+-- Above the head's centre. Low enough that the 56 px label stays inside the view of a 390 px high phone in landscape.
+local NAME_OFFSET = Vector3.new(0, 1.5, 0)
 
 -- Which stand each avatar stands on, in placement order.
 local SLOTS = {
@@ -180,10 +185,11 @@ local function decorate(avatar)
 	end
 end
 
--- Decorates the avatar under the screen point and clears the others; returns the hit avatar's name, or nil.
+-- Decorates the avatar under the point and clears the others; returns the hit avatar's name, or nil. `space` is
+-- "viewport" (the default) or "screen", see the header.
 -- The ray only sees the avatars (an Include list): the room's walls and stands would otherwise block it, and the walls
 -- are hit by rays even though they are not queryable.
-function CreditsRoom.hoverAt(room, camera, point)
+function CreditsRoom.hoverAt(room, camera, point, space)
 	local folder = room:FindFirstChild("CreditAvatars")
 	if not folder then
 		return nil
@@ -191,7 +197,9 @@ function CreditsRoom.hoverAt(room, camera, point)
 	local params = RaycastParams.new()
 	params.FilterType = Enum.RaycastFilterType.Include
 	params.FilterDescendantsInstances = { folder }
-	local ray = camera:ViewportPointToRay(point.X, point.Y)
+	local ray = if space == "screen"
+		then camera:ScreenPointToRay(point.X, point.Y)
+		else camera:ViewportPointToRay(point.X, point.Y)
 	local result = workspace:Raycast(ray.Origin, ray.Direction * RAY_LENGTH, params)
 
 	-- The hit is a part somewhere inside one of the avatars: walk up to the avatar itself.
@@ -212,13 +220,13 @@ function CreditsRoom.hoverAt(room, camera, point)
 end
 
 -- A tap: whatever is at the first touch position gets the decoration, and it stays until the next tap. Taps a GUI
--- already used (BACK, say) are not for the room.
+-- already used (BACK, say) are not for the room. TouchTap positions are in screen space (inset below the top bar).
 function CreditsRoom.tap(room, camera, touchPositions, processed)
 	local position = touchPositions[1]
 	if processed or not position then
 		return nil
 	end
-	return CreditsRoom.hoverAt(room, camera, position)
+	return CreditsRoom.hoverAt(room, camera, position, "screen")
 end
 
 -- Not a finger on a screen or a gamepad: the mouse position means something.

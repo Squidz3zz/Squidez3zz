@@ -6,7 +6,8 @@
 --          (bounding-box bottom within 0.3 of the stand's top), faces the camera (horizontal dot > 0.8) and has a
 --          looping idle track playing. Then hoverAt (a separate copy of CreditsRoom, so it must be stateless) at the
 --          Developer's head returns "Developer", highlights it and labels it with its DisplayName attribute, and the
---          Viewer has neither; an empty point returns nil and clears both. Leaves the menu in Credits.
+--          Viewer has neither; the label's top edge is inside the viewport, at this window and scaled to a 390 px high
+--          one (a phone in landscape); an empty point returns nil and clears both. Leaves the menu in Credits.
 --   POINT  run after A: returns the Viewer head's position to aim a real mouse at (user_mouse_input moveTo).
 --   A2     run after the real mouse sits on the Viewer's head: the Viewer's highlight appears within 0.5s, its label
 --          is LocalPlayer.DisplayName and the Developer has neither.
@@ -16,13 +17,19 @@
 --   C      CreditsRoom.enter on a fresh copy of the room with only the Developer places exactly one avatar and raises
 --          no error; enter / exit / dispose twice is harmless; dispose removes the folder.
 --   D      Touch path (Studio has no touch): CreditsRoom.tap forwards the first touch position to hoverAt and ignores
---          taps a GUI already used. The decoration persists with no tracker running until the next tap clears it.
---          The real TouchTap wiring itself is verified by reading the code.
+--          taps a GUI already used. Touch positions are in SCREEN space (the viewport minus the GUI inset, ~58 px), so
+--          every tap here is fed the head's screen point, with the REAL camera aimed at the Credits shot (a spare
+--          Camera has no inset). A point just inside the top edge of the Developer's silhouette must hit in screen
+--          space and miss when read as a viewport point (an inset higher, in the air), which is what a tap handled
+--          in the wrong space does. hoverAt's explicit "screen" and "viewport" spaces are checked too. The decoration
+--          persists with no tracker running until the next tap clears it. The real TouchTap wiring itself is
+--          verified by reading the code, and by the Device Emulator.
 --   E      Late arrival: both source avatars are missing when Credits opens. enter must not wait or fail. Leaving
 --          Credits before they arrive places nothing; arriving while the player is in Credits places them.
 --   F      Play from Credits: the avatar folder is destroyed, the player spawns, the console stays clean.
 local CASE = "A"
 
+local GuiService = game:GetService("GuiService")
 local LogService = game:GetService("LogService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -279,7 +286,17 @@ if CASE == "A" then
 	local gui, label = labelOf(developer)
 	assert(gui and gui:IsA("BillboardGui"), "Developer has no BillboardGui named CreditName")
 	assert(gui.Adornee == developer.Head, "CreditName should be adorned to the Head")
-	assert(gui.StudsOffset == Vector3.new(0, 2.5, 0), "CreditName StudsOffset should be (0, 2.5, 0), got " .. tostring(gui.StudsOffset))
+	assert(gui.StudsOffset.Y > 0, "CreditName should float above the head, StudsOffset is " .. tostring(gui.StudsOffset))
+	-- The label must stay inside the view: its top edge (the label is gui.Size.Y.Offset px tall, a fixed size in pixels,
+	-- centred on the head plus the offset) at this window, and at a 390 px high phone in landscape, where the avatars
+	-- shrink with the screen and the label does not.
+	local labelCentre = camera:WorldToViewportPoint(developer.Head.Position + camera.CFrame:VectorToWorldSpace(gui.StudsOffset))
+	local halfLabel = gui.Size.Y.Offset / 2
+	local topNow = labelCentre.Y - halfLabel
+	local top390 = labelCentre.Y * 390 / camera.ViewportSize.Y - halfLabel
+	print(("credits_room A: label top %.1f px now (viewport %d high), %.1f px at 390 high, StudsOffset %s"):format(topNow, camera.ViewportSize.Y, top390, tostring(gui.StudsOffset)))
+	assert(topNow >= 0, ("the name label's top is %.1f px, above the %d px high viewport"):format(topNow, camera.ViewportSize.Y))
+	assert(top390 >= 0, ("at a 390 px high viewport the name label's top would be %.1f px, clipped by the top edge"):format(top390))
 	assert(gui.AlwaysOnTop == true, "CreditName should be AlwaysOnTop")
 	assert(label and label.Text == developer:GetAttribute("DisplayName"), "CreditName text should be the Developer's DisplayName, got " .. tostring(label and label.Text))
 	assert(label.FontFace.Family == Font.fromEnum(Enum.Font.Oswald).Family, "CreditName should use Oswald")
@@ -437,29 +454,78 @@ elseif CASE == "D" then
 	assert(folder, "avatars did not appear")
 	local developer, viewer = folder.Developer, folder.Viewer
 	-- Leave Credits so the real mouse tracker is stopped, as it is on touch (nothing follows a finger that is not
-	-- touching), and look at the avatars through a second camera sitting on the Credits shot.
+	-- touching).
 	goAndSettle("Menu")
 	assert(countDecorations(folder) == 0)
-	local tapCamera = Instance.new("Camera")
-	tapCamera.CFrame = room.CreditsCameraShot.CFrame
-	tapCamera.FieldOfView = camera.FieldOfView
-	tapCamera.Parent = workspace
-	camera = tapCamera
+
+	-- Look at the avatars from the Credits shot through the REAL camera: only the current camera has the GUI inset (a
+	-- spare Camera has a 1x1 viewport and no inset, so screen and viewport space would be the same thing). MenuCamera
+	-- puts the camera back on the Menu shot on the next frame, so every use of it below comes straight after aim(),
+	-- with no yield in between.
+	local function aim()
+		camera.CFrame = room.CreditsCameraShot.CFrame
+	end
+
+	-- TouchTap positions are in SCREEN space: the viewport minus the top bar's inset (about 58 px), like GUI positions.
+	-- headPoint gives viewport space (what WorldToViewportPoint and the mouse use), so convert for every tap.
+	local inset = GuiService:GetGuiInset()
+	assert(inset.Y > 0, "setup: the GUI inset should be non-zero in a playtest, or this test cannot tell the two spaces apart")
+	local function tapPoint(avatar)
+		aim()
+		return headPoint(avatar) - inset
+	end
+	local function tap(positions, processed)
+		aim()
+		return CreditsRoom.tap(room, camera, positions, processed)
+	end
+	local function hover(point, space)
+		aim()
+		return CreditsRoom.hoverAt(room, camera, point, space)
+	end
 
 	-- A tap a GUI already used (BACK, say) does nothing; a tap on empty ground clears; a tap on an avatar shows it.
-	assert(CreditsRoom.tap(room, camera, { headPoint(developer) }, true) == nil, "a tap used by a GUI should be ignored")
+	assert(tap({ tapPoint(developer) }, true) == nil, "a tap used by a GUI should be ignored")
 	assert(countDecorations(folder) == 0, "a tap used by a GUI should not decorate")
-	assert(CreditsRoom.tap(room, camera, {}, false) == nil, "a tap with no position should be ignored")
-	assert(CreditsRoom.tap(room, camera, { headPoint(developer), Vector2.new(2, 2) }, false) == "Developer", "tap should use the first touch position")
+	assert(tap({}, false) == nil, "a tap with no position should be ignored")
+	assert(tap({ tapPoint(developer), Vector2.new(2, 2) }, false) == "Developer", "tap should use the first touch position, in screen space (a tap on the head's screen point)")
 	assert(developer:FindFirstChild("CreditHighlight") and developer:FindFirstChild("CreditName"), "the tapped avatar should be decorated")
+	-- hoverAt names the space explicitly: a screen point in screen space and a viewport point in viewport space both hit.
+	assert(hover(tapPoint(viewer), "screen") == "Viewer", "hoverAt(screen) on the Viewer's screen point should hit")
+	aim()
+	assert(hover(headPoint(viewer), "viewport") == "Viewer", "hoverAt(viewport) on the Viewer's viewport point should hit")
+	aim()
+	assert(hover(headPoint(developer)) == "Developer", "hoverAt without a space is viewport space")
+	assert(tap({ tapPoint(developer) }, false) == "Developer", "tap again on the Developer")
+
+	-- The discriminating check: a point just inside the top edge of the Developer's silhouette. In screen space it is a
+	-- hit; the same numbers read as a viewport point land an inset (58 px) higher, in the air above the avatar, so a tap
+	-- handled in the wrong space misses.
+	aim()
+	local headViewport = headPoint(developer)
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Include
+	params.FilterDescendantsInstances = { folder }
+	local topY = nil
+	for y = headViewport.Y - 150, headViewport.Y, 2 do
+		local ray = camera:ViewportPointToRay(headViewport.X, y)
+		if workspace:Raycast(ray.Origin, ray.Direction * 200, params) then
+			topY = y
+			break
+		end
+	end
+	assert(topY, "found no top edge of the Developer above its head")
+	local edgeViewport = Vector2.new(headViewport.X, topY + 6)
+	assert(tap({ edgeViewport - inset }, false) == "Developer", "a tap just inside the avatar's top edge, given in screen space, should hit")
+	assert(hover(edgeViewport - inset) == nil, "the same point read as a viewport point lands an inset higher, above the avatar: it must miss")
+
 	-- It persists until the next tap (no tracker clears it).
+	assert(tap({ tapPoint(developer) }, false) == "Developer", "tap on the Developer again")
 	task.wait(0.5)
 	assert(developer:FindFirstChild("CreditHighlight") and developer:FindFirstChild("CreditName"), "a tap's decoration should persist")
-	assert(CreditsRoom.tap(room, camera, { headPoint(viewer) }, false) == "Viewer", "a tap on the Viewer should return Viewer")
+	assert(tap({ tapPoint(viewer) }, false) == "Viewer", "a tap on the Viewer should return Viewer")
 	assert(developer:FindFirstChild("CreditHighlight") == nil and viewer:FindFirstChild("CreditHighlight"), "tapping the other avatar moves the decorations")
-	assert(CreditsRoom.tap(room, camera, { Vector2.new(2, 2) }, false) == nil, "a tap elsewhere should return nil")
+	assert(tap({ Vector2.new(2, 2) }, false) == nil, "a tap elsewhere should return nil")
 	assert(countDecorations(folder) == 0, "a tap elsewhere should clear every decoration")
-	tapCamera:Destroy()
 	assert(errorCount == 0, "errors: " .. table.concat(errorLog, " | "))
 elseif CASE == "E" then
 	local developerSource, viewerSource = waitForSources()
