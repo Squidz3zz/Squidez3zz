@@ -1,16 +1,23 @@
 -- One-shot build script: run in the Edit datamodel via execute_luau.
--- Builds the static main-menu tree from scratch as ReplicatedStorage.MainMenu (the heavy-factory look: Title and
--- Buttons middle-left, the avatar slot on the right, a dark Vignette, a BACK button for the room scenes), and creates
--- SoundService.Music and SoundService.SFX unless they are already there. It never adopts, moves or edits anything in
--- StarterGui, so a ScreenGui of your own stays untouched.
--- After it runs, Studio is the source of truth for the UI. The script refuses to run while ReplicatedStorage.MainMenu
--- exists, so as a recovery baseline it only works once the live MainMenu has been deleted (or moved out, e.g. to
--- ServerStorage.MainMenuBackupV1).
+-- Builds the static main-menu UI from scratch as three ScreenGuis in ReplicatedStorage (the heavy-factory look: Title
+-- and Buttons middle-left, the avatar slot on the right, a dark Vignette, a BACK button for the room scenes, a black
+-- Fader for the scene cuts and Play), and creates SoundService.Music and SoundService.SFX unless they are already there.
+-- It never adopts, moves or edits anything in StarterGui, so a ScreenGui of your own stays untouched.
+--   MainMenuVignette  DisplayOrder 9   ScreenInsets None             the Vignette frame (behind the menu)
+--   MainMenu          DisplayOrder 10  ScreenInsets DeviceSafeInsets Root and Back (the buttons and BACK never sit under a notch)
+--   MainMenuFader     DisplayOrder 11  ScreenInsets None             the Fader frame (on top of everything)
+-- The Vignette and the Fader must reach the notch strips and rounded corners of a phone, which the safe area (MainMenu's
+-- ScreenInsets) leaves out, so each lives in a full-screen overlay ScreenGui of its own.
+-- After it runs, Studio is the source of truth for the UI. The script refuses to run while ANY of ReplicatedStorage's
+-- MainMenu, MainMenuVignette or MainMenuFader exists, so as a recovery baseline it only works once all three live
+-- ScreenGuis have been deleted (or moved out, e.g. to ServerStorage.MainMenuBackupV1).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
-if ReplicatedStorage:FindFirstChild("MainMenu") then
-	error("MainMenu already exists")
+for _, name in { "MainMenu", "MainMenuVignette", "MainMenuFader" } do
+	if ReplicatedStorage:FindFirstChild(name) then
+		error(name .. " already exists")
+	end
 end
 
 -- Factory palette. All sizes/positions use Scale only (UIStroke thickness is the one exception allowed by design).
@@ -70,15 +77,26 @@ local function button(props, parent)
 	return inst
 end
 
-local gui = make("ScreenGui", {
-	ResetOnSpawn = false,
-	IgnoreGuiInset = true,
-	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-	DisplayOrder = 10,
-})
+-- Every ScreenGui here has IgnoreGuiInset true. ScreenInsets is what decides where the screen's usable area starts:
+-- None reaches the physical screen edges (notch strips included), DeviceSafeInsets stops at the phone's safe area.
+-- It is set after IgnoreGuiInset, which moves it to DeviceSafeInsets when it switches on.
+local function screenGui(displayOrder, screenInsets)
+	local inst = Instance.new("ScreenGui")
+	inst.ResetOnSpawn = false
+	inst.IgnoreGuiInset = true
+	inst.ScreenInsets = screenInsets
+	inst.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	inst.DisplayOrder = displayOrder
+	return inst
+end
 
--- Root draws above the Vignette (50) so the dark edges never dim the title, buttons or avatar, and below BACK (60)
--- and the Fader (100).
+-- Built detached and named last. The names are set when they are parented, so nothing half-built is ever visible.
+local vignetteGui = screenGui(9, Enum.ScreenInsets.None)
+local gui = screenGui(10, Enum.ScreenInsets.DeviceSafeInsets)
+local faderGui = screenGui(11, Enum.ScreenInsets.None)
+
+-- Root (ZIndex 55) stays below BACK (60). The dark Vignette edges and the Fader are ScreenGuis of their own, behind
+-- (DisplayOrder 9) and on top (11), so the ordering against them comes from DisplayOrder, not ZIndex.
 local root = make("Frame", {
 	Name = "Root",
 	Position = UDim2.fromScale(0, 0),
@@ -146,8 +164,9 @@ local characterView = make("ViewportFrame", {
 make("UIAspectRatioConstraint", { AspectRatio = 1.3 }, characterView)
 make("WorldModel", {}, characterView)
 
--- Vignette: dark edges on all four sides, under Root (55) so it never dims the title or buttons, and below BACK and
--- the Fader. It is only ever seen, never clicked: Active stays false on every frame so a press goes straight through.
+-- Vignette: dark edges on all four sides, in the full-screen MainMenuVignette ScreenGui (behind the menu, so it never
+-- dims the title or buttons). It is only ever seen, never clicked: Active stays false on every frame so a press goes
+-- straight through.
 -- Each edge fades with a UIGradient from Transparency 0.15 at the screen border to 1 on the inside. Gradient
 -- Rotation 0 runs left to right and 90 top to bottom, so the rotation is picked per edge to start at its outer side.
 local vignette = make("Frame", {
@@ -158,7 +177,7 @@ local vignette = make("Frame", {
 	BorderSizePixel = 0,
 	Active = false,
 	ZIndex = 50,
-}, gui)
+}, vignetteGui)
 local function edge(name, anchor, position, size, rotation)
 	local frame = make("Frame", {
 		Name = name,
@@ -195,7 +214,7 @@ button({
 	ZIndex = 60,
 }, gui)
 
--- Full-screen fade overlay, above everything
+-- Full-screen fade overlay, in the MainMenuFader ScreenGui: on top of everything (DisplayOrder 11), notch strips included
 make("Frame", {
 	Name = "Fader",
 	Position = UDim2.fromScale(0, 0),
@@ -204,15 +223,17 @@ make("Frame", {
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 	ZIndex = 100,
-}, gui)
+}, faderGui)
 
--- Everything built: publish. Rename + move last so a mid-build error never leaves a half-made MainMenu.
+-- Everything built: publish. Rename + move last so a mid-build error never leaves a half-made menu.
 if not SoundService:FindFirstChild("Music") then
 	make("SoundGroup", { Name = "Music", Volume = 0.5 }, SoundService)
 end
 if not SoundService:FindFirstChild("SFX") then
 	make("SoundGroup", { Name = "SFX", Volume = 0.5 }, SoundService)
 end
+apply(vignetteGui, { Name = "MainMenuVignette" }, ReplicatedStorage)
 apply(gui, { Name = "MainMenu" }, ReplicatedStorage)
+apply(faderGui, { Name = "MainMenuFader" }, ReplicatedStorage)
 
-return "built MainMenu"
+return "built MainMenu, MainMenuVignette and MainMenuFader"
