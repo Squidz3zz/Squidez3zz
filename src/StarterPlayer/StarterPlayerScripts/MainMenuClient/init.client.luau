@@ -10,6 +10,8 @@
 -- The buttons make sounds (ButtonSounds, on the Sound Effects slider): hover when the pointer enters one, confirm when one is
 -- clicked, and the play sound for PLAY. Every call is in pcall and none of them yields, so a missing or failing sound module
 -- never touches the menu or Play, and Play's fade does not cut the play sound (it lives in SoundService).
+-- The menu has background music (MenuAudio, on the Music slider): one looping track per scene, started when the menu opens,
+-- crossfaded by SceneDirector's onSceneChanged callback and faded out by runPlay. Same rules: pcall'd, never yields.
 --
 -- UI names this script depends on (three ScreenGuis under ReplicatedStorage). Restyle anything, but keep these names:
 --   MainMenu
@@ -74,6 +76,8 @@ local ButtonEffects = loadModule("ButtonEffects")
 local CharacterPreview = loadModule("CharacterPreview")
 -- The button sound effects. Without it the menu is silent, but nothing else is affected.
 local ButtonSounds = loadModule("ButtonSounds")
+-- The scene music. Without it the menu has no music, but nothing else is affected.
+local MenuAudio = loadModule("MenuAudio")
 -- Runs the Settings and Credits rooms: without it their buttons do nothing.
 local SceneDirector = loadModule("SceneDirector")
 -- The Settings room's board. Without it the room is empty, but the menu and Play are not affected.
@@ -196,6 +200,14 @@ local function runPlay()
 		local ok, err = pcall(SceneDirector.stop)
 		if not ok then
 			warn("MainMenuClient: SceneDirector.stop failed: " .. tostring(err))
+		end
+	end
+	-- The music fades out over the screen fade below and is gone after it. Never yields, and leaves the button sounds
+	-- alone (the play sound keeps going). Guarded like the above.
+	if MenuAudio then
+		local ok, err = pcall(MenuAudio.stop)
+		if not ok then
+			warn("MainMenuClient: MenuAudio.stop failed: " .. tostring(err))
 		end
 	end
 	-- Guarded like the above.
@@ -345,7 +357,14 @@ local function setupMenu()
 	if ButtonEffects then
 		local menuButtons = { root.Buttons.Play, root.Buttons.Settings, root.Buttons.Credits }
 		-- Guarded: a failing effect must never keep the menu from opening (and the player from spawning).
-		local hoverOptions = { onHover = ButtonSounds and ButtonSounds.hover }
+		-- The hover sound is silent once Play has started (the menu is fading out, nothing there is a choice any more).
+		local hoverOptions = {
+			onHover = ButtonSounds and function()
+				if not playing then
+					pcall(ButtonSounds.hover)
+				end
+			end,
+		}
 		local function attachEffects(button)
 			local ok, err = pcall(ButtonEffects.attach, button, hoverOptions)
 			if not ok then
@@ -394,7 +413,14 @@ local function setupMenu()
 
 	-- Guarded like the rest: a broken SceneDirector leaves Settings and Credits dead, never the menu or Play.
 	if SceneDirector then
-		local ok, err = pcall(SceneDirector.init, { fader = fader, root = root, back = back, menuCamera = MenuCamera })
+		local ok, err = pcall(SceneDirector.init, {
+			fader = fader,
+			root = root,
+			back = back,
+			menuCamera = MenuCamera,
+			-- The music follows the scene (nil without MenuAudio: SceneDirector then calls nothing).
+			onSceneChanged = MenuAudio and MenuAudio.setScene,
+		})
 		if not ok then
 			warn("MainMenuClient: SceneDirector.init failed: " .. tostring(err))
 		end
@@ -506,6 +532,14 @@ if not setupOk then
 	return
 end
 scheduleLoadingCleanup()
+
+-- The menu is open: its music starts (MenuMusic fades in). Guarded: a failing music module must never touch the menu or Play.
+if MenuAudio then
+	local ok, err = pcall(MenuAudio.start)
+	if not ok then
+		warn("MainMenuClient: MenuAudio.start failed: " .. tostring(err))
+	end
+end
 
 -- Gamepad players have no cursor, so start them on Play (ButtonEffects pops it, so it shows as focused).
 -- runPlay clears the selection again.

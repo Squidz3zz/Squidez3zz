@@ -6,6 +6,8 @@
 --   enter    shows the scene, behind the black screen
 --   exit     hides it again
 --   dispose  final cleanup when Play starts
+-- init may also pass ctx.onSceneChanged(name): it is called right after the current scene is switched (behind the black
+-- screen, before the scene's enter hook), in pcall, and must not yield. The music uses it to crossfade.
 -- Hooks run in pcall, so a failing one is warned about and the fade back in still completes. Hooks that run on the
 -- Play path (exit and dispose, called by stop) should not yield: stop() runs them detached so it never waits, but
 -- a hook that yields would be left to finish on its own after the menu is gone.
@@ -38,7 +40,7 @@ local MARKERS = {
 
 local SceneDirector = {}
 
-local ctx = nil -- { fader, root, back, menuCamera? }, set by init
+local ctx = nil -- { fader, root, back, menuCamera?, onSceneChanged? }, set by init
 local hooks = {} -- scene name -> { enter?, exit?, dispose? }
 local current = "Menu"
 local running = nil -- { cancelled, tween? } while a transition runs
@@ -160,6 +162,14 @@ local function transition(run, name, marker)
 	ctx.root.Visible = name == "Menu"
 	ctx.back.Visible = name ~= "Menu"
 	setCurrent(name)
+	-- Whatever follows the scene (the music) changes now, behind the black screen. pcall'd, and it must not yield.
+	local onSceneChanged = ctx.onSceneChanged
+	if onSceneChanged then
+		local ok, err = pcall(onSceneChanged, name)
+		if not ok then
+			warn("SceneDirector: onSceneChanged(" .. name .. ") failed: " .. tostring(err))
+		end
+	end
 	runHook(name, "enter")
 	if run.cancelled then
 		return

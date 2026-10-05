@@ -35,6 +35,22 @@
 --         D4  the click made the confirm sound once and flipped the switch. Prints the title point again. Then: moveTo it,
 --             left click (the row's RowHit flips it too).
 --         D5  that made the confirm sound a second time and flipped the switch back. Restores every setting.
+-- The scene music (MenuAudio: SoundService.MenuMusic / SettingsMusic / CreditsMusic, in the Music group). No mouse; each M case
+-- needs a FRESH playtest. They drive the menu through MainMenuClient's TestHook, as scenes.client.luau does.
+--   M-A   the menu opens: MenuMusic plays, looped, in the Music group, at full volume within 2 s; the other two tracks exist
+--         (looped, Music group) but do not play. Reports the music keys that did not load.
+--   M-B   goTo Settings: SettingsMusic plays at full volume and MenuMusic pauses within 1.5 s; back to Menu: MenuMusic RESUMES
+--         from where it paused (not from 0). goTo Credits then goTo Menu (refused: a transition is running): after 2 s exactly
+--         one track is audible. Then setScene is hammered through a test copy of the module (Credits, Settings, Menu, Credits, Menu
+--         about a quarter of a second apart): exactly one track is audible at the end and stays that way (no stale fade pauses it).
+--   M-C   Play pressed 0.2 s after goTo Settings (mid fade to black): within 1.5 s none of the music Sounds exist, the character
+--         spawns, and the SFX Sounds are untouched.
+--   M-D   Play pressed in the middle of the music crossfade itself (Settings fading in, Menu fading out): same checks as M-C.
+--   M-E   hover is silent once PLAY was pressed: selecting a menu button before Play makes the hover sound (the control), selecting
+--         one after Play does not.
+--   M-F   a track that did not load is skipped with one warning, and the others still play. Two ways: the loading screen's list
+--         (PlayerGui attribute LoadingFailedSounds) names it, or it is still not loaded once the module's own load attempt is
+--         over (its SoundId is pointed at nothing). Each is tried on a fresh copy of the module (a clone of the ModuleScript).
 local CASE = "S-A"
 
 local GuiService = game:GetService("GuiService")
@@ -108,6 +124,63 @@ local function getSound(key)
 	local sound = SoundService:FindFirstChild(SOUND_NAMES[key])
 	assert(sound and sound:IsA("Sound"), "SoundService." .. SOUND_NAMES[key] .. " (Sound) missing: ButtonSounds.init has not run")
 	return sound
+end
+
+-- The three music tracks, by the names MenuAudio gives them. getMusic asserts the Sound is there; musicSound may return nil.
+local MUSIC_SCENES = { "Menu", "Settings", "Credits" }
+local MUSIC_NAMES = { Menu = "MenuMusic", Settings = "SettingsMusic", Credits = "CreditsMusic" }
+local function musicSound(scene)
+	local sound = SoundService:FindFirstChild(MUSIC_NAMES[scene])
+	return if sound and sound:IsA("Sound") then sound else nil
+end
+local function getMusic(scene)
+	local sound = musicSound(scene)
+	assert(sound, "SoundService." .. MUSIC_NAMES[scene] .. " (Sound) missing: MenuAudio.start has not run")
+	return sound
+end
+
+-- One line about each track, for failure messages.
+local function describeMusic()
+	local parts = {}
+	for _, scene in MUSIC_SCENES do
+		local sound = musicSound(scene)
+		table.insert(
+			parts,
+			if sound
+				then ("%s{Playing=%s IsPlaying=%s IsPaused=%s Volume=%.2f Time=%.2f Loaded=%s}"):format(
+					sound.Name,
+					tostring(sound.Playing),
+					tostring(sound.IsPlaying),
+					tostring(sound.IsPaused),
+					sound.Volume,
+					sound.TimePosition,
+					tostring(sound.IsLoaded)
+				)
+				else MUSIC_NAMES[scene] .. "{missing}"
+		)
+	end
+	return table.concat(parts, " ")
+end
+
+-- The scenes whose track is audible right now: it exists, plays and is above half volume.
+local function audibleTracks()
+	local audible = {}
+	for _, scene in MUSIC_SCENES do
+		local sound = musicSound(scene)
+		if sound and sound.Playing and sound.Volume > 0.5 then
+			table.insert(audible, scene)
+		end
+	end
+	return audible
+end
+
+local function noMusicSounds()
+	for _, scene in MUSIC_SCENES do
+		if musicSound(scene) then
+			return false
+		end
+	end
+	return true
 end
 
 local function describePoint(label, point, inset)
@@ -603,6 +676,291 @@ elseif CASE:sub(1, 3) == "S-D" then
 	else
 		error("unknown CASE " .. tostring(CASE))
 	end
+elseif CASE == "M-A" then
+	waitForMenu()
+	local MenuAssets = require(game:GetService("ReplicatedFirst"):WaitForChild("MenuAssets", 10))
+	local musicGroup = SoundService:FindFirstChild("Music")
+	assert(musicGroup and musicGroup:IsA("SoundGroup"), "SoundService.Music (SoundGroup) missing")
+
+	-- Within 2 s of the menu being open: MenuMusic plays at full volume.
+	local menuMusic = waitFor(function()
+		local sound = musicSound("Menu")
+		return sound and sound.Playing and sound.IsPlaying and sound.Volume > 0.9 and sound
+	end, 2)
+	assert(menuMusic, "MenuMusic should be playing (Volume > 0.9) within 2s of the menu opening: " .. describeMusic())
+	assert(menuMusic.SoundGroup == musicGroup, "MenuMusic should be in SoundService.Music, it is in " .. tostring(menuMusic.SoundGroup))
+	assert(menuMusic.Looped, "MenuMusic should loop")
+	assert(menuMusic.SoundId == MenuAssets.Sounds.MenuMusic, "MenuMusic should use MenuAssets.Sounds.MenuMusic, it uses " .. menuMusic.SoundId)
+
+	-- The other two exist, set up the same way, and are not playing.
+	for _, scene in { "Settings", "Credits" } do
+		local sound = getMusic(scene)
+		assert(not sound.Playing, sound.Name .. " should not play on the main menu: " .. describeMusic())
+		assert(sound.SoundGroup == musicGroup, sound.Name .. " should be in SoundService.Music, it is in " .. tostring(sound.SoundGroup))
+		assert(sound.Looped, sound.Name .. " should loop")
+		assert(sound.SoundId == MenuAssets.Sounds[sound.Name], sound.Name .. " should use MenuAssets.Sounds." .. sound.Name .. ", it uses " .. sound.SoundId)
+		assert(sound.Volume < 0.01, sound.Name .. " should be at Volume 0 until its scene, it is at " .. sound.Volume)
+	end
+	assert(#audibleTracks() == 1, "exactly one track should be audible on the main menu: " .. describeMusic())
+
+	-- Report the keys Roblox refused (the loading screen's list, and any track that is still not loaded).
+	task.wait(1)
+	local notLoaded = {}
+	for _, scene in MUSIC_SCENES do
+		if not getMusic(scene).IsLoaded then
+			table.insert(notLoaded, MUSIC_NAMES[scene])
+		end
+	end
+	print(
+		("audio: music keys that failed to load: loading screen says [%s], not loaded now: [%s]"):format(
+			tostring(playerGui:GetAttribute("LoadingFailedSounds")),
+			table.concat(notLoaded, ",")
+		)
+	)
+	assert(#notLoaded == 0, "these music tracks never loaded: " .. table.concat(notLoaded, ", "))
+elseif CASE == "M-B" then
+	local _, fader = waitForMenu()
+	local hook = getHook()
+	local menuMusic = getMusic("Menu")
+	-- Let the menu track play for a while first, so a restart from 0 cannot pass for a resume.
+	assert(
+		waitFor(function()
+			return menuMusic.IsPlaying and menuMusic.Volume > 0.9 and menuMusic.TimePosition > 2.5
+		end, 10),
+		"MenuMusic should be playing for 2.5s on the menu: " .. describeMusic()
+	)
+	local before = menuMusic.TimePosition
+
+	-- Menu -> Settings: the Settings track plays at full volume and the Menu track pauses, within 1.5 s.
+	assert(hook:Invoke("goTo", "Settings") == true, "goTo(Settings) should start a transition")
+	local settingsMusic = getMusic("Settings")
+	local switched = waitFor(function()
+		return settingsMusic.Playing and settingsMusic.Volume > 0.9 and not menuMusic.Playing
+	end, 1.5)
+	assert(switched, "within 1.5s of goTo(Settings) SettingsMusic should play at full volume and MenuMusic pause: " .. describeMusic())
+	assert(menuMusic.IsPaused, "MenuMusic should be paused, not stopped: " .. describeMusic())
+	local pausedAt = menuMusic.TimePosition
+	assert(pausedAt >= before, ("MenuMusic went back from %.2f to %.2f while it faded out"):format(before, pausedAt))
+	assert(#audibleTracks() == 1 and audibleTracks()[1] == "Settings", "only the Settings track should be audible: " .. describeMusic())
+	assert(not getMusic("Credits").Playing, "CreditsMusic should not play in Settings: " .. describeMusic())
+	waitForScene("Settings", fader)
+
+	-- Settings -> Menu: the Menu track resumes from where it paused.
+	assert(hook:Invoke("goTo", "Menu") == true, "goTo(Menu) should start a transition")
+	local back = waitFor(function()
+		return menuMusic.Playing and menuMusic.Volume > 0.9 and not settingsMusic.Playing
+	end, 1.5)
+	assert(back, "within 1.5s of goTo(Menu) MenuMusic should play at full volume and SettingsMusic pause: " .. describeMusic())
+	local resumedAt = menuMusic.TimePosition
+	assert(resumedAt > before, ("MenuMusic should resume after Settings, not restart: it was at %.2f before Settings, it is at %.2f"):format(before, resumedAt))
+	assert(resumedAt >= pausedAt, ("MenuMusic should resume from where it paused (%.2f), it is at %.2f"):format(pausedAt, resumedAt))
+	waitForScene("Menu", fader)
+
+	-- Credits, then Menu straight away: the second call is refused (a transition is running), so Credits stays and wins.
+	assert(hook:Invoke("goTo", "Credits") == true, "goTo(Credits) should start a transition")
+	assert(hook:Invoke("goTo", "Menu") == false, "goTo(Menu) straight after goTo(Credits) should be refused")
+	task.wait(2)
+	assert(hook:Invoke("scene") == "Credits", "the scene should be Credits, it is " .. tostring(hook:Invoke("scene")))
+	local audible = audibleTracks()
+	assert(#audible == 1 and audible[1] == "Credits", "after 2s in Credits exactly the Credits track should be audible: " .. describeMusic())
+	assert(getMusic("Credits").IsPlaying, "CreditsMusic should be playing: " .. describeMusic())
+	assert(not menuMusic.Playing and not settingsMusic.Playing, "the other two tracks should be paused: " .. describeMusic())
+
+	-- setScene hammered (through this test's own copy of the module, which finds the Sounds by name): the earlier fades are
+	-- cancelled, never stacked, and no late fade-out pauses the track that won.
+	local MenuAudio = require(clientScript:WaitForChild("MenuAudio", 10))
+	assert(type(MenuAudio.start) == "function" and type(MenuAudio.setScene) == "function" and type(MenuAudio.stop) == "function", "MenuAudio.start / setScene / stop missing")
+	for _, scene in { "Menu", "Settings", "Credits", "Menu" } do
+		local fine, why = pcall(MenuAudio.setScene, scene)
+		assert(fine, "setScene(" .. scene .. ") must not error: " .. tostring(why))
+		task.wait(0.25)
+	end
+	local settled = waitFor(function()
+		local now = audibleTracks()
+		return #now == 1 and now[1] == "Menu" and menuMusic.Volume > 0.95 and not getMusic("Credits").Playing and not settingsMusic.Playing
+	end, 2)
+	assert(settled, "after the last of 4 quick setScene calls only MenuMusic should be audible: " .. describeMusic())
+	-- And it stays that way: nothing left over from the cancelled fades changes anything.
+	for _ = 1, 15 do
+		task.wait(0.1)
+		local now = audibleTracks()
+		assert(#now == 1 and now[1] == "Menu" and menuMusic.IsPlaying and menuMusic.Volume > 0.95, "a stale fade changed the music: " .. describeMusic())
+		assert(getMusic("Credits").Volume < 0.01 and settingsMusic.Volume < 0.01, "a track that was faded out came back: " .. describeMusic())
+	end
+elseif CASE == "M-C" or CASE == "M-D" then
+	-- M-C presses Play 0.2 s after goTo(Settings) (the screen is still fading to black, the music has not moved yet). M-D waits
+	-- until the music itself is in the middle of its crossfade (Settings fading in, Menu fading out) and presses Play then.
+	waitForMenu()
+	local hook = getHook()
+	local menuMusic = getMusic("Menu")
+	assert(
+		waitFor(function()
+			return menuMusic.IsPlaying and menuMusic.Volume > 0.9
+		end, 5),
+		"MenuMusic should be playing before Play: " .. describeMusic()
+	)
+	assert(player.Character == nil, "player already has a character; run this in a fresh playtest")
+	assert(hook:Invoke("goTo", "Settings") == true, "goTo(Settings) should start a transition")
+	if CASE == "M-C" then
+		task.wait(0.2)
+	else
+		local settingsMusic = getMusic("Settings")
+		local mid = waitFor(function()
+			return settingsMusic.Playing and settingsMusic.Volume > 0.2 and settingsMusic.Volume < 0.8 and menuMusic.Volume < 0.8 and menuMusic.Volume > 0.2
+		end, 3)
+		assert(mid, "the crossfade should be under way (both tracks between 0.2 and 0.8): " .. describeMusic())
+	end
+	print("audio: pressing Play with the music at: " .. describeMusic())
+	assert(hook:Invoke("play") == true, "play should start the Play flow")
+
+	local gone = waitFor(noMusicSounds, 1.5)
+	assert(gone, "within 1.5s of Play none of the three music Sounds should exist: " .. describeMusic())
+	-- Nothing comes back (no late tween or Resume): a second later still nothing.
+	task.wait(1)
+	assert(noMusicSounds(), "a music Sound came back after Play: " .. describeMusic())
+	assert(
+		waitFor(function()
+			return player.Character
+		end, 10),
+		"the character should spawn after Play"
+	)
+	-- Only the music is stopped: the button sounds stay (the play sound is not cut off by Play).
+	for _, name in { "MenuSfxHover", "MenuSfxConfirm", "MenuSfxPlay" } do
+		assert(SoundService:FindFirstChild(name), "SoundService." .. name .. " should survive Play, MenuAudio.stop must only touch the music")
+	end
+elseif CASE == "M-E" then
+	local menu = waitForMenu()
+	local hook = getHook()
+	local hoverSound = countPlays("Hover")
+	assert(hoverSound.IsLoaded, "the hover sound should have loaded")
+	local settingsButton = menu.Root.Buttons.Settings
+	local creditsButton = menu.Root.Buttons.Credits
+	assert(settingsButton.Selectable and creditsButton.Selectable, "the menu buttons should be selectable")
+
+	-- Control: before Play, a selection (a controller moving onto the button) makes the hover sound once.
+	GuiService.SelectedObject = settingsButton
+	assert(
+		waitFor(function()
+			return starts("Hover") >= 1
+		end, WINDOW),
+		"before Play, selecting SETTINGS should make the hover sound (the control for this test)"
+	)
+	task.wait(0.3)
+	assert(starts("Hover") == 1, "selecting SETTINGS once should make the hover sound once, it made " .. describeStarts("Hover"))
+	GuiService.SelectedObject = nil
+	task.wait(0.3)
+
+	-- Play, then select another button while the menu is still fading out: silence.
+	arm()
+	assert(hook:Invoke("play") == true, "play should start the Play flow")
+	assert(creditsButton:IsDescendantOf(playerGui), "the menu should still be there for the fade out")
+	GuiService.SelectedObject = creditsButton
+	-- A hover sound would start within a frame or two. Short, and the selection is cleared again before the menu is destroyed
+	-- (a button destroyed while selected makes ButtonEffects' SelectionLost handler throw on its already removed pop).
+	task.wait(0.25)
+	assert(starts("Hover") == 0, "no hover sound should play once Play was pressed, it made " .. describeStarts("Hover"))
+	GuiService.SelectedObject = nil
+	assert(
+		waitFor(function()
+			return player.Character
+		end, 10),
+		"the character should spawn after Play"
+	)
+elseif CASE == "M-F" then
+	waitForMenu()
+	local menuMusic = getMusic("Menu")
+	local settingsMusic = getMusic("Settings")
+	local creditsMusic = getMusic("Credits")
+	assert(
+		waitFor(function()
+			return menuMusic.IsPlaying and menuMusic.Volume > 0.9
+		end, 5),
+		"MenuMusic should be playing: " .. describeMusic()
+	)
+	local warnings = {}
+	local logConnection = LogService.MessageOut:Connect(function(message, messageType)
+		if messageType == Enum.MessageType.MessageWarning and string.find(message, "MenuAudio", 1, true) then
+			table.insert(warnings, message)
+		end
+	end)
+	local function warningsAbout(name)
+		local found = 0
+		for _, message in warnings do
+			if string.find(message, name, 1, true) then
+				found += 1
+			end
+		end
+		return found
+	end
+	-- A module copy with no state of its own (the clone is a new ModuleScript, so require runs it again).
+	local function freshCopy()
+		local clone = clientScript:WaitForChild("MenuAudio", 10):Clone()
+		clone.Parent = clientScript
+		local copy = require(clone)
+		clone:Destroy()
+		return copy
+	end
+	local function expectAudible(sound, why)
+		assert(
+			waitFor(function()
+				return sound.Playing and sound.Volume > 0.9
+			end, 2.5),
+			why .. ": " .. describeMusic()
+		)
+	end
+	local settingsId = settingsMusic.SoundId
+	local ok, err = pcall(function()
+		-- 1. The loading screen's list names CreditsMusic: start() warns once, setScene("Credits") plays nothing and does not error.
+		playerGui:SetAttribute("LoadingFailedSounds", "CreditsMusic")
+		local copy = freshCopy()
+		copy.start()
+		task.wait(0.3)
+		assert(warningsAbout("CreditsMusic") == 1, "start() should warn once about CreditsMusic, it warned " .. warningsAbout("CreditsMusic") .. " time(s)")
+		for call = 1, 3 do
+			local fine, why = pcall(copy.setScene, "Credits")
+			assert(fine, "setScene(Credits) #" .. call .. " with a failed track must not error: " .. tostring(why))
+			task.wait(0.2)
+		end
+		task.wait(1)
+		assert(not creditsMusic.Playing, "a track the loading screen reported as failed must not play: " .. describeMusic())
+		assert(#audibleTracks() == 0, "the Menu track should have faded out, nothing else plays: " .. describeMusic())
+		assert(warningsAbout("CreditsMusic") == 1, "the failed track should be warned about once, it was " .. warningsAbout("CreditsMusic") .. " time(s)")
+		-- The others still play.
+		copy.setScene("Settings")
+		expectAudible(settingsMusic, "SettingsMusic should still play while CreditsMusic is failed")
+		copy.setScene("Menu")
+		expectAudible(menuMusic, "MenuMusic should still play while CreditsMusic is failed")
+		task.wait(1) -- SettingsMusic has faded out and paused
+
+		-- 2. SettingsMusic points at nothing: it is still not loaded once the module's own load attempt is over.
+		playerGui:SetAttribute("LoadingFailedSounds", "")
+		settingsMusic.SoundId = "rbxassetid://1"
+		assert(
+			waitFor(function()
+				return not settingsMusic.IsLoaded
+			end, 5),
+			"SettingsMusic should not be loaded with SoundId rbxassetid://1"
+		)
+		local copy2 = freshCopy()
+		copy2.start()
+		task.wait(2) -- its load attempt is over
+		assert(warningsAbout("SettingsMusic") == 1, "the load attempt should warn once about SettingsMusic, it warned " .. warningsAbout("SettingsMusic") .. " time(s)")
+		for call = 1, 3 do
+			local fine, why = pcall(copy2.setScene, "Settings")
+			assert(fine, "setScene(Settings) #" .. call .. " with a track that did not load must not error: " .. tostring(why))
+			task.wait(0.2)
+		end
+		task.wait(1)
+		assert(not settingsMusic.Playing, "a track that did not load must not play: " .. describeMusic())
+		assert(warningsAbout("SettingsMusic") == 1, "the track that did not load should be warned about once, it was " .. warningsAbout("SettingsMusic") .. " time(s)")
+		-- The others still play (CreditsMusic is not failed for this copy).
+		copy2.setScene("Credits")
+		expectAudible(creditsMusic, "CreditsMusic should still play while SettingsMusic did not load")
+	end)
+	logConnection:Disconnect()
+	playerGui:SetAttribute("LoadingFailedSounds", "")
+	settingsMusic.SoundId = settingsId
+	assert(ok, err)
 else
 	error("unknown CASE " .. tostring(CASE))
 end

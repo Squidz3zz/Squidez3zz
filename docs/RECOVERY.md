@@ -45,7 +45,7 @@ It builds the three ScreenGuis again and adds `SoundService.Music` and `SoundSer
 
 ### c) Put the scripts back
 
-There are thirteen scripts. The file names are in `src/`.
+There are fourteen scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -68,14 +68,15 @@ The file `default.project.json` already says where everything goes. It only touc
 | `ButtonSounds` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonSounds.luau` |
 | `CharacterPreview` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/CharacterPreview.luau` |
 | `CreditsRoom` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/CreditsRoom.luau` |
+| `MenuAudio` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuAudio.luau` |
 | `MenuCamera` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuCamera.luau` |
 | `MenuSettings` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuSettings.luau` |
 | `SceneDirector` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SceneDirector.luau` |
 | `SettingsBoard` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SettingsBoard.luau` |
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 
-The nine ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
-`LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`. `MenuAssets` is the one place to change the
+The ten ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
+`LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `MenuAssets` is the one place to change the
 menu's sound ids, the loading screen's tips and its timings. The names must match exactly.
 
 ### d) Turn off automatic spawning
@@ -103,13 +104,14 @@ Press **Play** in Studio (the Test tab) and check each of these:
 1. A dark loading screen shows first, with the title, a spinning amber ring and a tip. It stays for at least 2 seconds,
    fades to black, and the menu fades in.
 2. The menu opens with the title, three buttons, and your avatar on the right after a few seconds. In the Device
-   Emulator (a phone, landscape) the dark border and the fades reach every screen edge, notch included.
+   Emulator (a phone, landscape) the dark border and the fades reach every screen edge, notch included. Music plays and
+   changes track with each scene (Menu, Settings, Credits), and fades out when you press Play.
 3. **Settings** fades to a room with a board. The sliders move and the switches flip. **BACK** returns. The buttons and
    the switches make a hover sound and a click sound (PLAY has its own click sound).
 4. **Credits** fades to a room with two avatars on stands. Hovering one shows a name. **BACK** returns.
 5. **Play** spawns your character and the menu goes away.
 6. Reset your character. It respawns and the menu does not come back.
-7. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'` or `ButtonSounds: ...`) means
+7. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`, `ButtonSounds: ...` or `MenuAudio: ...`) means
    Roblox refused that sound's asset id: fix the id in `MenuAssets`, or its permissions.
 
 ## What these steps cannot bring back
