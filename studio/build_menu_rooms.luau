@@ -2,9 +2,10 @@
 -- Builds the two heavy-factory menu rooms under the map as Persistent Models: Workspace.SettingsRoom and
 -- Workspace.CreditsRoom. It adopts the user's four parts (BackgroundForSettings, Settingsboard, BackgroundForCredits,
 -- PlayerCreditStand) from Workspace, moving each by (0, -200, 0) into its room, or creates stand-ins with the same
--- names, sizes and layout when they are missing. It adds ViewerCreditStand, the camera markers SettingsCameraShot and
--- CreditsCameraShot, the Settingsboard BoardFace attribute, and the dressing (shell, grate trench, girders, pipes,
--- caged amber lamps, haze and steam).
+-- names, sizes and layout when they are missing. It adds ViewerCreditStand (an empty second podium), the camera markers
+-- SettingsCameraShot and CreditsCameraShot, ViewerSpot (the invisible marker the viewer's avatar stands on in the Credits
+-- foreground, back to the camera, looking at PlayerCreditStand), the Settingsboard BoardFace attribute, and the dressing
+-- (shell, grate trench, girders, pipes, caged amber lamps, haze and steam).
 -- The rooms assume the user's parts are axis-aligned with their front faces toward -Z (the cameras look along +Z).
 -- After it runs, Studio is the source of truth for the rooms. The script refuses to run while either room exists.
 -- To rebuild: delete workspace.SettingsRoom and workspace.CreditsRoom, then run this script. With no user parts present
@@ -17,6 +18,16 @@ local DROP = Vector3.new(0, -200, 0)
 local VIEWER_OFFSET = -4.5 -- ViewerCreditStand sits this far along BackgroundForCredits' RightVector (camera's right)
 local TAN_HALF_FOV = math.tan(math.rad(70 / 2)) -- default Camera.FieldOfView (vertical)
 local NARROW = 4 / 3 -- narrowest landscape aspect the shots must fit horizontally
+-- ViewerSpot, on the floor plan: this fraction of the way from CreditsCameraShot to PlayerCreditStand (about a third), then
+-- this many studs to the side away from the developer (toward ViewerCreditStand), facing the developer's stand turned
+-- SPOT_TURN of the way toward the way the camera looks (0 = straight at the stand, 1 = the camera's own direction), so the
+-- camera sees the viewer's back and not its side. Tuned with screenshots, at 16:9 down to a phone in landscape (844x390):
+-- the viewer's head and shoulders fill the lower right of the Credits shot, seen from behind, without covering the
+-- developer, the developer's name label or BACK. (The camera is about as high as an avatar's head, so the head sits about
+-- 40% down the frame, and the body runs off the bottom edge.)
+local SPOT_ALONG = 0.4
+local SPOT_SIDE = 3.0
+local SPOT_TURN = 0.5
 
 -- Room shell, in studs.
 local HALF_WIDTH = 11.4 -- inner half-width either side of the camera's centre line
@@ -501,6 +512,20 @@ for _, standCFrame in { devCFrame, viewerCFrame } do
 end
 local creditsShot = frameShot(creditPoints, -10, 0.82)
 
+-- ViewerSpot: a 1x1x1 marker resting on the floor, so its bottom face is where the viewer's feet go. Its LookVector,
+-- horizontal, is the way the avatar looks: at the developer's stand, turned part of the way toward the camera's direction.
+local function viewerSpotCFrame(shotCFrame, devPosition, viewerPosition, floorY)
+	local shotPosition = shotCFrame.Position
+	local toDeveloper = Vector3.new(devPosition.X - shotPosition.X, 0, devPosition.Z - shotPosition.Z)
+	local away = Vector3.new(viewerPosition.X - devPosition.X, 0, viewerPosition.Z - devPosition.Z).Unit
+	local centre = Vector3.new(shotPosition.X, floorY + 0.5, shotPosition.Z) + toDeveloper * SPOT_ALONG + away * SPOT_SIDE
+	local atDeveloper = Vector3.new(devPosition.X - centre.X, 0, devPosition.Z - centre.Z).Unit
+	local cameraForward = Vector3.new(shotCFrame.LookVector.X, 0, shotCFrame.LookVector.Z).Unit
+	local facing = (atDeveloper * (1 - SPOT_TURN) + cameraForward * SPOT_TURN).Unit
+	return CFrame.lookAt(centre, centre + facing)
+end
+local viewerSpot = viewerSpotCFrame(creditsShot, devCFrame.Position, viewerCFrame.Position, creditsLayout.floorY)
+
 -- Build the dressing in detached Models first, so a failure here never touches the user's parts.
 local settingsRoom = Instance.new("Model")
 settingsRoom.Name = "SettingsRoom"
@@ -514,6 +539,7 @@ dress(settingsRoom, settingsLayout)
 dress(creditsRoom, creditsLayout)
 local settingsMarker = marker(settingsRoom, "SettingsCameraShot", settingsShot)
 marker(creditsRoom, "CreditsCameraShot", creditsShot)
+marker(creditsRoom, "ViewerSpot", viewerSpot)
 
 -- Settings: a steel bezel framing the board's sides and top against the backdrop.
 do
@@ -582,10 +608,11 @@ local function count(model)
 end
 
 return string.format(
-	"SettingsRoom %d parts, CreditsRoom %d parts, BoardFace %s\nSettingsCameraShot %s\nCreditsCameraShot %s",
+	"SettingsRoom %d parts, CreditsRoom %d parts, BoardFace %s\nSettingsCameraShot %s\nCreditsCameraShot %s\nViewerSpot %s",
 	count(settingsRoom),
 	count(creditsRoom),
 	bestFace.Name,
 	tostring(settingsShot),
-	tostring(creditsShot)
+	tostring(creditsShot),
+	tostring(viewerSpot)
 )

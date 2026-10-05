@@ -1,8 +1,12 @@
--- CreditsRoom: the avatars in the Credits room. The developer and the viewing player each stand on a stand, facing the
--- camera and idling; the one under the mouse (or the last one tapped) gets an amber outline and a name label.
+-- CreditsRoom: the avatars in the Credits room, both idling. The developer stands on a stand, facing the camera. The
+-- viewing player stands in the foreground on the floor spot room.ViewerSpot, with their back to the camera, looking at the
+-- developer's stand like a visitor at an exhibit (the second stand, ViewerCreditStand, stays empty). The one under the
+-- mouse (or the last one tapped) gets an amber outline and a name label; the viewer's label reads YOU, not their name,
+-- so it does not look as if they were inside the game twice.
 --
 -- The avatars are client-only copies in room.CreditAvatars (a Folder this module makes), named "Developer" and "Viewer",
--- each carrying its name as the attribute DisplayName. They are made once and reused on later visits.
+-- each carrying its name as the attribute DisplayName. They are made once and reused on later visits. Without a ViewerSpot
+-- the viewer is skipped with a warning and the developer still shows.
 --
 --   enter(room, sources)   shows the room: makes the folder, places the copies of sources.Developer and sources.Viewer
 --                          (Models, either may be nil) that are not placed yet, and starts hover tracking
@@ -20,7 +24,6 @@
 -- Scene hooks run behind the black screen or on the Play path, so none of these yields, and exit and dispose are safe to
 -- repeat. hoverAt keeps no state of its own (the decorations are Instances in the room), so any copy of this module
 -- can show or clear what another copy decorated.
-local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -33,10 +36,14 @@ local RAY_LENGTH = 200
 -- Above the head's centre. Low enough that the 56 px label stays inside the view of a 390 px high phone in landscape.
 local NAME_OFFSET = Vector3.new(0, 1.5, 0)
 
--- Which stand each avatar stands on, in placement order.
+-- The viewer's hover label: not their name, so it does not look as if they were inside the game twice.
+local VIEWER_LABEL = "YOU"
+
+-- Where each avatar stands, in placement order: on top of a stand, facing the camera marker, or on a floor spot, facing
+-- along the spot's LookVector.
 local SLOTS = {
 	{ name = "Developer", stand = "PlayerCreditStand" },
-	{ name = "Viewer", stand = "ViewerCreditStand" },
+	{ name = "Viewer", spot = "ViewerSpot" },
 }
 local DECORATIONS = { "CreditHighlight", "CreditName" }
 
@@ -62,20 +69,45 @@ local function topOf(part)
 	return part.Position.Y + (math.abs(r10) * size.X + math.abs(r11) * size.Y + math.abs(r12) * size.Z) / 2
 end
 
+-- The name shown for an avatar: the developer's comes from the server's model, the viewer's is always YOU.
 local function displayNameFor(name, source)
 	if name == "Viewer" then
-		local localPlayer = Players.LocalPlayer
-		if localPlayer then
-			return if localPlayer.DisplayName ~= "" then localPlayer.DisplayName else localPlayer.Name
-		end
-		return name
+		return VIEWER_LABEL
 	end
 	local fromServer = source:GetAttribute("DisplayName")
 	return if type(fromServer) == "string" and fromServer ~= "" then fromServer else name
 end
 
--- Puts a copy of `source` on the stand, facing the camera marker.
-local function placeAvatar(folder, name, source, stand, shot)
+-- A direction on the ground plane, or `fallback` when it has no horizontal part.
+local function flatDirection(vector, fallback)
+	local flat = Vector3.new(vector.X, 0, vector.Z)
+	return if flat.Magnitude < 0.001 then fallback else flat.Unit
+end
+
+-- Where a slot's avatar stands: the point on the ground its feet go, and the horizontal direction it faces. When a part it
+-- needs is missing, returns nil, nil and the names of what is missing.
+local function standingPlace(room, slot)
+	if slot.stand then
+		-- Over the middle of the stand, on its top, turned to face the camera marker.
+		local stand, shot = room:FindFirstChild(slot.stand), room:FindFirstChild("CreditsCameraShot")
+		if stand and stand:IsA("BasePart") and shot and shot:IsA("BasePart") then
+			local standPosition = stand.Position
+			local toShot = flatDirection(shot.Position - standPosition, Vector3.zAxis)
+			return Vector3.new(standPosition.X, topOf(stand), standPosition.Z), toShot
+		end
+		return nil, nil, slot.stand .. " or CreditsCameraShot"
+	end
+	-- On the floor spot: the marker rests on the floor, so its bottom face is the ground. It faces along its LookVector.
+	local spot = room:FindFirstChild(slot.spot)
+	if spot and spot:IsA("BasePart") then
+		local spotPosition = spot.Position
+		return Vector3.new(spotPosition.X, spotPosition.Y - spot.Size.Y / 2, spotPosition.Z), flatDirection(spot.CFrame.LookVector, Vector3.zAxis)
+	end
+	return nil, nil, slot.spot
+end
+
+-- Puts a copy of `source` on the ground at `position`, turned to face `forward` without tilting.
+local function placeAvatar(folder, name, source, position, forward)
 	local clone, idleId = CharacterPreview.clonePosed(source)
 	local ok, err = pcall(function()
 		clone.Name = name
@@ -83,20 +115,13 @@ local function placeAvatar(folder, name, source, stand, shot)
 		-- The name is the label's job: no second one floating over the head.
 		clone:FindFirstChildOfClass("Humanoid").DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 
-		-- Over the middle of the stand, turned to face the camera marker without tilting.
-		local standPosition = stand.Position
-		local toShot = Vector3.new(shot.Position.X - standPosition.X, 0, shot.Position.Z - standPosition.Z)
-		if toShot.Magnitude < 0.001 then
-			toShot = Vector3.new(0, 0, 1)
-		end
-		local position = Vector3.new(standPosition.X, topOf(stand), standPosition.Z)
-		clone:PivotTo(CFrame.lookAt(position, position + toShot))
+		clone:PivotTo(CFrame.lookAt(position, position + forward))
 		clone.Parent = folder
 
-		-- Measured after parenting (accessory welds settle then): the bounding box's bottom goes on the stand's top.
+		-- Measured after parenting (accessory welds settle then): the bounding box's bottom goes on the ground.
 		local boxCFrame, boxSize = clone:GetBoundingBox()
 		local bottom = boxCFrame.Position.Y - boxSize.Y / 2
-		clone:PivotTo(clone:GetPivot() + Vector3.new(0, topOf(stand) - bottom, 0))
+		clone:PivotTo(clone:GetPivot() + Vector3.new(0, position.Y - bottom, 0))
 	end)
 	if not ok then
 		clone:Destroy()
@@ -105,25 +130,24 @@ local function placeAvatar(folder, name, source, stand, shot)
 	CharacterPreview.playIdle(clone, idleId)
 end
 
--- Places each given source that is not on its stand yet. A missing stand or a broken source is a warning and an empty
--- stand, never an error.
+-- Places each given source that is not placed yet. A missing stand or spot, or a broken source, is a warning and an
+-- empty place (the viewer is skipped and the developer still shows), never an error.
 local function placeSources(room, sources)
 	local folder = room:FindFirstChild("CreditAvatars")
-	local shot = room:FindFirstChild("CreditsCameraShot")
 	if not folder then
 		return
 	end
 	for _, slot in SLOTS do
 		local source = sources[slot.name]
 		if source and not folder:FindFirstChild(slot.name) then
-			local stand = room:FindFirstChild(slot.stand)
-			if stand and stand:IsA("BasePart") and shot and shot:IsA("BasePart") then
-				local ok, err = pcall(placeAvatar, folder, slot.name, source, stand, shot)
+			local position, forward, missing = standingPlace(room, slot)
+			if position then
+				local ok, err = pcall(placeAvatar, folder, slot.name, source, position, forward)
 				if not ok then
 					warn("CreditsRoom: could not place the " .. slot.name .. ": " .. tostring(err))
 				end
 			else
-				warn("CreditsRoom: " .. room.Name .. "." .. slot.stand .. " or CreditsCameraShot is missing; no " .. slot.name .. " avatar")
+				warn("CreditsRoom: " .. room.Name .. "." .. missing .. " is missing; no " .. slot.name .. " avatar")
 			end
 		end
 	end

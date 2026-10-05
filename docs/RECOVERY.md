@@ -29,6 +29,12 @@ It builds both rooms. If your own four parts (`BackgroundForSettings`, `Settings
 `PlayerCreditStand`) are loose in Workspace, it uses them. If they are not there, it builds stand-ins with the same
 names, so everything still works.
 
+The Credits room also gets `ViewerSpot`: an invisible marker on the floor, in the foreground, where the player's own
+avatar stands (seen from behind, looking at the developer's podium, with the hover label `YOU`). Without it the player's avatar is
+left out of Credits, with a warning, and the developer's avatar still shows. The second podium, `ViewerCreditStand`,
+stays empty. To move the player's avatar, move or turn `ViewerSpot`: it should rest on the floor, and the way its front
+face points is the way the avatar looks.
+
 ### b) Rebuild the menu
 
 1. In the Explorer, the menu is three ScreenGuis in `ReplicatedStorage`: `MainMenu`, `MainMenuVignette` and
@@ -108,7 +114,8 @@ Press **Play** in Studio (the Test tab) and check each of these:
    changes track with each scene (Menu, Settings, Credits), and fades out when you press Play.
 3. **Settings** fades to a room with a board. The sliders move and the switches flip. **BACK** returns. The buttons and
    the switches make a hover sound and a click sound (PLAY has its own click sound).
-4. **Credits** fades to a room with two avatars on stands. Hovering one shows a name. **BACK** returns.
+4. **Credits** fades to a room with the developer's avatar on a stand, and the player's own avatar in the foreground,
+   seen from behind, looking at it. Hovering one shows a name (the player's says `YOU`). **BACK** returns.
 5. **Play** spawns your character and the menu goes away.
 6. Reset your character. It respawns and the menu does not come back.
 7. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`, `ButtonSounds: ...` or `MenuAudio: ...`) means

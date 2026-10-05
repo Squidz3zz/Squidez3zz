@@ -1,6 +1,7 @@
 -- Run in Edit datamodel. Verifies the factory Settings and Credits rooms built by studio/build_menu_rooms.luau:
 -- Persistent Models under the map, the user's parts adopted, camera markers, BoardFace, line of sight to the
--- centrepieces, full enclosure (no sky) and non-queryable decoration.
+-- centrepieces, full enclosure (no sky) and non-queryable decoration, the empty ViewerCreditStand and the ViewerSpot
+-- marker (where the viewer's avatar stands in the Credits foreground).
 local ROOMS = {
 	{
 		name = "SettingsRoom",
@@ -122,5 +123,46 @@ local offset = viewerStand.Position - devStand.Position
 local along = creditsRoom.BackgroundForCredits.CFrame.RightVector
 assert(math.abs(math.abs(offset:Dot(along)) - 4.5) < 0.05, "ViewerCreditStand must be 4.5 studs along the backdrop")
 assert((offset - along * offset:Dot(along)).Magnitude < 0.05, "ViewerCreditStand must be level with and beside PlayerCreditStand")
+
+-- Credits: ViewerSpot, the invisible marker the viewer's avatar stands on, in the foreground with its back to the camera.
+-- The marker rests on the floor (its bottom face is the avatar's feet) and faces PlayerCreditStand horizontally.
+local spot = creditsRoom:FindFirstChild("ViewerSpot")
+assert(spot and spot:IsA("BasePart"), "CreditsRoom.ViewerSpot missing")
+assert(spot.Anchored, "ViewerSpot must be anchored")
+assert(spot.Transparency == 1, "ViewerSpot must have Transparency 1")
+assert(not spot.CanCollide, "ViewerSpot must have CanCollide false")
+assert(not spot.CanQuery, "ViewerSpot must have CanQuery false")
+assert(not spot.CanTouch, "ViewerSpot must have CanTouch false")
+assert((spot.Size - Vector3.one).Magnitude < 0.001, "ViewerSpot must be 1x1x1, got " .. tostring(spot.Size))
+
+local function flat(v)
+	return Vector3.new(v.X, 0, v.Z)
+end
+
+-- On walkable floor inside the room (not in the grate trench, not on a prop): a ray down through the marker hits the room's
+-- floor right at the marker's bottom face.
+local spotFloorY = spot.Position.Y - spot.Size.Y / 2
+local down = workspace:Raycast(spot.Position + Vector3.new(0, 5, 0), Vector3.new(0, -20, 0))
+assert(down and down.Instance:IsDescendantOf(creditsRoom), "nothing of the Credits room under ViewerSpot; ray hit " .. (down and down.Instance:GetFullName() or "nothing"))
+assert(down.Instance.Name == "FloorFront", "ViewerSpot must stand on FloorFront, the floor in front of the trench, not " .. down.Instance.Name)
+assert(math.abs(down.Position.Y - spotFloorY) < 0.05, ("ViewerSpot's bottom face (Y %.3f) must rest on the floor (Y %.3f)"):format(spotFloorY, down.Position.Y))
+
+-- Faces the developer's podium, level (no tilt), turned a little toward the camera's direction so the camera sees its back.
+local cameraPosition = creditsRoom.CreditsCameraShot.Position
+local look = spot.CFrame.LookVector
+assert(math.abs(look.Y) < 0.01, "ViewerSpot must look horizontally, LookVector.Y is " .. look.Y)
+local atPodium = look:Dot(flat(devStand.Position - spot.Position).Unit)
+assert(atPodium > 0.85, ("ViewerSpot must face PlayerCreditStand (dot %.2f)"):format(atPodium))
+local awayFromCamera = look:Dot(flat(spot.Position - cameraPosition).Unit)
+assert(awayFromCamera > 0.55, ("ViewerSpot must look away from the camera, so the camera sees its back (dot %.2f)"):format(awayFromCamera))
+
+-- Between the camera and the developer, about a third of the way, and to the side away from the developer.
+local toDeveloper = flat(devStand.Position - cameraPosition)
+local fromCamera = flat(spot.Position - cameraPosition)
+local fraction = fromCamera:Dot(toDeveloper.Unit) / toDeveloper.Magnitude
+assert(fraction > 0.2 and fraction < 0.5, ("ViewerSpot should be about a third of the way from the camera to the developer, it is %.2f"):format(fraction))
+local lateral = fromCamera - toDeveloper.Unit * fromCamera:Dot(toDeveloper.Unit)
+local awayFromDeveloper = flat(viewerStand.Position - devStand.Position).Unit
+assert(lateral:Dot(awayFromDeveloper) > 0.3, "ViewerSpot should be offset to the side away from the developer, toward ViewerCreditStand")
 
 return "PASS"
