@@ -1,5 +1,6 @@
 -- MenuServer: holds each player on the main menu (no character) until they press Play.
 -- Builds a menu avatar per player, spawns them once on PlayPressed, then respawns them after death.
+-- Also builds the developer's avatar once, in its own thread, for the Credits room (ReplicatedStorage.CreditAvatars).
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -18,6 +19,13 @@ end
 
 local playPressed = getOrCreate("RemoteEvent", "PlayPressed")
 local menuAvatars = getOrCreate("Folder", "MenuAvatars")
+local creditAvatars = getOrCreate("Folder", "CreditAvatars")
+
+-- Whose avatar stands on the Credits room's developer stand: the experience owner when that is a user, else this account.
+local DEVELOPER_USER_ID = 71629421
+local developerId = if game.CreatorType == Enum.CreatorType.User and game.CreatorId ~= 0
+	then game.CreatorId
+	else DEVELOPER_USER_ID
 
 -- Where the menu camera sits: an anchored Part named MenuCameraShot in Workspace, if there is one, else the client's
 -- default angle. Published as the Workspace attribute MenuCameraShot (the part's CFrame, because the camera needs the
@@ -59,11 +67,15 @@ local function createModel(desc, rigType)
 	return ok and model or nil
 end
 
+-- The avatar of `userId`: their description on their rig, or a default description if that fails. Yields (web calls).
+local function buildModelForUser(userId)
+	local rigType = getRigType(userId)
+	return createModel(getDescription(userId), rigType) or createModel(Instance.new("HumanoidDescription"), rigType)
+end
+
 local function buildAvatar(player)
 	local userId = player.UserId
-	local rigType = getRigType(userId)
-	local model = createModel(getDescription(userId), rigType)
-		or createModel(Instance.new("HumanoidDescription"), rigType)
+	local model = buildModelForUser(userId)
 	if not model then
 		warn("MenuServer: could not build a menu avatar for " .. player.Name)
 		return
@@ -77,6 +89,20 @@ local function buildAvatar(player)
 	-- Lets the client wait until every part has replicated before it clones the model (see MainMenuClient).
 	model:SetAttribute("DescendantCount", #model:GetDescendants())
 	model.Parent = menuAvatars
+end
+
+-- The developer's credit avatar, built once at startup. A failure leaves the stand empty.
+local function buildDeveloperAvatar()
+	local model = buildModelForUser(developerId)
+	if not model then
+		warn("MenuServer: could not build the developer's credit avatar")
+		return
+	end
+	local nameOk, name = pcall(Players.GetNameFromUserIdAsync, Players, developerId)
+	model.Name = "Developer"
+	model:SetAttribute("DisplayName", if nameOk and type(name) == "string" and name ~= "" then name else "Developer")
+	model:SetAttribute("DescendantCount", #model:GetDescendants())
+	model.Parent = creditAvatars
 end
 
 local function destroyAvatar(userId)
@@ -136,6 +162,14 @@ Players.PlayerAdded:Connect(onPlayerAdded)
 for _, player in Players:GetPlayers() do
 	task.spawn(onPlayerAdded, player)
 end
+
+-- Its own thread, and guarded: its web calls must never delay a player's menu avatar or their spawn.
+task.spawn(function()
+	local ok, err = pcall(buildDeveloperAvatar)
+	if not ok then
+		warn("MenuServer: building the developer's credit avatar failed: " .. tostring(err))
+	end
+end)
 
 if RunService:IsStudio() then
 	-- Test hook for tests/menu_server.server.luau (execute_luau cannot reach this script's locals).

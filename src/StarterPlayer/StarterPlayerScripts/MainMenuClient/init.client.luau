@@ -2,6 +2,7 @@
 -- The menu lives in ReplicatedStorage (not StarterGui) because the server holds players without a character
 -- until PlayPressed; it is cloned into PlayerGui here and destroyed once the player has spawned.
 -- Settings and Credits are 3D rooms: their buttons ask SceneDirector (a module under this script) to fade and cut there.
+-- The Credits room shows the developer's avatar (built by MenuServer in ReplicatedStorage.CreditAvatars) and the player's own.
 --
 -- UI names this script depends on (all under ReplicatedStorage.MainMenu). Restyle anything, but keep these names:
 --   Root
@@ -26,6 +27,8 @@ local CHARACTER_TIMEOUT = 10
 local AVATAR_TIMEOUT = 15
 local AVATAR_PARTS_TIMEOUT = 10
 local AVATAR_DESCENDANTS_TIMEOUT = 5
+local CREDITS_AVATAR_WAIT = 20
+local CREDITS_AVATAR_POLL = 0.25
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -54,9 +57,41 @@ local CharacterPreview = loadModule("CharacterPreview")
 local SceneDirector = loadModule("SceneDirector")
 -- The Settings room's board. Without it the room is empty, but the menu and Play are not affected.
 local SettingsBoard = loadModule("SettingsBoard")
+-- The Credits room's avatars. Without it that room is empty, but the menu and Play are not affected.
+local CreditsRoom = loadModule("CreditsRoom")
 
 -- Set by setupMenu.
 local menu, root, fader, back
+
+-- Bumped whenever the Credits scene is entered, exited or disposed. A late avatar placement stops when it changes.
+local creditsVisit = 0
+
+-- Whether `model` has everything CharacterPreview needs: its Humanoid and root part, and as many descendants as the
+-- server counted just before it parented the model (the DescendantCount attribute). Never waits; the avatar thread
+-- below waits for the same things, and the Credits scene just goes without an avatar that is not there yet.
+local function avatarIsReady(model)
+	if not (model:FindFirstChildOfClass("Humanoid") and model:FindFirstChild("HumanoidRootPart")) then
+		return false
+	end
+	local expected = model:GetAttribute("DescendantCount")
+	return type(expected) ~= "number" or #model:GetDescendants() >= expected
+end
+
+-- The Credits room's source avatars that are there and complete right now: { Developer = Model?, Viewer = Model? }.
+local function readyCreditSources()
+	local sources = {}
+	local creditAvatars = ReplicatedStorage:FindFirstChild("CreditAvatars")
+	local developer = creditAvatars and creditAvatars:FindFirstChild("Developer")
+	if developer and avatarIsReady(developer) then
+		sources.Developer = developer
+	end
+	local menuAvatars = ReplicatedStorage:FindFirstChild("MenuAvatars")
+	local viewer = menuAvatars and menuAvatars:FindFirstChild(tostring(player.UserId))
+	if viewer and avatarIsReady(viewer) then
+		sources.Viewer = viewer
+	end
+	return sources
+end
 
 local playing = false
 
@@ -257,6 +292,59 @@ local function setupMenu()
 		})
 		if not ok then
 			warn("MainMenuClient: could not register the Settings board: " .. tostring(err))
+		end
+	end
+
+	-- The Credits scene shows the developer's and the player's avatars. Same contract as above: nothing here yields, and
+	-- exit and dispose are safe to run twice or with no avatars placed. enter never waits for an avatar: one that is not
+	-- ready leaves its stand empty, and a short-lived thread places it if it arrives while the player is still here.
+	if SceneDirector and CreditsRoom then
+		local function findCreditsRoom()
+			return workspace:FindFirstChild("CreditsRoom")
+		end
+		local ok, err = pcall(SceneDirector.register, "Credits", {
+			enter = function()
+				creditsVisit += 1
+				local visit = creditsVisit
+				local room = findCreditsRoom()
+				if not room then
+					warn("MainMenuClient: workspace.CreditsRoom is missing; the Credits room stays empty")
+					return
+				end
+				CreditsRoom.enter(room, readyCreditSources())
+				task.spawn(function()
+					local deadline = os.clock() + CREDITS_AVATAR_WAIT
+					while true do
+						task.wait(CREDITS_AVATAR_POLL)
+						-- Left Credits (or pressed Play) in the meantime, or nothing more to wait for.
+						local folder = room:FindFirstChild("CreditAvatars")
+						if visit ~= creditsVisit or os.clock() >= deadline or not folder then
+							return
+						end
+						if folder:FindFirstChild("Developer") and folder:FindFirstChild("Viewer") then
+							return
+						end
+						CreditsRoom.place(room, readyCreditSources())
+					end
+				end)
+			end,
+			exit = function()
+				creditsVisit += 1
+				local room = findCreditsRoom()
+				if room then
+					CreditsRoom.exit(room)
+				end
+			end,
+			dispose = function()
+				creditsVisit += 1
+				local room = findCreditsRoom()
+				if room then
+					CreditsRoom.dispose(room)
+				end
+			end,
+		})
+		if not ok then
+			warn("MainMenuClient: could not register the Credits room: " .. tostring(err))
 		end
 	end
 

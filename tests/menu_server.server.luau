@@ -1,7 +1,7 @@
 -- Run in the Server datamodel during a playtest, one case at a time (set CASE below).
 -- Order: A -> client fire_play (N=1) -> B -> C1 -> client fire_play (N=3) -> C2 -> D
---   A  avatar built and parked in MenuAvatars, no character yet
---   B  after Play: character spawned, avatar removed
+--   A  avatar built and parked in MenuAvatars, no character yet; the developer's credit avatar built in CreditAvatars
+--   B  after Play: character spawned, avatar removed (the developer's credit avatar stays)
 --   C1 death respawns exactly once per death (two deaths, so stacked Died connections would show)
 --   C2 repeat PlayPressed fires after the first spawn do not spawn again
 --   D  cleanup (the PlayerRemoving logic, via the Studio-only TestHook) removes avatar and state
@@ -66,6 +66,20 @@ if CASE == "A" then
 	assert(playPressed and playPressed:IsA("RemoteEvent"), "ReplicatedStorage.PlayPressed (RemoteEvent) missing")
 	assert(Players.CharacterAutoLoads == false, "CharacterAutoLoads must be false")
 	assert(testHook():Invoke("state", player.UserId) == "menu", "player should be in the menu state")
+	-- The developer's credit avatar: built once, in its own thread (web calls), so allow it time.
+	local credit = ReplicatedStorage:FindFirstChild("CreditAvatars")
+	assert(credit and credit:IsA("Folder"), "ReplicatedStorage.CreditAvatars (Folder) missing")
+	local developer = waitFor(function()
+		return credit:FindFirstChild("Developer")
+	end, 20)
+	assert(developer and developer:IsA("Model"), "CreditAvatars.Developer missing after 20s")
+	assert(developer:FindFirstChildOfClass("Humanoid"), "Developer has no Humanoid")
+	assert(developer:FindFirstChild("HumanoidRootPart"), "Developer has no HumanoidRootPart")
+	local displayName = developer:GetAttribute("DisplayName")
+	assert(type(displayName) == "string" and displayName ~= "", "Developer has no DisplayName attribute")
+	-- Set before parenting, so the client can wait for the parts (the model may gain an Animator after that).
+	local expected = developer:GetAttribute("DescendantCount")
+	assert(type(expected) == "number" and expected > 0 and expected <= #developer:GetDescendants(), "Developer DescendantCount is wrong: " .. tostring(expected))
 	return "PASS"
 elseif CASE == "B" then
 	local character = waitFor(function()
@@ -76,6 +90,8 @@ elseif CASE == "B" then
 	assert(character:IsDescendantOf(workspace), "spawned character is not in Workspace")
 	assert(menuAvatar() == nil, "MenuAvatars[" .. key .. "] should be destroyed after Play")
 	assert(testHook():Invoke("state", player.UserId) == "playing", "player should be in the playing state")
+	-- The developer's credit avatar is shared by everyone: Play must not remove it.
+	assert(ReplicatedStorage.CreditAvatars:FindFirstChild("Developer"), "Play must not destroy the developer's credit avatar")
 	return "PASS"
 elseif CASE == "C1" then
 	local c = player.Character
