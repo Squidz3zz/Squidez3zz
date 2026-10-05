@@ -19,6 +19,15 @@
 --   E1  regression for the ScreenGui path of VolumeSlider (the SurfaceGui fix must not break it): builds a throwaway
 --       ScreenGui slider on a throwaway SoundGroup and prints the points of a real drag along it, like D1.
 --   E2  like D2 (D2_STAGE press / middle / end) for that slider; "end" removes the throwaway slider and group.
+--   F1  like D1, but the drag starts on the Music ROW's title area, away from the thin track (Music is first set to 0.6,
+--       so a press that does not reach the slider cannot give the near-0 value D2's "press" stage wants). Run D2 with
+--       the same three stages (press / middle / end) after each step: the stage checks are shared.
+--   G1  go to Settings, switch Camera Sway off, count Activated on the Screen Effects row's RowHit and on its Toggle and
+--       print where to click: the row's TITLE area, away from the ON / OFF button.
+--   G2  run AFTER the real click: exactly one RowHit click, none on the Toggle, Screen Effects is off and the button
+--       reads OFF. Restores both settings.
+--   Case A also checks the touch targets: every row is at least 40 px high on screen at a 390 px high viewport (scaled to
+--   this window), the slider rows are Active (they start the drag) and each switch row has a full-size RowHit button.
 -- B and D need a real mouse: they aim with Camera:WorldToViewportPoint at the 3D spot of the control on the board.
 -- user_mouse_input coordinates are window relative and GetMouseLocation reads them as (x, y + 58), so y is printed
 -- already reduced by 58.
@@ -221,6 +230,34 @@ if CASE == "A" then
 	end
 	assert(copies == 1, "expected exactly one " .. GUI_NAME .. ", found " .. copies)
 
+	-- Touch targets: a finger needs 40 px, and the board is only ~266 px tall on a phone in landscape (390 px high), so
+	-- each ROW must be that big. Projection scales with the viewport height, so check against 40 * height / 390.
+	local viewportHeight = workspace.CurrentCamera.ViewportSize.Y
+	local minRowHeight = 40 * viewportHeight / 390
+	for _, rowName in { "MusicRow", "SfxRow", "SwayRow", "EffectsRow" } do
+		local row = gui:FindFirstChild(rowName)
+		assert(row and row:IsA("Frame"), rowName .. " missing")
+		local height = screenPointOf(gui, row, Vector2.new(0.5, 1)).Y - screenPointOf(gui, row, Vector2.new(0.5, 0)).Y
+		assert(
+			height >= minRowHeight,
+			("%s is %.1f px high on screen, a finger needs at least %.1f px at this %d px high viewport (40 px at 390)"):format(
+				rowName,
+				height,
+				minRowHeight,
+				viewportHeight
+			)
+		)
+		print(("settings_board A: %s is %.1f px high at a %d px high viewport (needs %.1f)"):format(rowName, height, viewportHeight, minRowHeight))
+	end
+	for _, rowName in { "MusicRow", "SfxRow" } do
+		assert(gui[rowName].Active, rowName .. " should be Active: a press anywhere on it starts the slider's drag")
+	end
+	for _, rowName in { "SwayRow", "EffectsRow" } do
+		local hit = gui[rowName]:FindFirstChild("RowHit")
+		assert(hit and hit:IsA("TextButton"), rowName .. ".RowHit (TextButton) missing: the whole row should flip the switch")
+		assert(hit.Size == UDim2.fromScale(1, 1), rowName .. ".RowHit should cover the whole row, is " .. tostring(hit.Size))
+	end
+
 	local originalMusic, originalSfx = music.Volume, sfx.Volume
 	local ok, err = pcall(function()
 		-- The sliders start at the groups' volumes ...
@@ -421,6 +458,52 @@ elseif CASE == "E2" then
 			testGui:Destroy()
 		end
 	end
+	assert(ok, err)
+elseif CASE == "F1" then
+	-- A drag that starts on the Music row's title, away from the track: the whole row is the touch target.
+	ensureScene("Settings")
+	local parts = boardParts()
+	playerGui:SetAttribute("SettingsBoardTestMusic", music.Volume) -- D2 restores it
+	VolumeSlider.setAlpha(parts.musicSlider, music, 0.6)
+	MenuSettings.set("CameraSway", false)
+	waitForCameraRest()
+	local row = parts.musicSlider.Parent
+	-- The title spans x 0.05-0.75 and y 0.06-0.52 of the row; the slider starts at x 0.05 and is 0.9 wide.
+	describePoint("Music row title area, left (alpha 0.08)", screenPointOf(parts.gui, row, Vector2.new(0.12, 0.25)))
+	describePoint("Music row title area, middle (alpha 0.5)", screenPointOf(parts.gui, row, Vector2.new(0.5, 0.25)))
+	describePoint("Music row right end (alpha 1.04)", screenPointOf(parts.gui, row, Vector2.new(0.985, 0.25)))
+elseif CASE == "G1" then
+	ensureScene("Settings")
+	local parts = boardParts()
+	assert(MenuSettings.get("ScreenEffects") == true, "ScreenEffects should start on")
+	MenuSettings.set("CameraSway", false)
+	waitForCameraRest()
+	local row = parts.effectsToggle.Parent
+	local rowHit = row:FindFirstChild("RowHit")
+	assert(rowHit and rowHit:IsA("TextButton"), "EffectsRow.RowHit (TextButton) missing")
+	playerGui:SetAttribute("SettingsBoardTestRowClicks", 0)
+	playerGui:SetAttribute("SettingsBoardTestToggleClicks", 0)
+	rowHit.Activated:Connect(function()
+		playerGui:SetAttribute("SettingsBoardTestRowClicks", (playerGui:GetAttribute("SettingsBoardTestRowClicks") or 0) + 1)
+	end)
+	parts.effectsToggle.Activated:Connect(function()
+		playerGui:SetAttribute("SettingsBoardTestToggleClicks", (playerGui:GetAttribute("SettingsBoardTestToggleClicks") or 0) + 1)
+	end)
+	-- The title spans x 0.05-0.65 of the row, the ON / OFF button x 0.69-0.95.
+	describePoint("Screen Effects row, title area", screenPointOf(parts.gui, row, Vector2.new(0.2, 0.5)))
+elseif CASE == "G2" then
+	assert(playerGui:GetAttribute("SettingsBoardTestRowClicks") ~= nil, "run case G1 first, in this same playtest")
+	local parts = boardParts()
+	local ok, err = pcall(function()
+		local rowClicks = playerGui:GetAttribute("SettingsBoardTestRowClicks")
+		local toggleClicks = playerGui:GetAttribute("SettingsBoardTestToggleClicks")
+		assert(rowClicks == 1, "expected exactly one real click on the row's RowHit, got " .. tostring(rowClicks))
+		assert(toggleClicks == 0, "the click on the title area must not reach the Toggle button, it got " .. tostring(toggleClicks))
+		assert(MenuSettings.get("ScreenEffects") == false, "a click on the row should switch Screen Effects off")
+		assert(parts.effectsToggle.Text == "OFF", "the button should read OFF after the row click, reads " .. parts.effectsToggle.Text)
+	end)
+	MenuSettings.set("ScreenEffects", true)
+	MenuSettings.set("CameraSway", true)
 	assert(ok, err)
 else
 	error("unknown CASE " .. tostring(CASE))

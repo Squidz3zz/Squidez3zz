@@ -1,5 +1,8 @@
 -- VolumeSlider: a draggable music volume slider.
--- attach(slider, group) wires mouse/touch dragging on `slider` (a Frame holding Fill and Knob Frames) to group.Volume.
+-- attach(slider, group, hitArea?) wires mouse/touch dragging on `slider` (a Frame holding Fill and Knob Frames) to
+-- group.Volume. `hitArea` (a GuiObject in the same GUI, optional) is a bigger place to start a drag from, for a slider
+-- too thin to hit with a finger: a press anywhere on it starts the drag, and the pointer's X still maps through the
+-- slider's own width. Without it only the slider and its knob start a drag.
 -- setAlpha(slider, group, alpha) is the only place the volume and the visuals change: dragging calls it, and so do
 -- the tests. It acts only on the Instances it is given and keeps no state of its own.
 --
@@ -32,7 +35,7 @@ local function alphaAt(slider, input)
 	return (input.Position.X - slider.AbsolutePosition.X) / slider.AbsoluteSize.X
 end
 
-function VolumeSlider.attach(slider, group)
+function VolumeSlider.attach(slider, group, hitArea)
 	VolumeSlider.setAlpha(slider, group, group.Volume)
 
 	local dragging = false
@@ -99,6 +102,9 @@ function VolumeSlider.attach(slider, group)
 
 	slider.InputBegan:Connect(startDrag)
 	slider.Knob.InputBegan:Connect(startDrag)
+	if hitArea then
+		hitArea.InputBegan:Connect(startDrag)
+	end
 end
 
 return VolumeSlider

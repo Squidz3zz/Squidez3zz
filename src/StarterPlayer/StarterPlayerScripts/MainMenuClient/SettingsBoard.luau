@@ -9,6 +9,11 @@
 --   EffectsRow.Toggle         Screen Effects, ON / OFF (MenuSettings)
 -- A switch flips its MenuSettings value and shows it, and shows it again whenever MenuSettings changes from anywhere
 -- else. Nothing here yields: it runs inside SceneDirector's hooks, behind the black screen.
+--
+-- Touch targets: on a phone in landscape the board is only about 270 px tall on screen, so the sliders and the ON / OFF
+-- buttons themselves are far under the 40 px a finger needs. The whole ROW (about 45 px there) is the target instead: a
+-- press anywhere on a slider row starts that slider's drag (the X still maps through the slider's own width), and a
+-- tap anywhere on a switch row (SwayRow.RowHit, under the title and the button) flips the switch.
 local SoundService = game:GetService("SoundService")
 
 local MenuSettings = require(script.Parent.MenuSettings)
@@ -82,9 +87,11 @@ local function newRow(gui, name, index)
 end
 
 -- A volume slider row: the title on top, a thick track with an amber Fill and a Knob under it (the shape VolumeSlider
--- drives). The track is tall so it is easy to hit from the camera, and the knob stands out above and below it.
+-- drives). The track is tall so it is easy to hit from the camera, and the knob stands out above and below it. The
+-- whole row starts a drag, so a finger need not find the thin track.
 local function newSliderRow(gui, name, title, index, group)
 	local row = newRow(gui, name, index)
+	row.Active = true
 	label({
 		Name = "Title",
 		Text = title,
@@ -115,7 +122,7 @@ local function newSliderRow(gui, name, title, index, group)
 	}, slider)
 
 	if group and group:IsA("SoundGroup") then
-		VolumeSlider.attach(slider, group)
+		VolumeSlider.attach(slider, group, row)
 	else
 		warn("SettingsBoard: the " .. title .. " slider has no SoundGroup to control")
 	end
@@ -132,6 +139,19 @@ end
 -- (the caller disconnects it with the gui).
 local function newSwitchRow(gui, name, title, index, settingName)
 	local row = newRow(gui, name, index)
+	-- The whole row is the switch's touch target. It is created first, so it sits under the title and the button, and
+	-- the button still takes its own presses. Transparent; it only needs the text properties the board's checks expect.
+	local rowHit = create("TextButton", {
+		Name = "RowHit",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		AutoButtonColor = false,
+		Selectable = false,
+		FontFace = FONT,
+		Text = "",
+		TextScaled = true,
+	}, row)
 	label({
 		Name = "Title",
 		Text = title,
@@ -155,9 +175,11 @@ local function newSwitchRow(gui, name, title, index, settingName)
 		renderToggle(toggle, MenuSettings.get(settingName))
 	end
 	render()
-	toggle.Activated:Connect(function()
+	local function flip()
 		MenuSettings.set(settingName, not MenuSettings.get(settingName))
-	end)
+	end
+	toggle.Activated:Connect(flip)
+	rowHit.Activated:Connect(flip)
 	return row, MenuSettings.changed(settingName):Connect(render)
 end
 
