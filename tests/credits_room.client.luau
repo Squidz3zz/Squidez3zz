@@ -67,7 +67,12 @@ local menu = waitFor(function()
 	return playerGui:FindFirstChild("MainMenu")
 end, 10)
 assert(menu, "MainMenu missing in PlayerGui")
-local fader = menu.Fader
+-- The Fader lives in its own full-screen ScreenGui, MainMenuFader.
+local faderGui = waitFor(function()
+	return playerGui:FindFirstChild("MainMenuFader")
+end, 10)
+assert(faderGui, "MainMenuFader missing in PlayerGui")
+local fader = faderGui.Fader
 local playerScripts = player:WaitForChild("PlayerScripts", 10)
 local clientScript = playerScripts and playerScripts:WaitForChild("MainMenuClient", 10)
 assert(clientScript, "PlayerScripts.MainMenuClient missing")

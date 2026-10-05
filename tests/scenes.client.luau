@@ -54,14 +54,21 @@ end
 
 local playerGui = player:WaitForChild("PlayerGui", 10)
 assert(playerGui, "PlayerGui missing")
-local menu = waitFor(function()
-	return playerGui:FindFirstChild("MainMenu")
-end, 10)
-assert(menu, "MainMenu missing in PlayerGui")
+-- The menu is three ScreenGuis in PlayerGui: MainMenu (Root, Back), MainMenuVignette (Vignette), MainMenuFader (Fader).
+local function waitForGui(name)
+	local gui = waitFor(function()
+		return playerGui:FindFirstChild(name)
+	end, 10)
+	assert(gui, name .. " missing in PlayerGui")
+	return gui
+end
+local menu = waitForGui("MainMenu")
+local vignetteGui = waitForGui("MainMenuVignette")
+local faderGui = waitForGui("MainMenuFader")
 assert(playerGui:GetAttribute("MenuOpen") == true, "MenuOpen should be true while the menu is open")
 assert(player.Character == nil, "player already has a character; run this in a fresh playtest")
 
-local root, back, fader, vignette = menu.Root, menu.Back, menu.Fader, menu.Vignette
+local root, back, fader, vignette = menu.Root, menu.Back, faderGui.Fader, vignetteGui.Vignette
 local playerScripts = player:WaitForChild("PlayerScripts", 10)
 local clientScript = playerScripts and playerScripts:WaitForChild("MainMenuClient", 10)
 local hook = clientScript and clientScript:WaitForChild("TestHook", 10)
@@ -305,7 +312,9 @@ elseif CASE == "C" then
 	assert(character, "player.Character is nil 10s after play()")
 	assert(waitFor(function()
 		return playerGui:FindFirstChild("MainMenu") == nil
-	end, 10), "MainMenu was not destroyed after Play")
+			and playerGui:FindFirstChild("MainMenuVignette") == nil
+			and playerGui:FindFirstChild("MainMenuFader") == nil
+	end, 10), "MainMenu, MainMenuVignette and MainMenuFader were not all destroyed after Play")
 	assert(playerGui:GetAttribute("MenuOpen") == false, "MenuOpen should be false after Play")
 	assert(
 		waitFor(function()

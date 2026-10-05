@@ -19,20 +19,40 @@ end
 local playerGui = player:WaitForChild("PlayerGui", 10)
 assert(playerGui, "PlayerGui missing")
 
--- The menu is cloned in at join.
+-- The menu is cloned in at join, as three ScreenGuis: MainMenu (Root, Back), MainMenuVignette (Vignette) and
+-- MainMenuFader (Fader).
+local GUI_NAMES = { "MainMenu", "MainMenuVignette", "MainMenuFader" }
 local menu = waitFor(function()
 	return playerGui:FindFirstChild("MainMenu")
 end, 10)
 assert(menu, "MainMenu missing in PlayerGui")
+local vignetteGui = waitFor(function()
+	return playerGui:FindFirstChild("MainMenuVignette")
+end, 10)
+assert(vignetteGui, "MainMenuVignette missing in PlayerGui")
+local faderGui = waitFor(function()
+	return playerGui:FindFirstChild("MainMenuFader")
+end, 10)
+assert(faderGui, "MainMenuFader missing in PlayerGui")
+for _, name in GUI_NAMES do
+	local gui = playerGui:FindFirstChild(name)
+	assert(gui and gui:IsA("ScreenGui") and gui.Parent == playerGui, name .. " should be a ScreenGui in PlayerGui while the menu is open")
+end
+-- The clones keep what the build gave them: the overlays are full screen, behind (9) and over (11) the menu (10).
+assert(vignetteGui.ScreenInsets == Enum.ScreenInsets.None and vignetteGui.DisplayOrder == 9, "MainMenuVignette should be ScreenInsets None, DisplayOrder 9")
+assert(menu.ScreenInsets == Enum.ScreenInsets.DeviceSafeInsets and menu.DisplayOrder == 10, "MainMenu should be DeviceSafeInsets, DisplayOrder 10")
+assert(faderGui.ScreenInsets == Enum.ScreenInsets.None and faderGui.DisplayOrder == 11, "MainMenuFader should be ScreenInsets None, DisplayOrder 11")
 assert(playerGui:GetAttribute("MenuOpen") == true, "MenuOpen should be true while the menu is open")
 assert(player.Character == nil, "player already has a character; run this in a fresh playtest")
 
 local root = menu:FindFirstChild("Root")
 assert(root, "MainMenu.Root missing")
 assert(root:FindFirstChild("SettingsPanel") == nil and root:FindFirstChild("CreditsPanel") == nil, "the popup panels should be gone")
-local vignette = menu:FindFirstChild("Vignette")
+local vignette = vignetteGui:FindFirstChild("Vignette")
+local fader = faderGui:FindFirstChild("Fader")
 local back = menu:FindFirstChild("Back")
-assert(vignette and back, "MainMenu.Vignette / MainMenu.Back missing")
+assert(vignette and fader and back, "MainMenuVignette.Vignette / MainMenuFader.Fader / MainMenu.Back missing")
+assert(menu:FindFirstChild("Vignette") == nil and menu:FindFirstChild("Fader") == nil, "Vignette and Fader should not be in MainMenu")
 assert(root.Visible, "Root should be visible at join")
 assert(not back.Visible, "Back should start hidden")
 
@@ -90,10 +110,20 @@ local character = waitFor(function()
 end, 10)
 assert(character, "player.Character is nil 10s after play()")
 
+-- All three ScreenGuis go, not just MainMenu.
+local function leftOver()
+	local names = {}
+	for _, name in GUI_NAMES do
+		if playerGui:FindFirstChild(name) then
+			table.insert(names, name)
+		end
+	end
+	return table.concat(names, ", ")
+end
 local gone = waitFor(function()
-	return playerGui:FindFirstChild("MainMenu") == nil
+	return leftOver() == ""
 end, 10)
-assert(gone, "MainMenu was not destroyed after Play")
+assert(gone, "the menu's ScreenGuis were not all destroyed after Play, still in PlayerGui: " .. leftOver())
 assert(playerGui:GetAttribute("MenuOpen") == false, "MenuOpen should be false after Play")
 assert(
 	playerGui:GetAttribute("MenuScene") == nil,
