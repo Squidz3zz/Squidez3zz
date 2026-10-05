@@ -1,0 +1,104 @@
+# Recovery guide: getting the main menu back
+
+This is for when Roblox Studio has lost your work (a crash, a PC restart, or a place that reopened as an older version).
+You do not need anyone's help to follow it. Everything the menu needs is in this folder.
+
+## First: always save your work
+
+At the end of every Studio session, do one of these:
+
+- **File -> Publish to Roblox** (best: the place is stored online), or
+- **File -> Save to File** (saves a `.rbxl` copy on your PC).
+
+If your PC restarts or Studio crashes, Studio can reopen the last published version. Anything you built after that
+publish, such as the rooms, the menu, or the scripts, is gone. Publishing often is the whole trick.
+
+## If Studio lost your work
+
+Do these steps in order. Run a `.luau` file by opening it in a text editor, copying everything, pasting it into Studio's
+**Command Bar** (View -> Command Bar), and pressing Enter. Then look at the **Output** window (View -> Output). Red
+text means something went wrong. No red text means it worked.
+
+### a) Rebuild the two rooms
+
+1. In the Explorer, delete `Workspace.SettingsRoom` and `Workspace.CreditsRoom` if they exist (the script refuses to run
+   while they do).
+2. Run `studio/build_menu_rooms.luau`.
+
+It builds both rooms. If your own four parts (`BackgroundForSettings`, `Settingsboard`, `BackgroundForCredits`,
+`PlayerCreditStand`) are loose in Workspace, it uses them. If they are not there, it builds stand-ins with the same
+names, so everything still works.
+
+### b) Rebuild the menu
+
+1. In the Explorer, if `ReplicatedStorage.MainMenu` exists, move it out of the way (drag it into `ServerStorage`) or
+   delete it. The script refuses to run while it exists.
+2. Run `studio/build_main_menu_ui.luau`.
+
+It builds `ReplicatedStorage.MainMenu` and adds `SoundService.Music` and `SoundService.SFX` if they are missing.
+
+### c) Put the scripts back
+
+There are ten scripts. The file names are in `src/`.
+
+**Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
+
+1. Install Rojo and its Studio plugin.
+2. In a terminal opened in this folder, run `rojo serve`.
+3. In Studio, open the Rojo plugin and press **Connect**.
+
+The file `default.project.json` already says where everything goes. It only touches `ServerScriptService` and
+`StarterPlayerScripts`, and it leaves your other scripts alone.
+
+**By hand:** create each script with the right kind and parent, then paste the file's text into it.
+
+| Name | Kind | Parent | File to copy |
+|---|---|---|---|
+| `MenuServer` | Script | `ServerScriptService` | `src/ServerScriptService/MenuServer.server.luau` |
+| `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
+| `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
+| `CharacterPreview` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/CharacterPreview.luau` |
+| `CreditsRoom` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/CreditsRoom.luau` |
+| `MenuCamera` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuCamera.luau` |
+| `MenuSettings` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuSettings.luau` |
+| `SceneDirector` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SceneDirector.luau` |
+| `SettingsBoard` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SettingsBoard.luau` |
+| `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
+
+The eight ModuleScripts sit **inside** `MainMenuClient` (drag them onto it in the Explorer). The names must match
+exactly.
+
+### d) Turn off automatic spawning
+
+In the Explorer, click **Players**. In Properties, untick **CharacterAutoLoads**. The menu holds each player until they
+press Play, so nobody should spawn on their own.
+
+### e) Optional: the menu's map camera
+
+The menu looks at your map from a spot you choose. Fly the editor camera to the view you want, then run this in the
+Command Bar. It makes a part called `MenuCameraShot` there. The camera looks out of the part's **Front** face, which
+is the way the editor camera was looking.
+
+```lua
+local p = workspace:FindFirstChild("MenuCameraShot") or Instance.new("Part"); p.Name = "MenuCameraShot"; p.Size = Vector3.new(1,1,1); p.Anchored = true; p.CFrame = workspace.CurrentCamera.CFrame; p.Parent = workspace
+```
+
+When the game starts it anchors the part, hides it and turns off its collisions, so you do not have to. Without this
+part, the menu uses a default angle.
+
+### f) Playtest checklist
+
+Press **Play** in Studio (the Test tab) and check each of these:
+
+1. The menu opens with the title, three buttons, and your avatar on the right after a few seconds.
+2. **Settings** fades to a room with a board. The sliders move and the switches flip. **BACK** returns.
+3. **Credits** fades to a room with two avatars on stands. Hovering one shows a name. **BACK** returns.
+4. **Play** spawns your character and the menu goes away.
+5. Reset your character. It respawns and the menu does not come back.
+6. The Output window has no red text.
+
+## What these steps cannot bring back
+
+The build scripts make the **baseline look**. If you restyled the menu or the rooms in Studio after your last publish,
+for example moved a button, changed a colour, or added a lamp, those changes were not in the scripts. Redo them, and
+publish again straight away.

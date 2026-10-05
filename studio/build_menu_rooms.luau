@@ -6,8 +6,9 @@
 -- CreditsCameraShot, the Settingsboard BoardFace attribute, and the dressing (shell, grate trench, girders, pipes,
 -- caged amber lamps, haze and steam).
 -- The rooms assume the user's parts are axis-aligned with their front faces toward -Z (the cameras look along +Z).
--- After it runs, Studio is the source of truth for the rooms. The script refuses to run while either room exists, so
--- as a recovery baseline: move the user's four parts back out to Workspace (raised by 200), delete both rooms, then run.
+-- After it runs, Studio is the source of truth for the rooms. The script refuses to run while either room exists.
+-- To rebuild: delete workspace.SettingsRoom and workspace.CreditsRoom, then run this script. With no user parts present
+-- it recreates them (stand-in path).
 if workspace:FindFirstChild("SettingsRoom") or workspace:FindFirstChild("CreditsRoom") then
 	error("rooms already exist")
 end
