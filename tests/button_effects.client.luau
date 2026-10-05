@@ -29,13 +29,13 @@ end, 10)
 assert(menu, "MainMenu missing in PlayerGui")
 local root = menu:FindFirstChild("Root")
 assert(root, "MainMenu.Root missing")
+assert(menu:FindFirstChild("Back"), "MainMenu.Back missing")
 
 local buttons = {
 	Play = root.Buttons.Play,
 	Settings = root.Buttons.Settings,
 	Credits = root.Buttons.Credits,
-	SettingsClose = root.SettingsPanel.Close,
-	CreditsClose = root.CreditsPanel.Close,
+	Back = menu:FindFirstChild("Back"),
 }
 
 -- attach() ran on every button: PopScale/PopStroke exist and start idle.
@@ -44,7 +44,7 @@ for name, button in buttons do
 	assert(popScale and popScale:IsA("UIScale"), "PopScale missing on " .. name)
 	local popStroke = button:FindFirstChild("PopStroke")
 	assert(popStroke and popStroke:IsA("UIStroke"), "PopStroke missing on " .. name)
-	assert(popStroke.Color == Color3.new(1, 1, 1), name .. " PopStroke should be white")
+	assert(popStroke.Color == Color3.fromRGB(255, 150, 30), name .. " PopStroke should be amber RGB(255, 150, 30)")
 	assert(popStroke.Thickness == 2, name .. " PopStroke.Thickness should be 2")
 	assert(popStroke.ApplyStrokeMode == Enum.ApplyStrokeMode.Border, name .. " PopStroke should use Border mode")
 	assert(math.abs(popScale.Scale - 1) <= TOLERANCE, name .. " PopScale should start at 1, got " .. popScale.Scale)

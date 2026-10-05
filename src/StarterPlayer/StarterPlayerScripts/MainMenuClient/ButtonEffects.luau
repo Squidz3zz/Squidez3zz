@@ -38,7 +38,7 @@ function ButtonEffects.attach(button)
 
 	local popStroke = Instance.new("UIStroke")
 	popStroke.Name = "PopStroke"
-	popStroke.Color = Color3.new(1, 1, 1)
+	popStroke.Color = Color3.fromRGB(255, 150, 30) -- factory amber
 	popStroke.Thickness = 2
 	popStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	popStroke.Transparency = STATES.idle.strokeTransparency

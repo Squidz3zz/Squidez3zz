@@ -1,12 +1,12 @@
--- Run in the Client datamodel of a playtest; the menu does not have to be open (it measures a clone of the
--- ReplicatedStorage.MainMenu template, so hover pops and panels in the live menu cannot skew it).
--- Simulates screens by cloning Root into a Frame of a temporary ScreenGui in PlayerGui. Root is all Scale, so it
--- reflows to the Frame. At each size it reads the rectangles of Title, Buttons and CharacterView and checks that
+-- Run in the Client datamodel of a playtest; the menu does not have to be open (it measures clones of the
+-- ReplicatedStorage.MainMenu template, so hover pops and scene changes in the live menu cannot skew it).
+-- Simulates screens by cloning Root and Back into a Frame of a temporary ScreenGui in PlayerGui. Both are all Scale,
+-- so they reflow to the Frame. At each size it reads the rectangles of Title, Buttons and CharacterView and checks that
 --   * they stay inside the screen and do not overlap each other,
 --   * the Play / Settings / Credits buttons are at least MIN_BUTTON_SIZE px tall and wide, stay inside their
 --     Buttons frame and do not overlap each other,
---   * the Close button of the Settings and Credits panels (each made Visible in the clone, they start hidden) is at
---     least MIN_BUTTON_SIZE px tall and wide and stays inside its panel,
+--   * the BACK button (hidden in the template, made Visible in the clone) is at least MIN_BUTTON_SIZE px tall and
+--     wide and stays inside the screen,
 --   * on the landscape phone, the Title starts below Roblox's topbar (where the menu and chat icons sit).
 -- Asserted: phone landscape (844x390, an iPhone 14) and the current window. Portrait (390x844) is only reported
 -- (printed), because Roblox phones play in landscape.
@@ -29,6 +29,7 @@ local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui", 10)
 assert(playerGui, "PlayerGui missing")
 local template = ReplicatedStorage:FindFirstChild("MainMenu")
 assert(template and template:FindFirstChild("Root"), "ReplicatedStorage.MainMenu.Root missing")
+assert(template:FindFirstChild("Back"), "ReplicatedStorage.MainMenu.Back missing")
 
 local function removeTestGuis()
 	for _, child in playerGui:GetChildren() do
@@ -54,8 +55,6 @@ local function describe(rect)
 	return ("(%.0f,%.0f %.0fx%.0f)"):format(rect.x, rect.y, rect.w, rect.h)
 end
 
-local PANEL_NAMES = { "SettingsPanel", "CreditsPanel" }
-
 -- Builds the simulated screen, measures it and returns { problems = {string}, details = string }.
 -- checkTopbar: also require the Title to start below the topbar.
 local function measure(label, size, keep, checkTopbar)
@@ -64,6 +63,7 @@ local function measure(label, size, keep, checkTopbar)
 	gui.ResetOnSpawn = false
 	gui.ScreenInsets = Enum.ScreenInsets.None
 	gui.DisplayOrder = 1000
+	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	local screen = Instance.new("Frame")
 	screen.Name = "Screen"
 	screen.Size = size
@@ -71,14 +71,11 @@ local function measure(label, size, keep, checkTopbar)
 	screen.BorderSizePixel = 0
 	screen.Parent = gui
 	local root = template.Root:Clone()
-	-- The panels start hidden; show them so their Close buttons get a layout to measure.
-	for _, panelName in PANEL_NAMES do
-		local panel = root:FindFirstChild(panelName)
-		if panel then
-			panel.Visible = true
-		end
-	end
 	root.Parent = screen
+	-- BACK starts hidden (only the room scenes show it); show it so it gets a layout to measure.
+	local back = template.Back:Clone()
+	back.Visible = true
+	back.Parent = screen
 	gui.Parent = playerGui
 
 	-- Layout (UIListLayout, aspect ratios) settles over the next frames.
@@ -158,24 +155,13 @@ local function measure(label, size, keep, checkTopbar)
 		end
 	end
 
-	for _, panelName in PANEL_NAMES do
-		local panel = root:FindFirstChild(panelName)
-		local close = panel and panel:FindFirstChild("Close")
-		if not close then
-			table.insert(problems, panelName .. ".Close missing")
-		else
-			local rect = rectOf(close)
-			table.insert(details, panelName .. ".Close " .. describe(rect))
-			if rect.h < MIN_BUTTON_SIZE or rect.w < MIN_BUTTON_SIZE then
-				table.insert(
-					problems,
-					("%s.Close is %.0fx%.0f px, under the %d px tap target"):format(panelName, rect.w, rect.h, MIN_BUTTON_SIZE)
-				)
-			end
-			if not inside(rect, rectOf(panel)) then
-				table.insert(problems, panelName .. ".Close " .. describe(rect) .. " spills out of " .. panelName)
-			end
-		end
+	local backRect = rectOf(back)
+	table.insert(details, "Back " .. describe(backRect))
+	if backRect.h < MIN_BUTTON_SIZE or backRect.w < MIN_BUTTON_SIZE then
+		table.insert(problems, ("Back is %.0fx%.0f px, under the %d px tap target"):format(backRect.w, backRect.h, MIN_BUTTON_SIZE))
+	end
+	if not inside(backRect, screenRect) then
+		table.insert(problems, "Back " .. describe(backRect) .. " is outside the screen " .. describe(screenRect))
 	end
 
 	if not keep then

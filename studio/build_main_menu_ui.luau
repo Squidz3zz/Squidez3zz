@@ -1,9 +1,11 @@
 -- One-shot build script: run in the Edit datamodel via execute_luau.
--- Builds the static main-menu tree from scratch as ReplicatedStorage.MainMenu, and creates SoundService.Music
--- unless a Music instance is already there. It never adopts, moves or edits anything in StarterGui, so a ScreenGui
--- of your own stays untouched.
+-- Builds the static main-menu tree from scratch as ReplicatedStorage.MainMenu (the heavy-factory look: Title and
+-- Buttons middle-left, the avatar slot on the right, a dark Vignette, a BACK button for the room scenes), and creates
+-- SoundService.Music and SoundService.SFX unless they are already there. It never adopts, moves or edits anything in
+-- StarterGui, so a ScreenGui of your own stays untouched.
 -- After it runs, Studio is the source of truth for the UI. The script refuses to run while ReplicatedStorage.MainMenu
--- exists, so as a recovery baseline it only works once the live MainMenu has been deleted (or renamed).
+-- exists, so as a recovery baseline it only works once the live MainMenu has been deleted (or moved out, e.g. to
+-- ServerStorage.MainMenuBackupV1).
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
@@ -11,18 +13,18 @@ if ReplicatedStorage:FindFirstChild("MainMenu") then
 	error("MainMenu already exists")
 end
 
--- Style: dark panels, white text, rounded corners. All sizes/positions use Scale only
--- (UICorner radius is the one exception allowed by design).
-local PANEL_COLOR = Color3.fromRGB(25, 25, 35)
-local PANEL_TRANSPARENCY = 0.15
-local TRACK_COLOR = Color3.fromRGB(60, 60, 80)
-local ACCENT_COLOR = Color3.fromRGB(90, 160, 255)
+-- Factory palette. All sizes/positions use Scale only (UIStroke thickness is the one exception allowed by design).
+local PANEL_COLOR = Color3.fromRGB(38, 36, 34)
+local AMBER = Color3.fromRGB(255, 150, 30)
+local VIGNETTE_COLOR = Color3.fromRGB(12, 9, 6)
 local WHITE = Color3.new(1, 1, 1)
-local CORNER = UDim.new(0.15, 0)
-local PILL = UDim.new(0.5, 0)
 
--- One font for the whole menu (new text objects default to Legacy).
-local FONT = Enum.Font.SourceSans
+-- One font for the whole menu: Oswald, with uppercase labels (new text objects default to Legacy fonts).
+local FONT = Font.fromEnum(Enum.Font.Oswald)
+local FONT_BOLD = Font.new(FONT.Family, Enum.FontWeight.Bold)
+
+-- How deep each vignette edge is, as a fraction of the screen side it runs along the other way.
+local VIGNETTE_DEPTH = 0.18
 
 local function apply(inst, props, parent)
 	for key, value in props do
@@ -42,22 +44,29 @@ local function label(props, parent)
 	local inst = Instance.new("TextLabel")
 	inst.BackgroundTransparency = 1
 	inst.BorderSizePixel = 0
-	inst.Font = FONT
+	inst.FontFace = FONT
 	inst.TextColor3 = WHITE
 	inst.TextScaled = true
 	return apply(inst, props, parent)
 end
 
+-- A factory button: dark steel with a thin amber bar down its left edge. Used by the menu buttons and BACK.
 local function button(props, parent)
 	local inst = Instance.new("TextButton")
 	inst.BackgroundColor3 = PANEL_COLOR
-	inst.BackgroundTransparency = PANEL_TRANSPARENCY
+	inst.BackgroundTransparency = 0
 	inst.BorderSizePixel = 0
-	inst.Font = FONT
+	inst.FontFace = FONT
 	inst.TextColor3 = WHITE
 	inst.TextScaled = true
 	apply(inst, props, parent)
-	make("UICorner", { CornerRadius = CORNER }, inst)
+	make("Frame", {
+		Name = "Accent",
+		Position = UDim2.fromScale(0, 0),
+		Size = UDim2.fromScale(0.03, 1),
+		BackgroundColor3 = AMBER,
+		BorderSizePixel = 0,
+	}, inst)
 	return inst
 end
 
@@ -76,127 +85,106 @@ local root = make("Frame", {
 	BorderSizePixel = 0,
 }, gui)
 
--- Title
-label({
+-- Title: sits just above the buttons and shares their left edge.
+-- Its top edge is at 0.20 of the height, which keeps it below Roblox's topbar (menu / chat icons) on phones in
+-- landscape (about 58pt at 844x390).
+local title = label({
 	Name = "Title",
 	Text = "GAME TITLE",
+	FontFace = FONT_BOLD,
 	TextXAlignment = Enum.TextXAlignment.Left,
-	-- Y 0.15 keeps the Title below Roblox's topbar (menu / chat icons) on phones in landscape (about 58pt at 844x390).
-	Position = UDim2.fromScale(0.05, 0.15),
-	Size = UDim2.fromScale(0.45, 0.12),
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.fromScale(0.06, 0.30),
+	Size = UDim2.fromScale(0.40, 0.10),
 }, root)
+make("UIStroke", { Color = AMBER, Thickness = 2 }, title)
 
--- Menu buttons
+-- Menu buttons: middle-left, vertically centred on 0.56.
+-- UIListLayout padding scales with this frame, not the screen: the gap on screen is 0.1775 x 0.50 = 0.089 of the
+-- height (the spec wants 0.08 to 0.10) and a button is 0.215 x 0.50 = 0.1075 of the height, i.e. 42px at 390px.
+-- (The spec's first values, 0.42 / 0.19 / 0.215, gave 31px buttons on the phone, under the 40px tap target.)
 local buttons = make("Frame", {
 	Name = "Buttons",
-	Position = UDim2.fromScale(0.05, 0.30),
-	Size = UDim2.fromScale(0.28, 0.42),
+	AnchorPoint = Vector2.new(0, 0.5),
+	Position = UDim2.fromScale(0.06, 0.56),
+	Size = UDim2.fromScale(0.24, 0.50),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 }, root)
 make("UIListLayout", {
 	FillDirection = Enum.FillDirection.Vertical,
 	SortOrder = Enum.SortOrder.LayoutOrder,
-	Padding = UDim.new(0.05, 0),
+	Padding = UDim.new(0.1775, 0),
 }, buttons)
 for index, name in { "Play", "Settings", "Credits" } do
 	button({
 		Name = name,
-		Text = name,
+		Text = string.upper(name),
 		LayoutOrder = index,
 		Position = UDim2.fromScale(0, 0),
-		Size = UDim2.fromScale(1, 0.28),
+		Size = UDim2.fromScale(1, 0.215),
 	}, buttons)
 end
 
 -- Character preview (a script fills the WorldModel and camera later)
 local characterView = make("ViewportFrame", {
 	Name = "CharacterView",
-	Position = UDim2.fromScale(0.57, 0.18),
-	Size = UDim2.fromScale(0.38, 0.72),
+	Position = UDim2.fromScale(0.56, 0.10),
+	Size = UDim2.fromScale(0.40, 0.85),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 }, root)
 make("UIAspectRatioConstraint", { AspectRatio = 0.95 }, characterView)
 make("WorldModel", {}, characterView)
 
--- Settings / Credits panels share geometry, header and close button.
-local function makePanel(name, headerText)
-	local panel = make("Frame", {
+-- Vignette: dark edges on all four sides, above Root and below BACK and the Fader. It is only ever seen, never
+-- clicked: Active stays false on every frame so a press goes straight through to the buttons underneath.
+-- Each edge fades with a UIGradient from Transparency 0.15 at the screen border to 1 on the inside. Gradient
+-- Rotation 0 runs left to right and 90 top to bottom, so the rotation is picked per edge to start at its outer side.
+local vignette = make("Frame", {
+	Name = "Vignette",
+	Position = UDim2.fromScale(0, 0),
+	Size = UDim2.fromScale(1, 1),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	Active = false,
+	ZIndex = 50,
+}, gui)
+local function edge(name, anchor, position, size, rotation)
+	local frame = make("Frame", {
 		Name = name,
-		Visible = false,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromScale(0.4, 0.4),
-		BackgroundColor3 = PANEL_COLOR,
-		BackgroundTransparency = PANEL_TRANSPARENCY,
+		AnchorPoint = anchor,
+		Position = position,
+		Size = size,
+		BackgroundColor3 = VIGNETTE_COLOR,
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
-		-- Above CharacterView (ZIndex 1, and it overlaps the panels), so an open panel is never drawn under the avatar.
-		-- The panel's children still draw on top of it: ZIndexBehavior is Sibling.
-		ZIndex = 5,
-	}, root)
-	make("UICorner", { CornerRadius = CORNER }, panel)
-	label({
-		Name = "Header",
-		Text = headerText,
-		TextXAlignment = Enum.TextXAlignment.Left,
-		Position = UDim2.fromScale(0.05, 0.05),
-		Size = UDim2.fromScale(0.8, 0.18),
-	}, panel)
-	-- Square, and at least 40px on a phone in landscape (0.12 of the panel width is about 40px at 844x390).
-	local close = button({
-		Name = "Close",
-		Text = "X",
-		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.fromScale(0.97, 0.03),
-		Size = UDim2.fromScale(0.12, 0.28),
-	}, panel)
-	make("UIAspectRatioConstraint", { AspectRatio = 1 }, close)
-	return panel
+		Active = false,
+	}, vignette)
+	make("UIGradient", {
+		Rotation = rotation,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.15),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	}, frame)
 end
+edge("Top", Vector2.new(0, 0), UDim2.fromScale(0, 0), UDim2.fromScale(1, VIGNETTE_DEPTH), 90)
+edge("Bottom", Vector2.new(0, 1), UDim2.fromScale(0, 1), UDim2.fromScale(1, VIGNETTE_DEPTH), 270)
+edge("Left", Vector2.new(0, 0), UDim2.fromScale(0, 0), UDim2.fromScale(VIGNETTE_DEPTH, 1), 0)
+edge("Right", Vector2.new(1, 0), UDim2.fromScale(1, 0), UDim2.fromScale(VIGNETTE_DEPTH, 1), 180)
 
-local settingsPanel = makePanel("SettingsPanel", "Settings")
-label({
-	Name = "MusicLabel",
-	Text = "Music Volume",
-	TextXAlignment = Enum.TextXAlignment.Left,
-	Position = UDim2.fromScale(0.1, 0.35),
-	Size = UDim2.fromScale(0.8, 0.14),
-}, settingsPanel)
-
-local slider = make("Frame", {
-	Name = "Slider",
-	Position = UDim2.fromScale(0.1, 0.62),
-	Size = UDim2.fromScale(0.8, 0.08),
-	BackgroundColor3 = TRACK_COLOR,
-	BorderSizePixel = 0,
-}, settingsPanel)
-make("UICorner", { CornerRadius = PILL }, slider)
-local fill = make("Frame", {
-	Name = "Fill",
-	Size = UDim2.fromScale(0.5, 1),
-	BackgroundColor3 = ACCENT_COLOR,
-	BorderSizePixel = 0,
-}, slider)
-make("UICorner", { CornerRadius = PILL }, fill)
-local knob = make("Frame", {
-	Name = "Knob",
-	AnchorPoint = Vector2.new(0.5, 0.5),
-	Position = UDim2.fromScale(0.5, 0.5),
-	Size = UDim2.fromScale(0.07, 2),
-	BackgroundColor3 = WHITE,
-	BorderSizePixel = 0,
-}, slider)
-make("UICorner", { CornerRadius = PILL }, knob)
-make("UIAspectRatioConstraint", { AspectRatio = 1 }, knob)
-
-local creditsPanel = makePanel("CreditsPanel", "Credits")
-label({
-	Name = "Body",
-	Text = "Made by YOUR NAME",
-	Position = UDim2.fromScale(0.1, 0.35),
-	Size = UDim2.fromScale(0.8, 0.3),
-}, creditsPanel)
+-- BACK: bottom-left, in the same skin. Hidden in the menu; the Settings and Credits rooms show it.
+-- Its height is 0.11 of the screen (0.09 would be 35px at 390px, under the 40px tap target).
+button({
+	Name = "Back",
+	Text = "BACK",
+	Visible = false,
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.fromScale(0.03, 0.95),
+	Size = UDim2.fromScale(0.12, 0.11),
+	ZIndex = 60,
+}, gui)
 
 -- Full-screen fade overlay, above everything
 make("Frame", {
@@ -212,6 +200,9 @@ make("Frame", {
 -- Everything built: publish. Rename + move last so a mid-build error never leaves a half-made MainMenu.
 if not SoundService:FindFirstChild("Music") then
 	make("SoundGroup", { Name = "Music", Volume = 0.5 }, SoundService)
+end
+if not SoundService:FindFirstChild("SFX") then
+	make("SoundGroup", { Name = "SFX", Volume = 0.5 }, SoundService)
 end
 apply(gui, { Name = "MainMenu" }, ReplicatedStorage)
 

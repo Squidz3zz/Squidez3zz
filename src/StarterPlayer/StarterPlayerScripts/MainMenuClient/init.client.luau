@@ -1,12 +1,14 @@
--- MainMenuClient: shows the main menu at join, wires the Settings/Credits panels and the Play button.
+-- MainMenuClient: shows the main menu at join and wires its Play, Settings and Credits buttons.
 -- The menu lives in ReplicatedStorage (not StarterGui) because the server holds players without a character
 -- until PlayPressed; it is cloned into PlayerGui here and destroyed once the player has spawned.
+-- Settings and Credits are 3D rooms: their buttons ask SceneDirector (a module under this script) to fade and cut there.
 --
 -- UI names this script depends on (all under ReplicatedStorage.MainMenu). Restyle anything, but keep these names:
 --   Root
 --   Root.Buttons.Play, Root.Buttons.Settings, Root.Buttons.Credits
---   Root.SettingsPanel (with Close and Slider), Root.CreditsPanel (with Close)
 --   Root.CharacterView
+--   Vignette
+--   Back
 --   Fader
 -- Root.Title is never looked up, so it can be renamed or restyled freely.
 -- If the UI is broken or never appears, setup warns and the player is spawned straight away instead: nobody
@@ -15,7 +17,6 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
-local SoundService = game:GetService("SoundService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
@@ -44,40 +45,31 @@ local function loadModule(name)
 	return result
 end
 
--- MenuCamera requires MenuSettings itself; loading it here first makes a broken MenuSettings warn at join.
-loadModule("MenuSettings")
+-- MenuCamera requires MenuSettings too (a broken MenuSettings warns here, at join, and takes MenuCamera down with it).
+local MenuSettings = loadModule("MenuSettings")
 local MenuCamera = loadModule("MenuCamera")
 local ButtonEffects = loadModule("ButtonEffects")
 local CharacterPreview = loadModule("CharacterPreview")
-local VolumeSlider = loadModule("VolumeSlider")
+-- Does not exist yet: nil until the scene director is added.
+local SceneDirector = loadModule("SceneDirector")
 
 -- Set by setupMenu.
-local menu, root, fader, panels
+local menu, root, fader
 
 local playing = false
 
-local function closePanels()
-	for _, panel in panels do
-		panel.Visible = false
+-- Settings and Credits are rooms run by SceneDirector. Without it (or once Play has started) the buttons do nothing.
+-- Returns true if a transition started. Guarded: a failing scene change must never touch the menu or the Play path.
+local function goToScene(name)
+	if playing or not SceneDirector then
+		return false
 	end
-	-- A hidden button may never get its MouseLeave / touch-up, so reset the Close buttons here or they would
-	-- reopen still popped. Guarded: a missing or broken ButtonEffects must never stop the panels closing.
-	if ButtonEffects then
-		for _, panel in panels do
-			pcall(ButtonEffects.setState, panel.Close, "idle")
-		end
+	local ok, result = pcall(SceneDirector.goTo, name)
+	if not ok then
+		warn("MainMenuClient: SceneDirector.goTo(" .. tostring(name) .. ") failed: " .. tostring(result))
+		return false
 	end
-end
-
--- Opening a panel closes the other one.
-local function openPanel(name)
-	assert(panels[name], "unknown panel: " .. tostring(name))
-	if playing then
-		return
-	end
-	for panelName, panel in panels do
-		panel.Visible = panelName == name
-	end
+	return result == true
 end
 
 local function fadeTo(transparency)
@@ -106,7 +98,6 @@ local function waitForCharacter(timeout)
 end
 
 local function runPlay()
-	closePanels()
 	GuiService.SelectedObject = nil
 	local fadeIn = fadeTo(0)
 	-- Guarded: a throw here must never stop the Play press from reaching the server.
@@ -148,50 +139,70 @@ local function setupMenu()
 	menu = template:Clone()
 	root = menu.Root
 	fader = menu.Fader
-	panels = {
-		Settings = root.SettingsPanel,
-		Credits = root.CreditsPanel,
-	}
+	local vignette = menu.Vignette
+	local back = menu.Back
 
 	root.Buttons.Play.Activated:Connect(play)
 	root.Buttons.Settings.Activated:Connect(function()
-		openPanel("Settings")
+		goToScene("Settings")
 	end)
 	root.Buttons.Credits.Activated:Connect(function()
-		openPanel("Credits")
+		goToScene("Credits")
 	end)
-	root.SettingsPanel.Close.Activated:Connect(closePanels)
-	root.CreditsPanel.Close.Activated:Connect(closePanels)
 
 	if ButtonEffects then
-		local buttons = {
-			root.Buttons.Play,
-			root.Buttons.Settings,
-			root.Buttons.Credits,
-			root.SettingsPanel.Close,
-			root.CreditsPanel.Close,
-		}
+		local menuButtons = { root.Buttons.Play, root.Buttons.Settings, root.Buttons.Credits }
 		-- Guarded: a failing effect must never keep the menu from opening (and the player from spawning).
-		for _, button in buttons do
+		local function attachEffects(button)
 			local ok, err = pcall(ButtonEffects.attach, button)
 			if not ok then
 				warn("MainMenuClient: ButtonEffects.attach failed for " .. button.Name .. ": " .. tostring(err))
 			end
 		end
+		for _, button in menuButtons do
+			attachEffects(button)
+		end
+		attachEffects(back)
+
+		-- A button that is hidden never gets its MouseLeave / touch-up, so one hidden while popped (the Settings
+		-- button, when its click hides Root) would come back still popped. Reset them whenever they are hidden.
+		local function resetWhenHidden(container, containerButtons)
+			container:GetPropertyChangedSignal("Visible"):Connect(function()
+				if container.Visible then
+					return
+				end
+				for _, button in containerButtons do
+					pcall(ButtonEffects.setState, button, "idle")
+				end
+			end)
+		end
+		resetWhenHidden(root, menuButtons)
+		resetWhenHidden(back, { back })
 	end
 
-	-- Guarded like ButtonEffects: a broken slider must never keep the menu from opening.
-	if VolumeSlider then
+	-- The Vignette follows the Screen Effects setting, now and whenever it changes.
+	-- Guarded like ButtonEffects: a broken setting must never keep the menu from opening.
+	if MenuSettings then
 		local ok, err = pcall(function()
-			VolumeSlider.attach(root.SettingsPanel.Slider, SoundService.Music)
+			local function update()
+				vignette.Visible = MenuSettings.get("ScreenEffects")
+			end
+			update()
+			local connection = MenuSettings.changed("ScreenEffects"):Connect(update)
+			-- The setting outlives the menu: stop listening once Play has destroyed it.
+			menu.Destroying:Connect(function()
+				connection:Disconnect()
+			end)
 		end)
 		if not ok then
-			warn("MainMenuClient: VolumeSlider.attach failed: " .. tostring(err))
+			warn("MainMenuClient: could not bind the Vignette to Screen Effects: " .. tostring(err))
 		end
 	end
 
 	menu.Parent = playerGui
 	playerGui:SetAttribute("MenuOpen", true)
+	-- The scene the player is looking at: SceneDirector keeps this up to date once it exists.
+	playerGui:SetAttribute("MenuScene", "Menu")
 end
 
 local setupOk, setupError = pcall(setupMenu)
@@ -278,13 +289,16 @@ end
 
 if RunService:IsStudio() then
 	-- Test hook for tests/menu_client.client.luau (execute_luau cannot reach this script's locals).
+	--   goTo(name)  asks for a scene change like the Settings / Credits buttons do; returns whether one started
+	--   scene()     the scene the menu says it is showing (the PlayerGui attribute MenuScene)
+	--   play()      presses Play; returns false if it was already pressed
 	local hook = Instance.new("BindableFunction")
 	hook.Name = "TestHook"
 	hook.OnInvoke = function(action, arg)
-		if action == "openPanel" then
-			openPanel(arg)
-		elseif action == "closePanels" then
-			closePanels()
+		if action == "goTo" then
+			return goToScene(arg)
+		elseif action == "scene" then
+			return playerGui:GetAttribute("MenuScene")
 		elseif action == "play" then
 			return play()
 		else
