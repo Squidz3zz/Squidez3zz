@@ -50,11 +50,11 @@ local MenuSettings = loadModule("MenuSettings")
 local MenuCamera = loadModule("MenuCamera")
 local ButtonEffects = loadModule("ButtonEffects")
 local CharacterPreview = loadModule("CharacterPreview")
--- Does not exist yet: nil until the scene director is added.
+-- Runs the Settings and Credits rooms: without it their buttons do nothing.
 local SceneDirector = loadModule("SceneDirector")
 
 -- Set by setupMenu.
-local menu, root, fader
+local menu, root, fader, back
 
 local playing = false
 
@@ -99,8 +99,20 @@ end
 
 local function runPlay()
 	GuiService.SelectedObject = nil
-	local fadeIn = fadeTo(0)
+	-- Play can be pressed in the middle of a scene change. stop() ends it (it never yields) before the fade below
+	-- starts, so the transition can no longer touch the Fader, Root, Back or the camera.
 	-- Guarded: a throw here must never stop the Play press from reaching the server.
+	if SceneDirector then
+		local ok, err = pcall(SceneDirector.stop)
+		if not ok then
+			warn("MainMenuClient: SceneDirector.stop failed: " .. tostring(err))
+		end
+	end
+	-- Whatever scene the player was in, Play ends on the main menu's own screen.
+	root.Visible = true
+	back.Visible = false
+	local fadeIn = fadeTo(0)
+	-- Guarded like the above.
 	if MenuCamera then
 		local ok, err = pcall(MenuCamera.stop)
 		if not ok then
@@ -117,9 +129,15 @@ local function runPlay()
 		fadeIn.Completed:Wait()
 	end
 	root:Destroy()
+	-- The Vignette is a sibling of Root, so it would otherwise stay on screen through the fade out.
+	local vignette = menu:FindFirstChild("Vignette")
+	if vignette then
+		vignette.Visible = false
+	end
 	fadeTo(1).Completed:Wait()
 	menu:Destroy()
 	playerGui:SetAttribute("MenuOpen", false)
+	playerGui:SetAttribute("MenuScene", nil)
 end
 
 -- Debounced: returns true if this call started the Play flow, false if it was already running.
@@ -140,7 +158,7 @@ local function setupMenu()
 	root = menu.Root
 	fader = menu.Fader
 	local vignette = menu.Vignette
-	local back = menu.Back
+	back = menu.Back
 
 	root.Buttons.Play.Activated:Connect(play)
 	root.Buttons.Settings.Activated:Connect(function()
@@ -199,9 +217,17 @@ local function setupMenu()
 		end
 	end
 
+	-- Guarded like the rest: a broken SceneDirector leaves Settings and Credits dead, never the menu or Play.
+	if SceneDirector then
+		local ok, err = pcall(SceneDirector.init, { fader = fader, root = root, back = back, menuCamera = MenuCamera })
+		if not ok then
+			warn("MainMenuClient: SceneDirector.init failed: " .. tostring(err))
+		end
+	end
+
 	menu.Parent = playerGui
 	playerGui:SetAttribute("MenuOpen", true)
-	-- The scene the player is looking at: SceneDirector keeps this up to date once it exists.
+	-- The scene the player is looking at: SceneDirector keeps this up to date from here on.
 	playerGui:SetAttribute("MenuScene", "Menu")
 end
 
@@ -288,9 +314,10 @@ if CharacterPreview then
 end
 
 if RunService:IsStudio() then
-	-- Test hook for tests/menu_client.client.luau (execute_luau cannot reach this script's locals).
-	--   goTo(name)  asks for a scene change like the Settings / Credits buttons do; returns whether one started
-	--   scene()     the scene the menu says it is showing (the PlayerGui attribute MenuScene)
+	-- Test hook for tests/menu_client.client.luau and tests/scenes.client.luau (execute_luau cannot reach this script's locals).
+	--   goTo(name)  asks SceneDirector for a scene change like the Settings / Credits / BACK buttons do; returns
+	--               SceneDirector.goTo's boolean (whether a transition started)
+	--   scene()     the scene the menu says it is showing (the PlayerGui attribute MenuScene, kept by SceneDirector)
 	--   play()      presses Play; returns false if it was already pressed
 	local hook = Instance.new("BindableFunction")
 	hook.Name = "TestHook"

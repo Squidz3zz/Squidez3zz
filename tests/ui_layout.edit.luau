@@ -101,7 +101,7 @@ assert(menu.DisplayOrder == 10, "MainMenu.DisplayOrder must be 10")
 -- Title: sits above the buttons, sharing their left edge. Oswald Bold with an amber outline.
 local title = get("Root.Title")
 assert(title.AnchorPoint == Vector2.new(0, 1), "Title.AnchorPoint must be (0, 1)")
-expectUDim2("Root.Title", "Position", 0.06, 0, 0.30, 0)
+expectUDim2("Root.Title", "Position", 0.06, 0, 0.27, 0)
 expectUDim2("Root.Title", "Size", 0.40, 0, 0.10, 0)
 assert(title.FontFace.Family:find("Oswald", 1, true), "Title must use Oswald, got " .. title.FontFace.Family)
 assert(title.FontFace.Weight == Enum.FontWeight.Bold, "Title must be Bold, got " .. tostring(title.FontFace.Weight))
@@ -206,7 +206,11 @@ expectColor("Back.Accent", "BackgroundColor3", AMBER)
 -- Fader: over everything.
 assert(get("Fader").BackgroundTransparency == 1, "Fader must start transparent")
 assert(get("Fader").ZIndex == 100, "Fader.ZIndex must be 100")
-assert(get("Root.CharacterView").ZIndex < get("Vignette").ZIndex, "the Vignette must draw over the CharacterView")
+-- Root (title, buttons, avatar) sits above the Vignette so the dark edges never dim it, and below BACK.
+assert(
+	get("Root").ZIndex > get("Vignette").ZIndex and get("Root").ZIndex < get("Back").ZIndex,
+	"Root.ZIndex must be above the Vignette and below Back, got Root " .. get("Root").ZIndex
+)
 assert(get("Vignette").ZIndex < get("Back").ZIndex and get("Back").ZIndex < get("Fader").ZIndex, "ZIndex order must be Vignette < Back < Fader")
 
 -- The build script no longer touches StarterGui, so nothing is asserted about it (a ScreenGui of the developer's own

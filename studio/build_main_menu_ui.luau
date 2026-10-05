@@ -77,24 +77,28 @@ local gui = make("ScreenGui", {
 	DisplayOrder = 10,
 })
 
+-- Root draws above the Vignette (50) so the dark edges never dim the title, buttons or avatar, and below BACK (60)
+-- and the Fader (100).
 local root = make("Frame", {
 	Name = "Root",
 	Position = UDim2.fromScale(0, 0),
 	Size = UDim2.fromScale(1, 1),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
+	ZIndex = 55,
 }, gui)
 
 -- Title: sits just above the buttons and shares their left edge.
--- Its top edge is at 0.20 of the height, which keeps it below Roblox's topbar (menu / chat icons) on phones in
--- landscape (about 58pt at 844x390).
+-- Its bottom edge is at 0.27 of the height, which leaves a gap above the buttons (they start at 0.31), and its top
+-- edge is at 0.17 (66px at 390px), which keeps it below Roblox's topbar (menu / chat icons) on phones in landscape
+-- (about 58pt at 844x390).
 local title = label({
 	Name = "Title",
 	Text = "GAME TITLE",
 	FontFace = FONT_BOLD,
 	TextXAlignment = Enum.TextXAlignment.Left,
 	AnchorPoint = Vector2.new(0, 1),
-	Position = UDim2.fromScale(0.06, 0.30),
+	Position = UDim2.fromScale(0.06, 0.27),
 	Size = UDim2.fromScale(0.40, 0.10),
 }, root)
 make("UIStroke", { Color = AMBER, Thickness = 2 }, title)
@@ -137,8 +141,8 @@ local characterView = make("ViewportFrame", {
 make("UIAspectRatioConstraint", { AspectRatio = 0.95 }, characterView)
 make("WorldModel", {}, characterView)
 
--- Vignette: dark edges on all four sides, above Root and below BACK and the Fader. It is only ever seen, never
--- clicked: Active stays false on every frame so a press goes straight through to the buttons underneath.
+-- Vignette: dark edges on all four sides, under Root (55) so it never dims the title or buttons, and below BACK and
+-- the Fader. It is only ever seen, never clicked: Active stays false on every frame so a press goes straight through.
 -- Each edge fades with a UIGradient from Transparency 0.15 at the screen border to 1 on the inside. Gradient
 -- Rotation 0 runs left to right and 90 top to bottom, so the rotation is picked per edge to start at its outer side.
 local vignette = make("Frame", {

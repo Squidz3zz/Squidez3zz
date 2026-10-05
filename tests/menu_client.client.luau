@@ -95,5 +95,9 @@ local gone = waitFor(function()
 end, 10)
 assert(gone, "MainMenu was not destroyed after Play")
 assert(playerGui:GetAttribute("MenuOpen") == false, "MenuOpen should be false after Play")
+assert(
+	playerGui:GetAttribute("MenuScene") == nil,
+	"MenuScene should be cleared after Play, got " .. tostring(playerGui:GetAttribute("MenuScene"))
+)
 
 return "PASS"
