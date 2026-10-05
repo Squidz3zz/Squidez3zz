@@ -7,6 +7,9 @@
 -- The Credits room shows the developer's avatar (built by MenuServer in ReplicatedStorage.CreditAvatars) and the player's own.
 -- At join the factory loading screen (ReplicatedFirst.LoadingScreen) preloads the menu's assets first: setup waits for its
 -- LoadingDone attribute before it shows anything, and a missing, disabled or broken loading screen is simply not waited for.
+-- The buttons make sounds (ButtonSounds, on the Sound Effects slider): hover when the pointer enters one, confirm when one is
+-- clicked, and the play sound for PLAY. Every call is in pcall and none of them yields, so a missing or failing sound module
+-- never touches the menu or Play, and Play's fade does not cut the play sound (it lives in SoundService).
 --
 -- UI names this script depends on (three ScreenGuis under ReplicatedStorage). Restyle anything, but keep these names:
 --   MainMenu
@@ -69,6 +72,8 @@ local MenuSettings = loadModule("MenuSettings")
 local MenuCamera = loadModule("MenuCamera")
 local ButtonEffects = loadModule("ButtonEffects")
 local CharacterPreview = loadModule("CharacterPreview")
+-- The button sound effects. Without it the menu is silent, but nothing else is affected.
+local ButtonSounds = loadModule("ButtonSounds")
 -- Runs the Settings and Credits rooms: without it their buttons do nothing.
 local SceneDirector = loadModule("SceneDirector")
 -- The Settings room's board. Without it the room is empty, but the menu and Play are not affected.
@@ -111,6 +116,14 @@ local function readyCreditSources()
 end
 
 local playing = false
+
+-- Plays one of ButtonSounds' sounds ("confirm" or "playSelect") for a click. Never yields, never throws, and is silent once
+-- Play has started (the menu is on its way out).
+local function playSfx(soundName)
+	if ButtonSounds and not playing then
+		pcall(ButtonSounds[soundName])
+	end
+end
 
 -- Settings and Credits are rooms run by SceneDirector. Without it (or once Play has started) the buttons do nothing.
 -- Returns true if a transition started. Guarded: a failing scene change must never touch the menu or the Play path.
@@ -292,6 +305,13 @@ end
 local function setupMenu()
 	-- Before anything is cloned or shown. The loading screen has already preloaded what the menu needs.
 	waitForLoading()
+	-- The button sounds. Guarded like everything else: a broken one leaves the menu silent, never closed.
+	if ButtonSounds then
+		local ok, err = pcall(ButtonSounds.init)
+		if not ok then
+			warn("MainMenuClient: ButtonSounds.init failed: " .. tostring(err))
+		end
+	end
 	-- All three templates first, so a missing one throws before anything is cloned.
 	local menuTemplate = waitForTemplate("MainMenu")
 	local vignetteTemplate = waitForTemplate("MainMenuVignette")
@@ -304,19 +324,30 @@ local function setupMenu()
 	vignette = vignetteGui.Vignette
 	fader = faderGui.Fader
 
-	root.Buttons.Play.Activated:Connect(play)
+	root.Buttons.Play.Activated:Connect(function()
+		-- Before play() sets `playing`, so a second press (which play() ignores) stays silent.
+		playSfx("playSelect")
+		play()
+	end)
 	root.Buttons.Settings.Activated:Connect(function()
+		playSfx("confirm")
 		goToScene("Settings")
 	end)
 	root.Buttons.Credits.Activated:Connect(function()
+		playSfx("confirm")
 		goToScene("Credits")
+	end)
+	-- SceneDirector wires BACK itself (it goes back to the Menu); this only adds the click sound.
+	back.Activated:Connect(function()
+		playSfx("confirm")
 	end)
 
 	if ButtonEffects then
 		local menuButtons = { root.Buttons.Play, root.Buttons.Settings, root.Buttons.Credits }
 		-- Guarded: a failing effect must never keep the menu from opening (and the player from spawning).
+		local hoverOptions = { onHover = ButtonSounds and ButtonSounds.hover }
 		local function attachEffects(button)
-			local ok, err = pcall(ButtonEffects.attach, button)
+			local ok, err = pcall(ButtonEffects.attach, button, hoverOptions)
 			if not ok then
 				warn("MainMenuClient: ButtonEffects.attach failed for " .. button.Name .. ": " .. tostring(err))
 			end
@@ -383,7 +414,7 @@ local function setupMenu()
 						warn("MainMenuClient: workspace.SettingsRoom.Settingsboard is missing; the Settings room stays empty")
 						return
 					end
-					boardGui = SettingsBoard.mount(board, playerGui)
+					boardGui = SettingsBoard.mount(board, playerGui, ButtonSounds)
 				end
 				SettingsBoard.setEnabled(boardGui, true)
 			end,

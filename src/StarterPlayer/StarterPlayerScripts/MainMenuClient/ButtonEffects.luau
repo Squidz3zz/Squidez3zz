@@ -1,7 +1,12 @@
 -- ButtonEffects: hover/press "pop" for the menu buttons.
--- attach(button) adds a UIScale (PopScale) and a UIStroke (PopStroke) to the button and wires the input events.
+-- attach(button, opts?) adds a UIScale (PopScale) and a UIStroke (PopStroke) to the button and wires the input events.
+-- opts.onHover (optional) is called, with no arguments and in pcall, each time the button goes from idle to hover: the
+-- mouse entering it, a controller selecting it or a finger landing on it. Not when it is hovered again while it already
+-- is, not on a press, and not when the hover comes back after a press while the cursor is still over it. The menu uses it
+-- for the hover sound (ButtonSounds.hover).
 -- setState(button, state) is the only place tweens happen: events call it, and so do the tests. It finds
--- PopScale/PopStroke on the button itself and keeps no state of its own, so it works on any attached button.
+-- PopScale/PopStroke on the button itself, so it works on any attached button. The only thing it remembers is whether
+-- a button is idle (and its onHover), which is what turns "hover" into a hover sound once and not on every event.
 local TweenService = game:GetService("TweenService")
 
 local TWEEN_INFO = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -14,6 +19,11 @@ local STATES = {
 
 local ButtonEffects = {}
 
+-- Per button, weak so a destroyed button is not kept alive: its onHover callback, and whether it is out of idle
+-- (hover or press) right now.
+local hoverCallbacks = setmetatable({}, { __mode = "k" })
+local engaged = setmetatable({}, { __mode = "k" })
+
 function ButtonEffects.setState(button, state)
 	local target = STATES[state]
 	assert(target, "ButtonEffects.setState: unknown state " .. tostring(state))
@@ -24,11 +34,26 @@ function ButtonEffects.setState(button, state)
 	-- Playing a tween cancels any tween already running on the same property, so quick state changes never fight.
 	TweenService:Create(popScale, TWEEN_INFO, { Scale = target.scale }):Play()
 	TweenService:Create(popStroke, TWEEN_INFO, { Transparency = target.strokeTransparency }):Play()
+
+	-- onHover fires on idle -> hover only. A press counts as out of idle too, so the hover that follows a press (the
+	-- cursor is still over the button) is not a new hover.
+	local wasIdle = not engaged[button]
+	engaged[button] = if state == "idle" then nil else true
+	local onHover = hoverCallbacks[button]
+	if state == "hover" and wasIdle and onHover then
+		local ok, err = pcall(onHover)
+		if not ok then
+			warn("ButtonEffects: onHover of " .. button:GetFullName() .. " failed: " .. tostring(err))
+		end
+	end
 end
 
-function ButtonEffects.attach(button)
+function ButtonEffects.attach(button, opts)
 	if button:FindFirstChild("PopScale") then
 		return
+	end
+	if opts and opts.onHover then
+		hoverCallbacks[button] = opts.onHover
 	end
 
 	local popScale = Instance.new("UIScale")

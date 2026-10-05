@@ -1,5 +1,5 @@
 -- SettingsBoard: the settings UI of the Settings room, drawn on the room's board.
--- mount(board, playerGui) builds a SurfaceGui named SettingsBoardGui (a SurfaceGui only receives clicks while it sits
+-- mount(board, playerGui, sounds?) builds a SurfaceGui named SettingsBoardGui (a SurfaceGui only receives clicks while it sits
 -- under PlayerGui with its Adornee set) and returns it, hidden. setEnabled shows or hides it and unmount removes it.
 -- The board has a header and four rows, all Scale layout inside the SurfaceGui's own canvas (50 pixels per stud):
 --   Header                    "SETTINGS"
@@ -9,6 +9,9 @@
 --   EffectsRow.Toggle         Screen Effects, ON / OFF (MenuSettings)
 -- A switch flips its MenuSettings value and shows it, and shows it again whenever MenuSettings changes from anywhere
 -- else. Nothing here yields: it runs inside SceneDirector's hooks, behind the black screen.
+-- `sounds` (optional, ButtonSounds) gives the switch rows their sound effects: hover() when the pointer enters a row (once,
+-- not again while it moves around inside it, on its button or its RowHit) and confirm() when the row flips the switch.
+-- Both are called in pcall; without `sounds` the rows are silent.
 --
 -- Touch targets: on a phone in landscape the board is only about 270 px tall on screen, so the sliders and the ON / OFF
 -- buttons themselves are far under the 40 px a finger needs. The whole ROW (about 45 px there) is the target instead: a
@@ -137,8 +140,13 @@ end
 
 -- An ON / OFF switch row. Returns the row and the connection that keeps the switch in step with MenuSettings
 -- (the caller disconnects it with the gui).
-local function newSwitchRow(gui, name, title, index, settingName)
+local function newSwitchRow(gui, name, title, index, settingName, sounds)
 	local row = newRow(gui, name, index)
+	local function sfx(soundName)
+		if sounds then
+			pcall(sounds[soundName])
+		end
+	end
 	-- The whole row is the switch's touch target. It is created first, so it sits under the title and the button, and
 	-- the button still takes its own presses. Transparent; it only needs the text properties the board's checks expect.
 	local rowHit = create("TextButton", {
@@ -177,15 +185,41 @@ local function newSwitchRow(gui, name, title, index, settingName)
 	render()
 	local function flip()
 		MenuSettings.set(settingName, not MenuSettings.get(settingName))
+		sfx("confirm")
 	end
 	toggle.Activated:Connect(flip)
 	rowHit.Activated:Connect(flip)
+
+	-- Hover: once when the pointer comes onto the row. The button sits on top of RowHit, so going from one to the other
+	-- is a leave and an enter; `inside` counts the two and the row is only left once neither has the pointer (checked a
+	-- moment later, because the leave and the enter can arrive in either order).
+	local inside = 0
+	local hovered = false
+	local function enter()
+		inside += 1
+		if not hovered then
+			hovered = true
+			sfx("hover")
+		end
+	end
+	local function leave()
+		inside -= 1
+		task.defer(function()
+			if inside <= 0 then
+				hovered = false
+			end
+		end)
+	end
+	for _, hit in { rowHit, toggle } do
+		hit.MouseEnter:Connect(enter)
+		hit.MouseLeave:Connect(leave)
+	end
 	return row, MenuSettings.changed(settingName):Connect(render)
 end
 
 -- Creates SettingsBoardGui on `board`, or returns the one already in `playerGui` (rebuilt if it was made for another
 -- board). It starts disabled: setEnabled shows it.
-function SettingsBoard.mount(board, playerGui)
+function SettingsBoard.mount(board, playerGui, sounds)
 	local existing = playerGui:FindFirstChild(GUI_NAME)
 	if existing then
 		if existing:IsA("SurfaceGui") and existing.Adornee == board then
@@ -251,8 +285,8 @@ function SettingsBoard.mount(board, playerGui)
 
 	newSliderRow(gui, "MusicRow", "MUSIC", 1, SoundService:FindFirstChild("Music"))
 	newSliderRow(gui, "SfxRow", "SOUND EFFECTS", 2, SoundService:FindFirstChild("SFX"))
-	local _, swayConnection = newSwitchRow(gui, "SwayRow", "CAMERA SWAY", 3, "CameraSway")
-	local _, effectsConnection = newSwitchRow(gui, "EffectsRow", "SCREEN EFFECTS", 4, "ScreenEffects")
+	local _, swayConnection = newSwitchRow(gui, "SwayRow", "CAMERA SWAY", 3, "CameraSway", sounds)
+	local _, effectsConnection = newSwitchRow(gui, "EffectsRow", "SCREEN EFFECTS", 4, "ScreenEffects", sounds)
 	-- MenuSettings outlives the board: stop listening once it is gone.
 	gui.Destroying:Connect(function()
 		swayConnection:Disconnect()
