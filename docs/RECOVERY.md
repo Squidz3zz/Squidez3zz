@@ -45,7 +45,7 @@ It builds the three ScreenGuis again and adds `SoundService.Music` and `SoundSer
 
 ### c) Put the scripts back
 
-There are ten scripts. The file names are in `src/`.
+There are twelve scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -53,13 +53,15 @@ There are ten scripts. The file names are in `src/`.
 2. In a terminal opened in this folder, run `rojo serve`.
 3. In Studio, open the Rojo plugin and press **Connect**.
 
-The file `default.project.json` already says where everything goes. It only touches `ServerScriptService` and
-`StarterPlayerScripts`, and it leaves your other scripts alone.
+The file `default.project.json` already says where everything goes. It only touches `ReplicatedFirst`,
+`ServerScriptService` and `StarterPlayerScripts`, and it leaves your other scripts alone.
 
 **By hand:** create each script with the right kind and parent, then paste the file's text into it.
 
 | Name | Kind | Parent | File to copy |
 |---|---|---|---|
+| `MenuAssets` | ModuleScript | `ReplicatedFirst` | `src/ReplicatedFirst/MenuAssets.luau` |
+| `LoadingScreen` | LocalScript | `ReplicatedFirst` | `src/ReplicatedFirst/LoadingScreen.client.luau` |
 | `MenuServer` | Script | `ServerScriptService` | `src/ServerScriptService/MenuServer.server.luau` |
 | `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
 | `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
@@ -71,8 +73,9 @@ The file `default.project.json` already says where everything goes. It only touc
 | `SettingsBoard` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SettingsBoard.luau` |
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 
-The eight ModuleScripts sit **inside** `MainMenuClient` (drag them onto it in the Explorer). The names must match
-exactly.
+The eight ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
+`LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`. `MenuAssets` is the one place to change the
+menu's sound ids, the loading screen's tips and its timings. The names must match exactly.
 
 ### d) Turn off automatic spawning
 
@@ -96,13 +99,16 @@ part, the menu uses a default angle.
 
 Press **Play** in Studio (the Test tab) and check each of these:
 
-1. The menu opens with the title, three buttons, and your avatar on the right after a few seconds. In the Device
+1. A dark loading screen shows first, with the title, a spinning amber ring and a tip. It stays for at least 2 seconds,
+   fades to black, and the menu fades in.
+2. The menu opens with the title, three buttons, and your avatar on the right after a few seconds. In the Device
    Emulator (a phone, landscape) the dark border and the fades reach every screen edge, notch included.
-2. **Settings** fades to a room with a board. The sliders move and the switches flip. **BACK** returns.
-3. **Credits** fades to a room with two avatars on stands. Hovering one shows a name. **BACK** returns.
-4. **Play** spawns your character and the menu goes away.
-5. Reset your character. It respawns and the menu does not come back.
-6. The Output window has no red text.
+3. **Settings** fades to a room with a board. The sliders move and the switches flip. **BACK** returns.
+4. **Credits** fades to a room with two avatars on stands. Hovering one shows a name. **BACK** returns.
+5. **Play** spawns your character and the menu goes away.
+6. Reset your character. It respawns and the menu does not come back.
+7. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`) means
+   Roblox refused that sound's asset id: fix the id in `MenuAssets`, or its permissions.
 
 ## What these steps cannot bring back
 

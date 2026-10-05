@@ -5,6 +5,8 @@
 -- overlays of their own (ScreenInsets None) so they reach the notch strips and rounded corners.
 -- Settings and Credits are 3D rooms: their buttons ask SceneDirector (a module under this script) to fade and cut there.
 -- The Credits room shows the developer's avatar (built by MenuServer in ReplicatedStorage.CreditAvatars) and the player's own.
+-- At join the factory loading screen (ReplicatedFirst.LoadingScreen) preloads the menu's assets first: setup waits for its
+-- LoadingDone attribute before it shows anything, and a missing, disabled or broken loading screen is simply not waited for.
 --
 -- UI names this script depends on (three ScreenGuis under ReplicatedStorage). Restyle anything, but keep these names:
 --   MainMenu
@@ -21,12 +23,21 @@
 -- spawns until PlayPressed (CharacterAutoLoads is off), so a menu that cannot open must not trap the player.
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local FADE_TIME = 0.4
+-- The loading screen (ReplicatedFirst.LoadingScreen) hands over after LOADING_MAX_SECONDS at the latest (the value in
+-- ReplicatedFirst.MenuAssets; this one is only used if that module cannot be read), so the menu waits that long, and a
+-- few seconds more, for it.
+local LOADING_MAX_SECONDS = 20
+local LOADING_WAIT_EXTRA = 5
+-- How long the loading screen has to remove itself once the menu is open (its fade out takes 0.4s) before this script
+-- destroys it.
+local LOADING_CLEANUP_DELAY = 1.5
 local MENU_TIMEOUT = 10
 local CHARACTER_TIMEOUT = 10
 local AVATAR_TIMEOUT = 15
@@ -226,8 +237,61 @@ local function waitForTemplate(name)
 	return template
 end
 
+-- Waits for the loading screen to hand over (it sets the PlayerGui attribute LoadingDone once it has faded to black), so
+-- the menu opens under the black and not under the loading screen. Returns at once if there is no loading screen (or it is
+-- disabled), and carries on with a warning if it never hands over. Never throws.
+local function waitForLoading()
+	local loadingScript = ReplicatedFirst:FindFirstChild("LoadingScreen")
+	if not loadingScript or (loadingScript:IsA("BaseScript") and loadingScript.Disabled) then
+		return
+	end
+	if playerGui:GetAttribute("LoadingDone") == true then
+		return
+	end
+	local limit = LOADING_MAX_SECONDS
+	local assetsModule = ReplicatedFirst:FindFirstChild("MenuAssets")
+	if assetsModule then
+		local ok, assets = pcall(require, assetsModule)
+		if ok and type(assets) == "table" and type(assets.LOADING_MAX_SECONDS) == "number" then
+			limit = assets.LOADING_MAX_SECONDS
+		end
+	end
+	limit += LOADING_WAIT_EXTRA
+
+	local thread = coroutine.running()
+	local connection, timer
+	connection = playerGui:GetAttributeChangedSignal("LoadingDone"):Connect(function()
+		if playerGui:GetAttribute("LoadingDone") == true then
+			connection:Disconnect()
+			task.cancel(timer)
+			task.spawn(thread, true)
+		end
+	end)
+	timer = task.delay(limit, function()
+		connection:Disconnect()
+		task.spawn(thread, false)
+	end)
+	if not coroutine.yield() then
+		warn("MainMenuClient: the loading screen did not hand over within " .. limit .. "s; opening the menu anyway")
+	end
+end
+
+-- The loading screen fades out and destroys itself once the menu is open (or has fallen back to spawning). One that is
+-- still there after LOADING_CLEANUP_DELAY is broken or stuck: remove it, so it can never keep covering the game.
+-- Never yields.
+local function scheduleLoadingCleanup()
+	task.delay(LOADING_CLEANUP_DELAY, function()
+		local leftover = playerGui:FindFirstChild("LoadingScreen")
+		if leftover then
+			leftover:Destroy()
+		end
+	end)
+end
+
 -- Clones the menu's three ScreenGuis, wires them up and shows them. Throws if the UI is not what this script expects.
 local function setupMenu()
+	-- Before anything is cloned or shown. The loading screen has already preloaded what the menu needs.
+	waitForLoading()
 	-- All three templates first, so a missing one throws before anything is cloned.
 	local menuTemplate = waitForTemplate("MainMenu")
 	local vignetteTemplate = waitForTemplate("MainMenuVignette")
@@ -406,9 +470,11 @@ if not setupOk then
 	-- setupMenu parents the three ScreenGuis last, but never leave a half-built menu on screen: destroy every clone that exists.
 	destroyMenuGuis()
 	playerGui:SetAttribute("MenuOpen", false)
+	scheduleLoadingCleanup()
 	playPressed:FireServer()
 	return
 end
+scheduleLoadingCleanup()
 
 -- Gamepad players have no cursor, so start them on Play (ButtonEffects pops it, so it shows as focused).
 -- runPlay clears the selection again.
