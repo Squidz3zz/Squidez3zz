@@ -7,11 +7,15 @@
 --   A2  run AFTER A, once Back was clicked for real (user_mouse_input moveTo the Back button, then a left click):
 --       exactly one click reached Back and the menu is back on Menu. Needs no fresh playtest, only A's.
 --   B   mashing: goTo Settings, Credits, Menu back to back. Only the first starts; Settings wins and nothing queues.
---   C   Play mid-transition (PLAY_DELAY seconds after goTo Settings; 0.1 is mid fade-out, 0.6 mid fade-in). Play
+--   C   Play mid-transition (PLAY_DELAY seconds after goTo SCENE; 0.1 is mid fade-out, 0.6 mid fade-in). Play
 --       wins: the character spawns, the menu is gone, and the cancelled transition never touches Root, Back, the
---       Fader or the camera again. Read the console afterwards: it must have no errors.
+--       Fader or the camera again. With PLAY_DELAY 0.5 or more the room's content is already up when Play is
+--       pressed (the settings board, or the credit avatars): that is asserted first, so the "nothing is left behind"
+--       checks afterwards are real and not vacuously true. Run it for SCENE "Settings" and for SCENE "Credits".
+--       Read the console afterwards: it must have no errors.
 local CASE = "A"
 local PLAY_DELAY = 0.1
+local SCENE = "Settings"
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -162,7 +166,9 @@ if CASE == "A" then
 		playerGui:SetAttribute("ScenesTestBackClicks", (playerGui:GetAttribute("ScenesTestBackClicks") or 0) + 1)
 	end)
 	local centre = back.AbsolutePosition + back.AbsoluteSize / 2
-	print(("scenes A: now in Settings; Back centre is at screen (%.0f, %.0f), so user_mouse_input y is %.0f"):format(centre.X, centre.Y, centre.Y - 58))
+	-- MainMenu has IgnoreGuiInset = true, so AbsolutePosition is already 58 px above the viewport y that
+	-- user_mouse_input uses: aim at the centre's AbsolutePosition as it is (no extra -58).
+	print(("scenes A: now in Settings; Back centre is at (%.0f, %.0f), so user_mouse_input moveTo that point"):format(centre.X, centre.Y))
 elseif CASE == "A2" then
 	assert(playerGui:GetAttribute("ScenesTestBackClicks") ~= nil, "run case A first, in this same playtest")
 	local clicks = playerGui:GetAttribute("ScenesTestBackClicks")
@@ -180,8 +186,22 @@ elseif CASE == "B" then
 	task.wait(1.5)
 	assert(sceneIsSettled("Settings", settingsPosition), "mashing left an inconsistent state: " .. describeState(settingsPosition))
 elseif CASE == "C" then
-	assert(hook:Invoke("goTo", "Settings") == true, "goTo(Settings) should start a transition")
+	assert(SCENE == "Settings" or SCENE == "Credits", "SCENE must be Settings or Credits")
+	assert(hook:Invoke("goTo", SCENE) == true, "goTo(" .. SCENE .. ") should start a transition")
 	task.wait(PLAY_DELAY)
+	-- Past the cut (0.4s) the scene's content is up. Prove it, so the cleanup checks below can fail.
+	if PLAY_DELAY >= 0.5 then
+		if SCENE == "Settings" then
+			local gui = playerGui:FindFirstChild("SettingsBoardGui")
+			assert(gui and gui.Enabled, "the settings board should be up before Play is pressed, or the cleanup check proves nothing")
+		else
+			local folder = workspace.CreditsRoom:FindFirstChild("CreditAvatars")
+			assert(
+				folder and #folder:GetChildren() >= 1,
+				"the credit avatars should be up before Play is pressed, or the cleanup check proves nothing"
+			)
+		end
+	end
 	assert(hook:Invoke("play") == true, "play() should start the Play flow")
 
 	-- From here Play owns the Fader, Root and Back until Root is destroyed: the transition must not touch them.
@@ -230,10 +250,11 @@ elseif CASE == "C" then
 	assert(avatars == nil or #avatars:GetChildren() == 0, "CreditsRoom.CreditAvatars should be absent or empty after Play")
 
 	-- The cancelled transition never grabs the camera back: once the character owns it, no frame sits on the room shot.
+	local shotPosition = if SCENE == "Settings" then settingsPosition else creditsPosition
 	for _ = 1, 20 do
 		RunService.Heartbeat:Wait()
-		local distance = (camera.CFrame.Position - settingsPosition).Magnitude
-		assert(distance > 5, "camera is still on the Settings shot after Play (" .. distance .. " studs)")
+		local distance = (camera.CFrame.Position - shotPosition).Magnitude
+		assert(distance > 5, "camera is still on the " .. SCENE .. " shot after Play (" .. distance .. " studs)")
 	end
 	assert(camera.CameraType == Enum.CameraType.Custom, "camera should stay Custom after Play")
 else
