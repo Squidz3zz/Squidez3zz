@@ -27,12 +27,21 @@ local developerId = if game.CreatorType == Enum.CreatorType.User and game.Creato
 	then game.CreatorId
 	else DEVELOPER_USER_ID
 
--- Where the menu camera sits: an anchored Part named MenuCameraShot in Workspace, if there is one, else the client's
--- default angle. Published as the Workspace attribute MenuCameraShot (the part's CFrame, because the camera needs the
--- part's orientation as well as its position) since the part itself may not have streamed to a client yet
--- (StreamingEnabled); attributes replicate with Workspace, so MenuCamera can read it without waiting.
+-- Where the menu camera sits: a Part named MenuCameraShot in Workspace, if there is one, else the client's default
+-- angle. The camera sits at the part's CFrame and looks out of the part's Front face (the way its LookVector points).
+-- To place the part from what the Studio editor camera sees right now, run this in the command bar:
+--   local p = workspace:FindFirstChild("MenuCameraShot") or Instance.new("Part"); p.Name = "MenuCameraShot"; p.Size = Vector3.new(1,1,1); p.Anchored = true; p.CFrame = workspace.CurrentCamera.CFrame; p.Parent = workspace
+-- It is made safe here at startup (anchored so it cannot fall, invisible, no collisions or touches), so it works even
+-- if it was placed carelessly. Published as the Workspace attribute MenuCameraShot (the part's CFrame, because the
+-- camera needs the part's orientation as well as its position) since the part itself may not have streamed to a
+-- client yet (StreamingEnabled); attributes replicate with Workspace, so MenuCamera can read it without waiting.
 local shotPart = workspace:FindFirstChild("MenuCameraShot")
 if shotPart and shotPart:IsA("BasePart") then
+	shotPart.Anchored = true
+	shotPart.Transparency = 1
+	shotPart.CanCollide = false
+	shotPart.CanQuery = false
+	shotPart.CanTouch = false
 	workspace:SetAttribute("MenuCameraShot", shotPart.CFrame)
 end
 local shotCFrame = workspace:GetAttribute("MenuCameraShot")

@@ -5,6 +5,13 @@
 --   C1 death respawns exactly once per death (two deaths, so stacked Died connections would show)
 --   C2 repeat PlayPressed fires after the first spawn do not spawn again
 --   D  cleanup (the PlayerRemoving logic, via the Studio-only TestHook) removes avatar and state
+--   E  MenuCameraShot is made safe at startup: needs a part named MenuCameraShot in Workspace when the playtest starts
+--      (there is none in the project until the developer places one). Create a throwaway in Edit mode, placed
+--      carelessly (not anchored, visible, collidable), run this case in a fresh playtest, and delete the throwaway:
+--        local p = Instance.new("Part"); p.Name = "MenuCameraShot"; p.Size = Vector3.new(4, 4, 4)
+--        p.Position = Vector3.new(0, 30, 0); p.Anchored = false; p.Transparency = 0; p.CanCollide = true
+--        p.CanQuery = true; p.CanTouch = true; p.Parent = workspace
+--      The server must have anchored and hidden it, turned off its collisions, and published its CFrame.
 local CASE = "A"
 
 local Players = game:GetService("Players")
@@ -135,6 +142,18 @@ elseif CASE == "D" then
 	assert(hook:Invoke("state", player.UserId) == "playing", "expected the playing state before cleanup")
 	hook:Invoke("cleanup", player.UserId)
 	assert(hook:Invoke("state", player.UserId) == nil, "cleanup did not clear the player's state")
+	return "PASS"
+elseif CASE == "E" then
+	local shot = workspace:FindFirstChild("MenuCameraShot")
+	assert(shot and shot:IsA("BasePart"), "needs a part named MenuCameraShot in Workspace (see the header)")
+	assert(shot.Anchored, "MenuCameraShot should be anchored by the server, or it falls")
+	assert(shot.Transparency == 1, "MenuCameraShot should be invisible, Transparency is " .. shot.Transparency)
+	assert(not shot.CanCollide, "MenuCameraShot should have CanCollide false")
+	assert(not shot.CanQuery, "MenuCameraShot should have CanQuery false")
+	assert(not shot.CanTouch, "MenuCameraShot should have CanTouch false")
+	local published = workspace:GetAttribute("MenuCameraShot")
+	assert(typeof(published) == "CFrame", "the Workspace attribute MenuCameraShot should be a CFrame")
+	assert(published == shot.CFrame, "the published CFrame should be the part's CFrame (it moved before it was published)")
 	return "PASS"
 else
 	error("unknown CASE: " .. tostring(CASE))
