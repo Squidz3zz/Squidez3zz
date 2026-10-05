@@ -38,15 +38,17 @@ Restyle the main menu with a **heavy-factory** look: rusty steel, grates, girder
 
 ## Main menu restyle
 
-- **Root layout (Scale only):**
-  - `Title`: AnchorPoint (0, 1), Position {0.06, 0}, {0.30, 0}, Size {0.40, 0}, {0.10, 0}. Its bottom edge sits just above the buttons.
-  - `Buttons`: AnchorPoint (0, 0.5), Position {0.06, 0}, {0.56, 0}, Size {0.24, 0}, {0.42, 0}.
-  - `UIListLayout`: Padding {0.215, 0}. UIListLayout padding scales with the Buttons frame, not the screen, so 0.215 × 0.42 ≈ 0.09 of screen height. Each button is Size {1, 0}, {0.19, 0} of the frame, which is ≈ 0.08 of the screen.
-  - Exact values may be tuned so the phone check passes, provided the on-screen gap stays between 0.08 and 0.10 of screen height.
-- **CharacterView:** Position {0.56, 0}, {0.10, 0}, Size {0.40, 0}, {0.85, 0}.
-  - `CharacterPreview` frames the **upper body**: the box from the bottom of the torso (or `LowerTorso` for R15) to the top of the head, widened to fit the wave arm.
-  - The camera aims at the centre of that box, with FOV 30 and a margin constant tuned so the wave isn't cropped. Facing and idle/wave behaviour are unchanged.
-- **Vignette:** a `Vignette` Frame (full screen, ZIndex 50, under the Fader) holds four edge Frames named `Top`, `Bottom`, `Left` and `Right`.
+- **Root layout (Scale only).** The first draft's numbers were tuned while building (the phone check, the Vignette layering and the "upper half, bigger" avatar), so the values below are the shipped ones. Each one that changed says **tuned**, with the draft value.
+  - `Root`: ZIndex 55 (**tuned**: the draft left it at the default, under the Vignette, which dimmed the title and buttons). It sits above the Vignette (50) and below `Back` (60) and the Fader (100).
+  - `Title`: AnchorPoint (0, 1), Position {0.06, 0}, {0.27, 0} (**tuned** from 0.30), Size {0.40, 0}, {0.10, 0}. Its bottom edge sits just above the buttons, which start at 0.31, and its top edge is at 0.17, below the topbar band on a phone (66 px at 390 px, the band ends at 58).
+  - `Buttons`: AnchorPoint (0, 0.5), Position {0.06, 0}, {0.56, 0}, Size {0.24, 0}, {0.50, 0} (**tuned** from 0.42).
+  - `UIListLayout`: Padding {0.1775, 0} (**tuned** from 0.215). UIListLayout padding scales with the Buttons frame, not the screen, so 0.1775 × 0.50 ≈ 0.089 of screen height. Each button is Size {1, 0}, {0.215, 0} of the frame (**tuned** from 0.19), which is ≈ 0.1075 of the screen, 42 px at 390 px. The draft values gave 31 px buttons on the phone, under the 40 px tap target.
+  - The rule that survives any further tuning: the on-screen gap between buttons stays between 0.08 and 0.10 of screen height, and every button is at least 40 px tall at 390 px.
+  - `Back`: AnchorPoint (0, 1), Position {0.03, 0}, {0.95, 0}, Size {0.12, 0}, {0.11, 0} (**tuned** from 0.09, which is only 35 px at 390 px), ZIndex 60.
+- **CharacterView** (**tuned**: the draft put it at Position {0.56, 0}, {0.10, 0}, Size {0.40, 0}, {0.85, 0}): AnchorPoint (0, 1), Position {0.48, 0}, {1, 0}, Size {0.48, 0}, {0.85, 0}, with a `UIAspectRatioConstraint` of 1.3. It sits on the bottom edge of the screen, because the avatar is cut off there, and runs from 0.48 to 0.96 of the width, clear of the Buttons (end at 0.30) and the Title frame (ends at 0.46). The aspect ratio shrinks it on a screen too wide for 0.85 of its height.
+  - `CharacterPreview` frames the **upper body** as a window, not a margin around the whole figure: the bottom edge sits just under the waist (the bottom of `Torso`, or of `LowerTorso` for R15) and the top edge is above the head, high enough for the raised wave hand. The legs are cut off at the bottom of the view.
+  - The framing is asymmetric and tuned (fractions of the upper-body height, torso bottom to head top): `WAIST_MARGIN` 0.05 below the waist, `HAND_ROOM` 0.45 above the head, `WINDOW_SLACK` 1.06 on the window height, and `AIM_SHIFT` toward the waving arm's side (R6 0.12, R15 0). The camera aims at the centre of the window with FOV 30. Measured over a looping wave, the head stays fully in the frame and the waving hand stays in the frame to within 3%. Facing and idle/wave behaviour are unchanged.
+- **Vignette:** a `Vignette` Frame (full screen, ZIndex 50, under `Root` (55), `Back` (60) and the Fader (100)) holds four edge Frames named `Top`, `Bottom`, `Left` and `Right`.
   - Colour is RGB (12, 9, 6).
   - Each edge is about 0.18 of the screen deep and has a `UIGradient` running from Transparency 0.15 at the outer edge to 1 at the inner edge.
   - It lives in the menu ScreenGui, so it disappears with the menu.
