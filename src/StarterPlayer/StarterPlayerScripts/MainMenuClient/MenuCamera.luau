@@ -2,11 +2,16 @@
 -- setBase) and sways a couple of degrees toward the mouse, with a blur and a colour grade over the picture.
 -- start() takes over the camera and adds the effects; stop() gives the camera back and removes them.
 -- stop() never yields: it is on the Play path, which must not wait for the blur fade.
+-- The grade covers every scene, the blur only the scenes setBase asks it for (the Menu: in the rooms the 3D board and
+-- the avatars are the interface and must stay sharp). Screen Effects off removes both everywhere.
 --
--- Where the map shot is: add an anchored Part named MenuCameraShot to Workspace and the camera sits at that part's
--- CFrame; without one it uses a default angle. MenuServer reads the part at startup and publishes its CFrame as the
--- Workspace attribute MenuCameraShot, which is what this module reads (the part itself may not be streamed in yet,
--- because StreamingEnabled is on), so move the part in Studio, not while the game runs.
+-- Where the map shot is: add a Part named MenuCameraShot to Workspace and the camera sits at that part's CFrame,
+-- looking out of the part's Front face (the way its LookVector points); without one it uses a default angle.
+-- MenuServer anchors and hides the part at startup, reads it and publishes its CFrame as the Workspace attribute
+-- MenuCameraShot, which is what this module reads (the part itself may not be streamed in yet, because StreamingEnabled
+-- is on), so move the part in Studio, not while the game runs. To place it from what the Studio editor camera sees
+-- right now, run this in the command bar:
+--   local p = workspace:FindFirstChild("MenuCameraShot") or Instance.new("Part"); p.Name = "MenuCameraShot"; p.Size = Vector3.new(1,1,1); p.Anchored = true; p.CFrame = workspace.CurrentCamera.CFrame; p.Parent = workspace
 --
 -- The current base is also published as the attribute MenuBaseCFrame on the camera, so tests (which get their own copy
 -- of this module) can read it.
@@ -28,26 +33,34 @@ local SWAY_SPEED = 6 -- smoothing: alpha = 1 - exp(-SWAY_SPEED * dt)
 
 local MenuCamera = {}
 
--- { camera, base, pitch, yaw, swayConnection, effectsConnection } while the menu camera runs, nil otherwise.
--- pitch and yaw are the smoothed sway angles in radians.
+-- { camera, base, blur, pitch, yaw, swayConnection, effectsConnection } while the menu camera runs, nil otherwise.
+-- blur is whether the current scene wants the blur. pitch and yaw are the smoothed sway angles in radians.
 local active = nil
 
-local function removeEffects()
+local function removeNamed(...)
+	local names = { ... }
 	for _, child in Lighting:GetChildren() do
-		if child.Name == "MenuBlur" or child.Name == "MenuColorCorrection" then
+		if table.find(names, child.Name) then
 			child:Destroy()
 		end
 	end
 end
 
+local function removeEffects()
+	removeNamed("MenuBlur", "MenuColorCorrection")
+end
+
 -- Adds whichever effect is missing, so it never stacks a second copy beside one that is already there.
-local function ensureEffects()
+local function ensureBlur()
 	if not Lighting:FindFirstChild("MenuBlur") then
 		local blur = Instance.new("BlurEffect")
 		blur.Name = "MenuBlur"
 		blur.Size = BLUR_SIZE
 		blur.Parent = Lighting
 	end
+end
+
+local function ensureGrade()
 	if not Lighting:FindFirstChild("MenuColorCorrection") then
 		local grade = Instance.new("ColorCorrectionEffect")
 		grade.Name = "MenuColorCorrection"
@@ -58,11 +71,18 @@ local function ensureEffects()
 	end
 end
 
-local function syncEffects()
-	if MenuSettings.get("ScreenEffects") then
-		ensureEffects()
-	else
+-- The effects the setting and the current scene call for. A blur that is not wanted is removed outright: scene changes
+-- happen behind the black Fader, so there is nothing to fade.
+local function syncEffects(state)
+	if not MenuSettings.get("ScreenEffects") then
 		removeEffects()
+		return
+	end
+	ensureGrade()
+	if state.blur then
+		ensureBlur()
+	else
+		removeNamed("MenuBlur")
 	end
 end
 
@@ -84,10 +104,14 @@ local function place(state, base)
 end
 
 -- Cuts to a new base (SceneDirector calls this behind the fader, so the camera snaps and the sway starts over).
+-- opts.blur says whether this scene wants the blur (default true): the Menu does, the rooms do not. The colour grade
+-- stays either way, and with Screen Effects off there is neither.
 -- Does nothing while the menu camera is not running, so a late call can never grab the camera back after Play.
-function MenuCamera.setBase(cf)
+function MenuCamera.setBase(cf, opts)
 	if active then
 		place(active, cf)
+		active.blur = not opts or opts.blur ~= false
+		syncEffects(active)
 	end
 end
 
@@ -133,18 +157,20 @@ function MenuCamera.start()
 	-- Effects left over from an earlier run (the blur may still be fading out) must not linger beside the new ones.
 	removeEffects()
 
-	local state = { camera = camera }
+	local state = { camera = camera, blur = true }
 	camera.CameraType = Enum.CameraType.Scriptable
 	-- Never yields: the menu must open at once, even if the server has not published a map shot.
 	place(state, MenuCamera.menuBase())
 
-	state.effectsConnection = MenuSettings.changed("ScreenEffects"):Connect(syncEffects)
+	state.effectsConnection = MenuSettings.changed("ScreenEffects"):Connect(function()
+		syncEffects(state)
+	end)
 	state.swayConnection = RunService.RenderStepped:Connect(function(deltaTime)
 		sway(state, deltaTime)
 	end)
 	active = state
 
-	syncEffects()
+	syncEffects(state)
 end
 
 function MenuCamera.stop()

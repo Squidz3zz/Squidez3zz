@@ -134,6 +134,21 @@ local function waitForCharacter(timeout)
 	return coroutine.yield()
 end
 
+-- The rooms sit under the map and nobody sees them after Play, but their emitters and lights would keep running on
+-- this client. Switches them off (client-side only). Never yields.
+local function quietRooms()
+	for _, roomName in { "SettingsRoom", "CreditsRoom" } do
+		local room = workspace:FindFirstChild(roomName)
+		if room then
+			for _, item in room:GetDescendants() do
+				if item:IsA("ParticleEmitter") or item:IsA("Light") then
+					item.Enabled = false
+				end
+			end
+		end
+	end
+end
+
 local function runPlay()
 	GuiService.SelectedObject = nil
 	-- Play can be pressed in the middle of a scene change. stop() ends it (it never yields) before the fade below
@@ -144,6 +159,11 @@ local function runPlay()
 		if not ok then
 			warn("MainMenuClient: SceneDirector.stop failed: " .. tostring(err))
 		end
+	end
+	-- Guarded like the above.
+	local quietOk, quietErr = pcall(quietRooms)
+	if not quietOk then
+		warn("MainMenuClient: could not switch the rooms' effects off: " .. tostring(quietErr))
 	end
 	-- Whatever scene the player was in, Play ends on the main menu's own screen.
 	root.Visible = true
@@ -442,6 +462,10 @@ if RunService:IsStudio() then
 	--               SceneDirector.goTo's boolean (whether a transition started)
 	--   scene()     the scene the menu says it is showing (the PlayerGui attribute MenuScene, kept by SceneDirector)
 	--   play()      presses Play; returns false if it was already pressed
+	--   gamepad(on) makes SceneDirector behave as if the player is on a gamepad (there is none to plug in), so the
+	--               controller selection can be tested
+	--   back(state) feeds the ButtonB action ("Begin" or "End") to the function SceneDirector binds to it; returns its
+	--               Enum.ContextActionResult
 	local hook = Instance.new("BindableFunction")
 	hook.Name = "TestHook"
 	hook.OnInvoke = function(action, arg)
@@ -451,6 +475,10 @@ if RunService:IsStudio() then
 			return playerGui:GetAttribute("MenuScene")
 		elseif action == "play" then
 			return play()
+		elseif action == "gamepad" then
+			SceneDirector.setGamepadOverride(arg)
+		elseif action == "back" then
+			return SceneDirector.onBack("MenuBack", Enum.UserInputState[arg])
 		else
 			error("TestHook: unknown action " .. tostring(action))
 		end
