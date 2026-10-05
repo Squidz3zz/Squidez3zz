@@ -52,6 +52,8 @@ local ButtonEffects = loadModule("ButtonEffects")
 local CharacterPreview = loadModule("CharacterPreview")
 -- Runs the Settings and Credits rooms: without it their buttons do nothing.
 local SceneDirector = loadModule("SceneDirector")
+-- The Settings room's board. Without it the room is empty, but the menu and Play are not affected.
+local SettingsBoard = loadModule("SettingsBoard")
 
 -- Set by setupMenu.
 local menu, root, fader, back
@@ -222,6 +224,39 @@ local function setupMenu()
 		local ok, err = pcall(SceneDirector.init, { fader = fader, root = root, back = back, menuCamera = MenuCamera })
 		if not ok then
 			warn("MainMenuClient: SceneDirector.init failed: " .. tostring(err))
+		end
+	end
+
+	-- The Settings scene shows the board. SceneDirector runs these in pcall, behind the black screen, and the exit and
+	-- dispose hooks on the Play path: none of them yield, and exit and dispose can run twice or with no board mounted.
+	if SceneDirector and SettingsBoard then
+		local ok, err = pcall(SceneDirector.register, "Settings", {
+			enter = function()
+				-- Mounted on the first visit and reused after that (dispose unmounts it, so it is looked up each time).
+				local boardGui = playerGui:FindFirstChild("SettingsBoardGui")
+				if not boardGui then
+					local settingsRoom = workspace:FindFirstChild("SettingsRoom")
+					local board = settingsRoom and settingsRoom:FindFirstChild("Settingsboard")
+					if not (board and board:IsA("BasePart")) then
+						warn("MainMenuClient: workspace.SettingsRoom.Settingsboard is missing; the Settings room stays empty")
+						return
+					end
+					boardGui = SettingsBoard.mount(board, playerGui)
+				end
+				SettingsBoard.setEnabled(boardGui, true)
+			end,
+			exit = function()
+				local boardGui = playerGui:FindFirstChild("SettingsBoardGui")
+				if boardGui then
+					SettingsBoard.setEnabled(boardGui, false)
+				end
+			end,
+			dispose = function()
+				SettingsBoard.unmount(playerGui)
+			end,
+		})
+		if not ok then
+			warn("MainMenuClient: could not register the Settings board: " .. tostring(err))
 		end
 	end
 
