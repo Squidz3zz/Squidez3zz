@@ -89,7 +89,8 @@ Further details:
 ### BACK and fallbacks
 
 - **BACK:** a screen-space TextButton named `Back`, bottom-left, with the factory skin. It is shown only in Settings and Credits and calls `goTo("Menu")`.
-- **Missing room or marker:** if a room or its marker is missing, `goTo` warns and stays on the current scene.
+- **Missing room or marker:** if a room or its marker is missing, `goTo` warns (and returns false without yielding) and stays on the current scene. The Persistent rooms stream in with the first load, so a click that beats them is tried once more when the room arrives, unless the player chose another scene or pressed Play in the meantime.
+- **Controller:** after each cut, a controller player's selection moves to `Back` in a room, or to the Settings or Credits button on return to the menu. While a room is up, ButtonB is bound (action `MenuBack`) to `goTo("Menu")`: only the press is sunk. It is unbound on Menu and by `stop()`. Board sliders and switches are not controller-navigable.
 - **Fault isolation:** scene `enter` and `exit` hooks run in pcall. A failing hook still completes the fade back in. None of this is on the Play path.
 
 ## Camera sway (replaces the orbit)
@@ -97,7 +98,7 @@ Further details:
 `MenuCamera` is rewritten. The orbit and `MenuCameraFocus` are removed.
 
 - `MenuCamera.start()` sets CameraType Scriptable, adds `MenuBlur` (Size 6, reduced from 16 so the map reads behind the menu) when Screen Effects is on, and connects a RenderStepped updater.
-- `MenuCamera.setBase(cf: CFrame)`: SceneDirector calls this on each scene change.
+- `MenuCamera.setBase(cf: CFrame, opts: { blur: boolean }?)`: SceneDirector calls this on each scene change. The blur is for the Menu scene only (`blur` defaults to true, SceneDirector passes false for Settings and Credits), because in the rooms the 3D board and avatars are the interface and must stay sharp. The colour grade stays in every scene, and with Screen Effects off there is neither.
 - **Sway** is computed every frame:
   - Mouse offset from screen centre, normalised to -1..1 on each axis.
   - Target rotation is `CFrame.Angles(-ny * rad(2), -nx * rad(2), 0)`.
@@ -150,6 +151,7 @@ The user's backdrop becomes the back wall's centrepiece, with CorrodedMetal appl
   - **Sound Effects:** a slider controlling `SoundService.SFX`, a new SoundGroup with Volume 0.5. The menu build creates it if missing.
   - **Camera Sway:** an ON/OFF switch, default ON.
   - **Screen Effects:** an ON/OFF switch, default ON. Off hides the vignette, removes `MenuBlur` and removes `MenuColorCorrection`. On restores them.
+- **Touch targets:** the board is only about 270 px tall on a phone in landscape, so the whole row is the target (about 45 px, over the 40 px minimum): a press anywhere on a slider row starts that slider's drag, and a tap anywhere on a switch row (its `RowHit` button) flips the switch.
 - **Shared state:** a client `MenuSettings` ModuleScript owns the two booleans, with `get(name)`, `set(name, value)` and a `Changed` BindableEvent. MenuCamera and SceneDirector read from it.
 - **Slider reuse:** sliders reuse `VolumeSlider`. Its drag mapping is verified on the board with a real mouse drag. If SurfaceGui input positions don't line up with the slider's `AbsolutePosition` space, `VolumeSlider` is adjusted to map correctly in both ScreenGui and SurfaceGui.
 
@@ -170,16 +172,18 @@ The user's backdrop becomes the back wall's centrepiece, with CorrodedMetal appl
 
 ### Hover
 While the Credits scene is active:
-- A raycast from the mouse (`Camera:ViewportPointToRay`) runs against the avatars only, using a RaycastParams include list.
+- A raycast from the mouse (`Camera:ViewportPointToRay`, on `GetMouseLocation()`) runs against the avatars only, using a RaycastParams include list.
 - The hovered avatar gets a `Highlight` (OutlineColor (255, 150, 30), FillTransparency 1).
 - It also gets a `BillboardGui` above the head with the `DisplayName` text in the factory font.
 - Un-hovering removes both.
-- **Touch:** a tap on an avatar shows it until another tap elsewhere.
+- **Touch:** a tap on an avatar shows it until another tap elsewhere. `TouchTap` positions are in screen space (below the top bar's inset), so taps use `Camera:ScreenPointToRay`; mixing the spaces misses by the inset (about 58 px).
+- **Name label:** a 56 px BillboardGui, `StudsOffset` (0, 1.5, 0), low enough to stay inside the view at 844x390.
 
 ## Server changes (MenuServer)
 
 - Build `CreditAvatars.Developer` at startup (above).
 - Set the `MenuCameraShot` Workspace attribute (Vector3 position) at startup if the marker exists, and stream around it for each player.
+  - If `workspace.MenuCameraShot` is a BasePart it is also made safe at startup: Anchored, Transparency 1, CanCollide, CanQuery and CanTouch false. The camera looks out of the part's Front face; `docs/RECOVERY.md` has the command-bar line that places it from the editor camera.
 - Keep all v1 behaviour.
 
 ## Components
