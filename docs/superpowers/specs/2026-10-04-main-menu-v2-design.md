@@ -39,7 +39,7 @@ Restyle the main menu with a **heavy-factory** look: rusty steel, grates, girder
 ## Main menu restyle
 
 - **Root layout (Scale only).** The first draft's numbers were tuned while building (the phone check, the Vignette layering and the "upper half, bigger" avatar), so the values below are the shipped ones. Each one that changed says **tuned**, with the draft value.
-  - `Root`: ZIndex 55 (**tuned**: the draft left it at the default, under the Vignette, which dimmed the title and buttons). It sits above the Vignette (50) and below `Back` (60) and the Fader (100).
+  - `Root`: ZIndex 55 (**tuned**: the draft left it at the default, under the Vignette, which dimmed the title and buttons). It sits below `Back` (60). The Vignette and the Fader are ScreenGuis of their own (see **Vignette**), so their order against `Root` comes from DisplayOrder, not ZIndex.
   - `Title`: AnchorPoint (0, 1), Position {0.06, 0}, {0.27, 0} (**tuned** from 0.30), Size {0.40, 0}, {0.10, 0}. Its bottom edge sits just above the buttons, which start at 0.31, and its top edge is at 0.17, below the topbar band on a phone (66 px at 390 px, the band ends at 58).
   - `Buttons`: AnchorPoint (0, 0.5), Position {0.06, 0}, {0.56, 0}, Size {0.24, 0}, {0.50, 0} (**tuned** from 0.42).
   - `UIListLayout`: Padding {0.1775, 0} (**tuned** from 0.215). UIListLayout padding scales with the Buttons frame, not the screen, so 0.1775 × 0.50 ≈ 0.089 of screen height. Each button is Size {1, 0}, {0.215, 0} of the frame (**tuned** from 0.19), which is ≈ 0.1075 of the screen, 42 px at 390 px. The draft values gave 31 px buttons on the phone, under the 40 px tap target.
@@ -48,10 +48,11 @@ Restyle the main menu with a **heavy-factory** look: rusty steel, grates, girder
 - **CharacterView** (**tuned**: the draft put it at Position {0.56, 0}, {0.10, 0}, Size {0.40, 0}, {0.85, 0}): AnchorPoint (0, 1), Position {0.48, 0}, {1, 0}, Size {0.48, 0}, {0.85, 0}, with a `UIAspectRatioConstraint` of 1.3. It sits on the bottom edge of the screen, because the avatar is cut off there, and runs from 0.48 to 0.96 of the width, clear of the Buttons (end at 0.30) and the Title frame (ends at 0.46). The aspect ratio shrinks it on a screen too wide for 0.85 of its height.
   - `CharacterPreview` frames the **upper body** as a window, not a margin around the whole figure: the bottom edge sits just under the waist (the bottom of `Torso`, or of `LowerTorso` for R15) and the top edge is above the head, high enough for the raised wave hand. The legs are cut off at the bottom of the view.
   - The framing is asymmetric and tuned (fractions of the upper-body height, torso bottom to head top): `WAIST_MARGIN` 0.05 below the waist, `HAND_ROOM` 0.45 above the head, `WINDOW_SLACK` 1.06 on the window height, and `AIM_SHIFT` toward the waving arm's side (R6 0.12, R15 0). The camera aims at the centre of the window with FOV 30. Measured over a looping wave, the head stays fully in the frame and the waving hand stays in the frame to within 3%. Facing and idle/wave behaviour are unchanged.
-- **Vignette:** a `Vignette` Frame (full screen, ZIndex 50, under `Root` (55), `Back` (60) and the Fader (100)) holds four edge Frames named `Top`, `Bottom`, `Left` and `Right`.
+- **Vignette:** a `Vignette` Frame (full screen, ZIndex 50) holds four edge Frames named `Top`, `Bottom`, `Left` and `Right`.
   - Colour is RGB (12, 9, 6).
   - Each edge is about 0.18 of the screen deep and has a `UIGradient` running from Transparency 0.15 at the outer edge to 1 at the inner edge.
-  - It lives in the menu ScreenGui, so it disappears with the menu.
+  - It lives in `MainMenuVignette`, a full-screen overlay ScreenGui (ScreenInsets `None`, IgnoreGuiInset true, DisplayOrder 9, behind the menu), so it reaches the notch strips and rounded edges of a phone. The menu itself (`MainMenu`: `Root` and `Back`, DisplayOrder 10) keeps ScreenInsets `DeviceSafeInsets`, so the buttons and BACK never sit under a notch. (When the Vignette was a child of `MainMenu` it stopped at the safe area and left blank strips on a phone.)
+  - It is destroyed with the other two menu ScreenGuis after Play.
 - **Factory skin:**
   - Buttons: background RGB (38, 36, 34), a 0.03-wide left accent bar RGB (255, 150, 30), white Oswald text and uppercase labels.
   - ButtonEffects stroke colour becomes amber RGB (255, 150, 30). Its scale values are unchanged.
@@ -77,7 +78,7 @@ Restyle the main menu with a **heavy-factory** look: rusty steel, grates, girder
 ### Transitions
 
 `SceneDirector.goTo(name)`:
-1. Fade the existing `Fader` to opaque over 0.4s.
+1. Fade the existing `Fader` to opaque over 0.4s. The `Fader` lives in `MainMenuFader`, a full-screen overlay ScreenGui (ScreenInsets `None`, DisplayOrder 11, over everything), so the fade also covers the notch strips of a phone while the menu stays in the safe area.
 2. Run the old scene's `exit` and the new scene's `enter`. Set the camera base CFrame.
 3. Fade back in over 0.4s.
 
@@ -190,7 +191,7 @@ While the Credits scene is active:
 
 | Component | Type | Location | Change |
 |---|---|---|---|
-| `build_main_menu_ui.luau` | build script | `studio/` | New layout, vignette, skin, Back button, SFX group; panels removed |
+| `build_main_menu_ui.luau` | build script | `studio/` | New layout, vignette, skin, Back button, SFX group; panels removed; builds three ScreenGuis (`MainMenuVignette`, `MainMenu`, `MainMenuFader`) |
 | `build_menu_rooms.luau` | build script | `studio/` | New: rooms, markers, ViewerCreditStand |
 | `MenuServer` | Script | ServerScriptService | Developer credit avatar, MenuCameraShot streaming |
 | `MainMenuClient` (init) | LocalScript | StarterPlayerScripts | Wires SceneDirector; Settings/Credits buttons call `goTo`; Play unchanged |
@@ -206,6 +207,7 @@ While the Credits scene is active:
 The I-1 header list of required UI names in `init.client.luau` is updated:
 - `SettingsPanel` and `CreditsPanel` are removed.
 - `Vignette` and `Back` are added.
+- The names are grouped per ScreenGui: `MainMenu` (`Root`, ..., `Back`), `MainMenuVignette` (`Vignette`) and `MainMenuFader` (`Fader`). The client clones all three, and treats a missing one like a missing `MainMenu` (setup throws and the I-1 fallback destroys every clone that exists).
 
 ## Error handling
 

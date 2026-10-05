@@ -31,11 +31,17 @@ names, so everything still works.
 
 ### b) Rebuild the menu
 
-1. In the Explorer, if `ReplicatedStorage.MainMenu` exists, move it out of the way (drag it into `ServerStorage`) or
-   delete it. The script refuses to run while it exists.
+1. In the Explorer, the menu is three ScreenGuis in `ReplicatedStorage`: `MainMenu`, `MainMenuVignette` and
+   `MainMenuFader`. Move all three that exist out of the way (drag them into `ServerStorage`) or delete them. The script
+   refuses to run while any one of them exists.
 2. Run `studio/build_main_menu_ui.luau`.
 
-It builds `ReplicatedStorage.MainMenu` and adds `SoundService.Music` and `SoundService.SFX` if they are missing.
+It builds the three ScreenGuis again and adds `SoundService.Music` and `SoundService.SFX` if they are missing:
+
+- `MainMenu` holds the title, buttons, avatar slot and BACK. It stays inside the phone's safe area, so nothing sits under
+  a notch.
+- `MainMenuVignette` holds the dark border, and `MainMenuFader` holds the black fade. Both are full-screen overlays
+  (ScreenInsets `None`), so they reach the notch strips and rounded edges of a phone.
 
 ### c) Put the scripts back
 
@@ -90,7 +96,8 @@ part, the menu uses a default angle.
 
 Press **Play** in Studio (the Test tab) and check each of these:
 
-1. The menu opens with the title, three buttons, and your avatar on the right after a few seconds.
+1. The menu opens with the title, three buttons, and your avatar on the right after a few seconds. In the Device
+   Emulator (a phone, landscape) the dark border and the fades reach every screen edge, notch included.
 2. **Settings** fades to a room with a board. The sliders move and the switches flip. **BACK** returns.
 3. **Credits** fades to a room with two avatars on stands. Hovering one shows a name. **BACK** returns.
 4. **Play** spawns your character and the menu goes away.
