@@ -1,16 +1,21 @@
 -- MainMenuClient: shows the main menu at join and wires its Play, Settings and Credits buttons.
 -- The menu lives in ReplicatedStorage (not StarterGui) because the server holds players without a character
 -- until PlayPressed; it is cloned into PlayerGui here and destroyed once the player has spawned.
+-- It is three ScreenGuis: MainMenu stays in the phone's safe area, while the Vignette and the Fader are full-screen
+-- overlays of their own (ScreenInsets None) so they reach the notch strips and rounded corners.
 -- Settings and Credits are 3D rooms: their buttons ask SceneDirector (a module under this script) to fade and cut there.
 -- The Credits room shows the developer's avatar (built by MenuServer in ReplicatedStorage.CreditAvatars) and the player's own.
 --
--- UI names this script depends on (all under ReplicatedStorage.MainMenu). Restyle anything, but keep these names:
---   Root
---   Root.Buttons.Play, Root.Buttons.Settings, Root.Buttons.Credits
---   Root.CharacterView
---   Vignette
---   Back
---   Fader
+-- UI names this script depends on (three ScreenGuis under ReplicatedStorage). Restyle anything, but keep these names:
+--   MainMenu
+--     Root
+--     Root.Buttons.Play, Root.Buttons.Settings, Root.Buttons.Credits
+--     Root.CharacterView
+--     Back
+--   MainMenuVignette
+--     Vignette
+--   MainMenuFader
+--     Fader
 -- Root.Title is never looked up, so it can be renamed or restyled freely.
 -- If the UI is broken or never appears, setup warns and the player is spawned straight away instead: nobody
 -- spawns until PlayPressed (CharacterAutoLoads is off), so a menu that cannot open must not trap the player.
@@ -60,8 +65,9 @@ local SettingsBoard = loadModule("SettingsBoard")
 -- The Credits room's avatars. Without it that room is empty, but the menu and Play are not affected.
 local CreditsRoom = loadModule("CreditsRoom")
 
--- Set by setupMenu.
-local menu, root, fader, back
+-- Set by setupMenu: the three cloned ScreenGuis, and the frames this script uses from them.
+local menu, vignetteGui, faderGui
+local root, vignette, fader, back
 
 -- Bumped whenever the Credits scene is entered, exited or disposed. A late avatar placement stops when it changes.
 local creditsVisit = 0
@@ -149,6 +155,14 @@ local function quietRooms()
 	end
 end
 
+-- Destroys the clones of the menu's three ScreenGuis (MainMenu, MainMenuVignette, MainMenuFader). Never yields. One that
+-- was never cloned (a setup that failed half way) is still nil and is skipped by the loop.
+local function destroyMenuGuis()
+	for _, gui in { menu, vignetteGui, faderGui } do
+		gui:Destroy()
+	end
+end
+
 local function runPlay()
 	GuiService.SelectedObject = nil
 	-- Play can be pressed in the middle of a scene change. stop() ends it (it never yields) before the fade below
@@ -186,13 +200,11 @@ local function runPlay()
 		fadeIn.Completed:Wait()
 	end
 	root:Destroy()
-	-- The Vignette is a sibling of Root, so it would otherwise stay on screen through the fade out.
-	local vignette = menu:FindFirstChild("Vignette")
-	if vignette then
-		vignette.Visible = false
-	end
+	-- The Vignette is in a ScreenGui of its own, so destroying Root does not touch it and it would otherwise stay on
+	-- screen through the fade out.
+	vignette.Visible = false
 	fadeTo(1).Completed:Wait()
-	menu:Destroy()
+	destroyMenuGuis()
 	playerGui:SetAttribute("MenuOpen", false)
 	playerGui:SetAttribute("MenuScene", nil)
 end
@@ -207,15 +219,26 @@ local function play()
 	return true
 end
 
--- Clones the menu, wires it up and shows it. Throws if the UI tree is not what this script expects.
+-- Waits for one of the three ScreenGui templates in ReplicatedStorage. Throws if it does not appear.
+local function waitForTemplate(name)
+	local template = ReplicatedStorage:WaitForChild(name, MENU_TIMEOUT)
+	assert(template, "ReplicatedStorage." .. name .. " did not appear within " .. MENU_TIMEOUT .. "s")
+	return template
+end
+
+-- Clones the menu's three ScreenGuis, wires them up and shows them. Throws if the UI is not what this script expects.
 local function setupMenu()
-	local template = ReplicatedStorage:WaitForChild("MainMenu", MENU_TIMEOUT)
-	assert(template, "ReplicatedStorage.MainMenu did not appear within " .. MENU_TIMEOUT .. "s")
-	menu = template:Clone()
+	-- All three templates first, so a missing one throws before anything is cloned.
+	local menuTemplate = waitForTemplate("MainMenu")
+	local vignetteTemplate = waitForTemplate("MainMenuVignette")
+	local faderTemplate = waitForTemplate("MainMenuFader")
+	menu = menuTemplate:Clone()
+	vignetteGui = vignetteTemplate:Clone()
+	faderGui = faderTemplate:Clone()
 	root = menu.Root
-	fader = menu.Fader
-	local vignette = menu.Vignette
 	back = menu.Back
+	vignette = vignetteGui.Vignette
+	fader = faderGui.Fader
 
 	root.Buttons.Play.Activated:Connect(play)
 	root.Buttons.Settings.Activated:Connect(function()
@@ -368,7 +391,10 @@ local function setupMenu()
 		end
 	end
 
+	-- All three go in together; DisplayOrder stacks them (Vignette 9 behind, MainMenu 10, Fader 11 on top).
+	vignetteGui.Parent = playerGui
 	menu.Parent = playerGui
+	faderGui.Parent = playerGui
 	playerGui:SetAttribute("MenuOpen", true)
 	-- The scene the player is looking at: SceneDirector keeps this up to date from here on.
 	playerGui:SetAttribute("MenuScene", "Menu")
@@ -377,10 +403,8 @@ end
 local setupOk, setupError = pcall(setupMenu)
 if not setupOk then
 	warn("MainMenuClient: the menu could not be set up (" .. tostring(setupError) .. "); spawning without it")
-	-- setupMenu parents the menu last, but never leave a half-built one on screen.
-	if menu then
-		menu:Destroy()
-	end
+	-- setupMenu parents the three ScreenGuis last, but never leave a half-built menu on screen: destroy every clone that exists.
+	destroyMenuGuis()
 	playerGui:SetAttribute("MenuOpen", false)
 	playPressed:FireServer()
 	return
