@@ -148,10 +148,19 @@ for name, order in layoutOrder do
 	expectColor(path .. ".Accent", "BackgroundColor3", AMBER)
 end
 
--- CharacterView: the avatar's slot on the right.
-expectUDim2("Root.CharacterView", "Position", 0.56, 0, 0.10, 0)
-expectUDim2("Root.CharacterView", "Size", 0.40, 0, 0.85, 0)
-assert(get("Root.CharacterView").BackgroundTransparency == 1, "CharacterView must be transparent")
+-- CharacterView: the avatar's slot on the right. The avatar is shown from the waist up, cut off at the bottom of the
+-- screen, so the frame is anchored to the bottom edge; it is 1.3 times as wide as tall (room for the wave's swing) and
+-- 0.48 of the screen wide, from 0.48 to 0.96, which keeps it clear of the Buttons (end at 0.30) and the Title (ends at 0.46).
+local characterView = get("Root.CharacterView")
+assert(characterView.AnchorPoint == Vector2.new(0, 1), "CharacterView.AnchorPoint must be (0, 1), got " .. tostring(characterView.AnchorPoint))
+expectUDim2("Root.CharacterView", "Position", 0.48, 0, 1, 0)
+expectUDim2("Root.CharacterView", "Size", 0.48, 0, 0.85, 0)
+local aspect = get("Root.CharacterView.UIAspectRatioConstraint")
+assert(near(aspect.AspectRatio, 1.3), "CharacterView aspect ratio must be 1.3, got " .. aspect.AspectRatio)
+assert(characterView.BackgroundTransparency == 1, "CharacterView must be transparent")
+local titleRight = get("Root.Title").Position.X.Scale + get("Root.Title").Size.X.Scale
+assert(characterView.Position.X.Scale >= titleRight, "CharacterView must start to the right of the Title frame")
+assert(characterView.Position.X.Scale + characterView.Size.X.Scale <= 1 + TOLERANCE, "CharacterView must stay inside the screen")
 
 -- Vignette: full screen, under the Fader, never in the way of a click. Four edges, darkest at the outside.
 local vignette = get("Vignette")

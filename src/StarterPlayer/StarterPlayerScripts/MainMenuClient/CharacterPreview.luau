@@ -1,14 +1,22 @@
 -- CharacterPreview: shows a copy of the player's avatar in the menu's ViewportFrame, idling and facing the
--- camera, and waves once when it appears. The camera frames the upper body.
+-- camera, and waves once when it appears. The camera shows the avatar from the waist up.
 -- show(viewport, source) returns the clone, or nil if the viewport was already destroyed.
 -- clonePosed and playIdle are the two halves of "a still copy of an avatar that idles": show uses them for the menu, and
 -- CreditsRoom uses them for the avatars standing in the Credits room.
 local CAMERA_FOV = 30
--- Room around the upper body (torso bottom to head top). The wave swings the arm about a stud above the head and about
--- three studs to the side of the body, and the menu's CharacterView is a little narrower than tall, so the width
--- decides: measured over a looping wave on R6 and R15 (default and the real avatar), the arm reaches 0.96 of the frame
--- half-width at 2.25 and 0.94 at 2.3 (aspect 0.95; wider frames have more room), and R6 reaches furthest.
-local FRAMING_MARGIN = 2.3
+-- The shot is a window on the avatar, not a margin around it: its bottom edge sits just under the waist (the bottom of
+-- Torso, or of LowerTorso on R15) and its top edge is above the head, high enough for the hand the wave raises. The
+-- three numbers are fractions of the upper-body height (torso bottom to head top). The menu's CharacterView is 1.3
+-- times as wide as it is tall (see studio/build_main_menu_ui.luau); measured over a looping wave on R6 and R15 (default
+-- and the real avatar), in a frame of that shape, the arms stay within 0.91 (R6) to 0.97 (R15) of the half-width, the
+-- hand R6 raises within 0.91 of the half-height, and the head within 0.53 and 0.49 of them.
+local WAIST_MARGIN = 0.05
+local HAND_ROOM = 0.45
+local WINDOW_SLACK = 1.06
+-- Only one arm swings out, so the aim moves toward its side, along the avatar's right, by this fraction of the
+-- upper-body height. R6 waves with its right arm and reaches 3.0 studs out on that side but only 2.3 on the other;
+-- R15 swings its arms out about equally (3.1 and 3.2), so it gets none.
+local AIM_SHIFT = { R6 = 0.12, R15 = 0 }
 
 -- Fallbacks for models that carry no Animate script (the idle is read from Animate when there is one).
 local ANIMATIONS = {
@@ -52,20 +60,25 @@ local function animationTools(humanoid)
 	return animator, ANIMATIONS[humanoid.RigType == Enum.HumanoidRigType.R15 and "R15" or "R6"]
 end
 
--- The centre and height of the upper body: from the bottom of the torso (LowerTorso on R15) to the top of the head.
--- Measured on the model as it stands (upright, at the origin). Falls back to the whole model if it lacks either part.
-local function upperBody(clone, rootPart)
+-- The point the camera aims at (the middle of the window) and the window's height in studs. Measured on the model as it
+-- stands (upright, at the origin). Falls back to the whole model, with a margin, if it lacks a torso or a head.
+local function shotWindow(clone, rootPart, rigName)
 	local torso = clone:FindFirstChild("LowerTorso") or clone:FindFirstChild("Torso")
 	local head = clone:FindFirstChild("Head")
 	if torso and torso:IsA("BasePart") and head and head:IsA("BasePart") then
 		local bottom = torso.Position.Y - torso.Size.Y / 2
 		local top = head.Position.Y + head.Size.Y / 2
 		if top > bottom then
-			return Vector3.new(rootPart.Position.X, (top + bottom) / 2, rootPart.Position.Z), top - bottom
+			local height = top - bottom
+			local windowBottom = bottom - WAIST_MARGIN * height
+			local windowTop = top + HAND_ROOM * height
+			local aim = Vector3.new(rootPart.Position.X, (windowTop + windowBottom) / 2, rootPart.Position.Z)
+				+ rootPart.CFrame.RightVector * (AIM_SHIFT[rigName] * height)
+			return aim, windowTop - windowBottom
 		end
 	end
 	local boxCFrame, boxSize = clone:GetBoundingBox()
-	return boxCFrame.Position, boxSize.Y
+	return boxCFrame.Position, boxSize.Y * 1.4
 end
 
 local CharacterPreview = {}
@@ -116,17 +129,19 @@ function CharacterPreview.show(viewport, source)
 	clone.Parent = viewport.WorldModel
 
 	-- Measured after parenting: accessory welds only settle once the model is in the WorldModel.
-	local centre, height = upperBody(clone, rootPart)
-	local distance = (height / 2) / math.tan(math.rad(CAMERA_FOV / 2)) * FRAMING_MARGIN
+	local humanoid = clone:FindFirstChildOfClass("Humanoid")
+	local rigName = if humanoid.RigType == Enum.HumanoidRigType.R15 then "R15" else "R6"
+	local aim, windowHeight = shotWindow(clone, rootPart, rigName)
+	local distance = (windowHeight * WINDOW_SLACK / 2) / math.tan(math.rad(CAMERA_FOV / 2))
 	local camera = Instance.new("Camera")
 	camera.Name = "PreviewCamera"
 	camera.FieldOfView = CAMERA_FOV
-	camera.CFrame = CFrame.lookAt(centre + rootPart.CFrame.LookVector * distance, centre)
+	camera.CFrame = CFrame.lookAt(aim + rootPart.CFrame.LookVector * distance, aim)
 	camera.Parent = viewport
 	viewport.CurrentCamera = camera
 
 	CharacterPreview.playIdle(clone, idleId)
-	local animator, fallback = animationTools(clone:FindFirstChildOfClass("Humanoid"))
+	local animator, fallback = animationTools(humanoid)
 	playAnimation(animator, fallback.wave, false, Enum.AnimationPriority.Action)
 
 	return clone

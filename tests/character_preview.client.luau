@@ -1,7 +1,9 @@
 -- Run in the Client datamodel of a FRESH playtest, with the main menu still open. Pick the case with CASE:
 --   "A": the player's avatar shows up in CharacterView (needs the server to have built MenuAvatars[UserId], a few seconds
---        after join): Humanoid present, no Animate, PreviewCamera set and framing the upper body (bottom of the torso to
---        the top of the head, aimed at the centre of that box), idle track looping, and the wave arm staying in frame.
+--        after join): Humanoid present, no Animate, PreviewCamera set and showing the avatar from the waist up (the bottom
+--        edge of the view just under the bottom of the torso, the legs cut off, the head inside the view, the upper body
+--        at least 0.55 of the view's height), idle track looping, the head staying fully in frame while the avatar
+--        waves, and the waving hand staying in frame (give or take 3%).
 --   "B": pressing Play immediately (before the avatar arrives) causes no errors and still spawns the player.
 --        Uses the Studio-only MainMenuClient.TestHook, because execute_luau cannot reach the script's locals.
 --   "C": CharacterPreview.show returns nil, without error, when the viewport has already been destroyed.
@@ -81,26 +83,35 @@ if CASE == "A" then
 	assert(torso and head, "preview model has no torso / head part")
 	local bottomY = torso.Position.Y - torso.Size.Y / 2
 	local topY = head.Position.Y + head.Size.Y / 2
-	local boxCentre = Vector3.new(rootPart.Position.X, (bottomY + topY) / 2, rootPart.Position.Z)
 
-	-- The camera aims at the middle of that box: the centre is within half a stud of the camera's look ray (the brief
-	-- allows a stud; the old whole-body framing missed by about 0.9, so a stud would not tell the two framings apart).
-	local toCentre = boxCentre - camera.CFrame.Position
-	local along = toCentre:Dot(camera.CFrame.LookVector)
-	assert(along > 0, "the upper-body centre is behind the preview camera")
-	local missBy = (toCentre - camera.CFrame.LookVector * along).Magnitude
-	assert(missBy <= 0.5, ("the camera aims %.2f studs away from the centre of the upper body"):format(missBy))
-
-	-- Head top and torso bottom both project inside the viewport (nothing is cropped), and the upper body fills it.
+	-- A ViewportFrame's camera reports a 1x1 viewport, so its projections assume a square frame: scale x back by the
+	-- frame's real aspect ratio (a no-op if ViewportSize ever is the real size). project() gives where a world point
+	-- lands in the view: x from -1 (left edge) to 1 (right edge), y from -1 (top edge) to 1 (bottom edge).
 	local viewSize = camera.ViewportSize
-	local top = camera:WorldToViewportPoint(Vector3.new(rootPart.Position.X, topY, rootPart.Position.Z))
-	local bottom = camera:WorldToViewportPoint(Vector3.new(rootPart.Position.X, bottomY, rootPart.Position.Z))
-	assert(top.Z > 0 and bottom.Z > 0, "character is behind the preview camera")
-	assert(top.Y >= 0 and top.Y <= viewSize.Y, ("head top is outside the viewport: y=%.0f of %.0f"):format(top.Y, viewSize.Y))
-	assert(bottom.Y >= 0 and bottom.Y <= viewSize.Y, ("torso bottom is outside the viewport: y=%.0f of %.0f"):format(bottom.Y, viewSize.Y))
-	local fill = (bottom.Y - top.Y) / viewSize.Y
-	assert(fill >= 0.4, ("the upper body is too small in the viewport: it spans %.0f%% of the height"):format(fill * 100))
-	assert(fill <= 0.9, ("no headroom left for the wave: the upper body spans %.0f%% of the height"):format(fill * 100))
+	local aspectFix = (viewSize.X / viewSize.Y) / (viewport.AbsoluteSize.X / viewport.AbsoluteSize.Y)
+	local function project(point)
+		local p = camera:WorldToViewportPoint(point)
+		assert(p.Z > 0, "a point of the character is behind the preview camera")
+		return (p.X / viewSize.X - 0.5) * 2 * aspectFix, (p.Y / viewSize.Y - 0.5) * 2
+	end
+	local rootX, rootZ = rootPart.Position.X, rootPart.Position.Z
+
+	-- Waist up: the bottom of the torso is inside the view, close to its bottom edge (at most 15% of the height above
+	-- it), and everything below that is cut off: the lowest point of the avatar is below the bottom edge.
+	local _, torsoBottomY = project(Vector3.new(rootX, bottomY, rootZ))
+	assert(torsoBottomY <= 1, ("the bottom of the torso is below the view (y %.2f, 1 is the bottom edge)"):format(torsoBottomY))
+	assert(torsoBottomY >= 0.7, ("the bottom of the view is too far under the waist: the torso ends at y %.2f, it must be 0.7 to 1"):format(torsoBottomY))
+	local boxCFrame, boxSize = model:GetBoundingBox()
+	local _, legsY = project(Vector3.new(rootX, boxCFrame.Position.Y - boxSize.Y / 2, rootZ))
+	assert(legsY > 1, ("the legs are not cropped: the lowest point of the avatar is at y %.2f, it must be below the bottom edge (above 1)"):format(legsY))
+
+	-- The head is inside the view, and the upper body fills at least 0.55 of its height (the old whole-body shot gave 0.43).
+	local centreX, headTopY = project(Vector3.new(rootX, topY, rootZ))
+	assert(headTopY >= -1, ("the top of the head is above the view (y %.2f, -1 is the top edge)"):format(headTopY))
+	local fill = (torsoBottomY - headTopY) / 2
+	assert(fill >= 0.55, ("the upper body is too small in the view: it fills %.0f%% of the height"):format(fill * 100))
+	assert(fill <= 0.85, ("no room left for the wave: the upper body fills %.0f%% of the height"):format(fill * 100))
+	assert(math.abs(centreX) <= 0.5, ("the avatar is off-centre in the view (x %.2f)"):format(centreX))
 
 	-- The idle animation plays on loop (animations load asynchronously, so poll).
 	local animator = humanoid:FindFirstChildOfClass("Animator")
@@ -115,8 +126,9 @@ if CASE == "A" then
 	end, 10)
 	assert(looping, "no looping animation track is playing (idle missing)")
 
-	-- The wave arm stays in frame (top and sides; hands hanging below the waist may be cut off by a waist-up shot):
-	-- loop the wave and project every corner of the arm parts, every frame.
+	-- The wave: loop it (with the idle already playing, so the pose is the real one) and project every corner of the head
+	-- and of the arm parts, every frame. The head must stay fully in the view. The raised hand may clip a little at the
+	-- edge (3% of the half-width or half-height is accepted); the tuning leaves it inside, see CharacterPreview.
 	local waveId = if humanoid.RigType == Enum.HumanoidRigType.R15 then "rbxassetid://507770239" else "rbxassetid://128777973"
 	local waveAnimation = Instance.new("Animation")
 	waveAnimation.AnimationId = waveId
@@ -137,25 +149,33 @@ if CASE == "A" then
 		end
 	end
 	assert(#armParts > 0, "found no arm parts to check")
-	-- A ViewportFrame's camera reports a 1x1 viewport, so its projections assume a square frame: scale x back by the
-	-- frame's real aspect ratio (a no-op if ViewportSize ever is the real size).
-	local aspectFix = (viewSize.X / viewSize.Y) / (viewport.AbsoluteSize.X / viewport.AbsoluteSize.Y)
-	local minY, widest = math.huge, 0
+	local corners = {
+		Vector3.new(1, 1, 1), Vector3.new(1, 1, -1), Vector3.new(1, -1, 1), Vector3.new(1, -1, -1),
+		Vector3.new(-1, 1, 1), Vector3.new(-1, 1, -1), Vector3.new(-1, -1, 1), Vector3.new(-1, -1, -1),
+	}
+	local headWidest, headHighest = 0, math.huge
+	local armWidest, armHighest = 0, math.huge
+	local function track(part, widest, highest)
+		local half = part.Size / 2
+		for _, sign in corners do
+			local x, y = project(part.CFrame:PointToWorldSpace(half * sign))
+			widest, highest = math.max(widest, math.abs(x)), math.min(highest, y)
+		end
+		return widest, highest
+	end
 	local deadline = os.clock() + math.max(3, wave.Length * 1.2)
 	while os.clock() < deadline do
 		RunService.Heartbeat:Wait()
+		headWidest, headHighest = track(head, headWidest, headHighest)
 		for _, part in armParts do
-			local half = part.Size / 2
-			for _, sign in { Vector3.new(1, 1, 1), Vector3.new(1, 1, -1), Vector3.new(1, -1, 1), Vector3.new(1, -1, -1), Vector3.new(-1, 1, 1), Vector3.new(-1, 1, -1), Vector3.new(-1, -1, 1), Vector3.new(-1, -1, -1) } do
-				local point = camera:WorldToViewportPoint(part.CFrame:PointToWorldSpace(half * sign))
-				widest = math.max(widest, math.abs(point.X / viewSize.X - 0.5) * 2 * aspectFix)
-				minY = math.min(minY, point.Y / viewSize.Y)
-			end
+			armWidest, armHighest = track(part, armWidest, armHighest)
 		end
 	end
 	wave:Stop()
-	assert(minY >= 0, ("the waving arm leaves the top of the viewport (y %.2f of the height)"):format(minY))
-	assert(widest <= 1, ("the arm leaves the side of the viewport (it reaches %.2f of the half-width)"):format(widest))
+	assert(headWidest <= 1 and headHighest >= -1, ("the head leaves the view during the wave (x reaches %.2f, top at y %.2f)"):format(headWidest, headHighest))
+	assert(armWidest <= 1.03, ("the waving arm leaves the side of the view (it reaches %.2f of the half-width)"):format(armWidest))
+	assert(armHighest >= -1.03, ("the waving hand leaves the top of the view (y %.2f, -1 is the top edge)"):format(armHighest))
+	print(("character_preview A: torso bottom y %.2f, legs y %.2f, head top y %.2f, fill %.0f%%; wave: head %.2f wide / top y %.2f, arm %.2f wide / top y %.2f"):format(torsoBottomY, legsY, headTopY, fill * 100, headWidest, headHighest, armWidest, armHighest))
 elseif CASE == "B" then
 	assert(player.Character == nil, "player already has a character; run this in a fresh playtest")
 

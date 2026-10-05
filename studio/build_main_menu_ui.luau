@@ -130,15 +130,20 @@ for index, name in { "Play", "Settings", "Credits" } do
 	}, buttons)
 end
 
--- Character preview (a script fills the WorldModel and camera later)
+-- Character preview (a script fills the WorldModel and camera later). The avatar is shown from the waist up, so the
+-- view's bottom edge is where the body is cut off: it sits on the bottom of the screen (AnchorPoint (0, 1), Y = 1).
+-- The frame is 1.3 times as wide as it is tall, wide enough for the arm the wave swings out (CharacterPreview frames the
+-- shot for that shape), and 0.48 of the screen wide, from 0.48 to 0.96: clear of the Buttons (which end at 0.30) and of
+-- the Title frame (which ends at 0.46). The aspect ratio shrinks it to fit if the screen is too wide for 0.85 of its height.
 local characterView = make("ViewportFrame", {
 	Name = "CharacterView",
-	Position = UDim2.fromScale(0.56, 0.10),
-	Size = UDim2.fromScale(0.40, 0.85),
+	AnchorPoint = Vector2.new(0, 1),
+	Position = UDim2.fromScale(0.48, 1),
+	Size = UDim2.fromScale(0.48, 0.85),
 	BackgroundTransparency = 1,
 	BorderSizePixel = 0,
 }, root)
-make("UIAspectRatioConstraint", { AspectRatio = 0.95 }, characterView)
+make("UIAspectRatioConstraint", { AspectRatio = 1.3 }, characterView)
 make("WorldModel", {}, characterView)
 
 -- Vignette: dark edges on all four sides, under Root (55) so it never dims the title or buttons, and below BACK and

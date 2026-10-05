@@ -7,8 +7,11 @@
 --     Buttons frame and do not overlap each other,
 --   * the BACK button (hidden in the template, made Visible in the clone) is at least MIN_BUTTON_SIZE px tall and
 --     wide and stays inside the screen,
+--   * the avatar's view (CharacterView) is at least 0.45 of the screen wide (the v1 slot was 0.40; on a screen so wide that
+--     the view is limited by its 0.85 height instead, that limit is what counts) and sits on the bottom edge of the
+--     screen, where the waist-up shot is cut off,
 --   * on the landscape phone, the Title starts below Roblox's topbar (where the menu and chat icons sit).
--- Asserted: phone landscape (844x390, an iPhone 14) and the current window. Portrait (390x844) is only reported
+-- Asserted: phone landscape (844x390, an iPhone 14), desktop 1920x1080 and the current window. Portrait (390x844) is only reported
 -- (printed), because Roblox phones play in landscape.
 -- KEEP = true leaves the landscape simulation on screen for a screen_capture; run again with KEEP = false to clean up.
 local KEEP = false
@@ -120,6 +123,18 @@ local function measure(label, size, keep, checkTopbar)
 		end
 	end
 
+	-- The avatar is shown from the waist up: its view must be a good size and cut the body off at the screen's bottom edge.
+	local view = rects.CharacterView
+	if view then
+		local limitedByHeight = view.h >= 0.85 * screenRect.h - 1
+		if view.w < 0.45 * screenRect.w - EPSILON and not limitedByHeight then
+			table.insert(problems, ("CharacterView %s is only %.2f of the screen wide, it must be at least 0.45"):format(describe(view), view.w / screenRect.w))
+		end
+		if math.abs(view.y + view.h - screenRect.h) > 1 then
+			table.insert(problems, ("CharacterView %s does not sit on the bottom edge of the screen (%.0f px)"):format(describe(view), screenRect.h))
+		end
+	end
+
 	if checkTopbar and rects.Title then
 		local minTop = math.max(GuiService.TopbarInset.Height, PHONE_TOPBAR_BOTTOM)
 		table.insert(details, ("Title top %.0f (topbar band ends at %.0f)"):format(rects.Title.y, minTop))
@@ -176,9 +191,11 @@ end
 local landscape = measure("landscape 844x390", UDim2.fromOffset(844, 390), KEEP, true)
 local window = measure("current window", UDim2.fromScale(1, 1), false, false)
 local portrait = measure("portrait 390x844", UDim2.fromOffset(390, 844), false, false)
+local desktop = measure("desktop 1920x1080", UDim2.fromOffset(1920, 1080), false, false)
 
 print("phone_layout: " .. landscape.details)
 print("phone_layout: " .. window.details)
+print("phone_layout: " .. desktop.details)
 print("phone_layout: " .. portrait.details)
 print(
 	"phone_layout: portrait 390x844 (informational): "
@@ -187,6 +204,7 @@ print(
 
 assert(#landscape.problems == 0, "landscape 844x390: " .. table.concat(landscape.problems, " | "))
 assert(#window.problems == 0, "current window: " .. table.concat(window.problems, " | "))
+assert(#desktop.problems == 0, "desktop 1920x1080: " .. table.concat(desktop.problems, " | "))
 
 if not KEEP then
 	assert(playerGui:FindFirstChild(TEST_GUI_NAME) == nil, "temporary test ScreenGui was not destroyed")
