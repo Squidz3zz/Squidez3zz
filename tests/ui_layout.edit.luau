@@ -1,5 +1,7 @@
--- Run in Edit datamodel. Verifies the static main-menu UI tree built by studio/build_main_menu_ui.luau
--- (the heavy-factory layout: Scale-only Title / Buttons / CharacterView, the Vignette, the BACK button, the Fader).
+-- Run in Edit datamodel. Verifies the static main-menu UI built by studio/build_main_menu_ui.luau: three ScreenGuis in
+-- ReplicatedStorage. MainMenu (the heavy-factory layout: Scale-only Title / Buttons / CharacterView, the BACK button)
+-- stays in the phone's safe area; the Vignette and the Fader live in their own full-screen ScreenGuis (ScreenInsets None)
+-- so they reach the notch strips and rounded corners.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
@@ -11,8 +13,15 @@ local PHONE_HEIGHT = 390
 local menu = ReplicatedStorage:FindFirstChild("MainMenu")
 assert(menu, "MainMenu missing")
 assert(menu:IsA("ScreenGui"), "MainMenu must be a ScreenGui")
+local vignetteGui = ReplicatedStorage:FindFirstChild("MainMenuVignette")
+assert(vignetteGui, "MainMenuVignette missing")
+assert(vignetteGui:IsA("ScreenGui"), "MainMenuVignette must be a ScreenGui")
+local faderGui = ReplicatedStorage:FindFirstChild("MainMenuFader")
+assert(faderGui, "MainMenuFader missing")
+assert(faderGui:IsA("ScreenGui"), "MainMenuFader must be a ScreenGui")
 
--- Every path (relative to MainMenu) with its expected ClassName.
+-- Every path with its expected ClassName. A path is resolved inside the ScreenGui that owns its first part: Vignette
+-- inside MainMenuVignette, Fader inside MainMenuFader, everything else inside MainMenu.
 local EXPECTED = {
 	{ "Root", "Frame" },
 	{ "Root.Title", "TextLabel" },
@@ -45,8 +54,19 @@ local EXPECTED = {
 -- Things that must be gone: the v1 popups.
 local ABSENT = { "Root.SettingsPanel", "Root.CreditsPanel", "SettingsPanel", "CreditsPanel" }
 
+-- The ScreenGui that owns `path`.
+local function ownerOf(path)
+	local first = string.match(path, "^[^%.]+")
+	if first == "Vignette" then
+		return vignetteGui
+	elseif first == "Fader" then
+		return faderGui
+	end
+	return menu
+end
+
 local function find(path)
-	local node = menu
+	local node = ownerOf(path)
 	for part in string.gmatch(path, "[^%.]+") do
 		node = node:FindFirstChild(part)
 		if not node then
@@ -58,7 +78,7 @@ end
 
 local function get(path)
 	local node = find(path)
-	assert(node, "missing: MainMenu." .. path)
+	assert(node, "missing: " .. ownerOf(path).Name .. "." .. path)
 	return node
 end
 
@@ -70,13 +90,16 @@ local function expectUDim2(path, property, xs, xo, ys, yo)
 	local value = get(path)[property]
 	assert(
 		near(value.X.Scale, xs) and value.X.Offset == xo and near(value.Y.Scale, ys) and value.Y.Offset == yo,
-		("MainMenu.%s.%s should be {%s, %s}, {%s, %s}, got %s"):format(path, property, xs, xo, ys, yo, tostring(value))
+		("%s.%s.%s should be {%s, %s}, {%s, %s}, got %s"):format(ownerOf(path).Name, path, property, xs, xo, ys, yo, tostring(value))
 	)
 end
 
 local function expectColor(path, property, expected)
 	local value = get(path)[property]
-	assert(value == expected, ("MainMenu.%s.%s should be %s, got %s"):format(path, property, tostring(expected), tostring(value)))
+	assert(
+		value == expected,
+		("%s.%s.%s should be %s, got %s"):format(ownerOf(path).Name, path, property, tostring(expected), tostring(value))
+	)
 end
 
 for _, path in ABSENT do
@@ -85,18 +108,53 @@ end
 
 for _, entry in EXPECTED do
 	local node = get(entry[1])
-	assert(node.ClassName == entry[2], ("MainMenu.%s is %s, expected %s"):format(entry[1], node.ClassName, entry[2]))
+	assert(
+		node.ClassName == entry[2],
+		("%s.%s is %s, expected %s"):format(ownerOf(entry[1]).Name, entry[1], node.ClassName, entry[2])
+	)
 end
 
 local PANEL = Color3.fromRGB(38, 36, 34)
 local AMBER = Color3.fromRGB(255, 150, 30)
 local VIGNETTE = Color3.fromRGB(12, 9, 6)
 
--- ScreenGui settings
-assert(menu.ResetOnSpawn == false, "MainMenu.ResetOnSpawn must be false")
-assert(menu.IgnoreGuiInset == true, "MainMenu.IgnoreGuiInset must be true")
-assert(menu.ZIndexBehavior == Enum.ZIndexBehavior.Sibling, "MainMenu.ZIndexBehavior must be Sibling")
-assert(menu.DisplayOrder == 10, "MainMenu.DisplayOrder must be 10")
+-- The three ScreenGuis. The Vignette (behind) and the Fader (on top) are full screen, notch strips included
+-- (ScreenInsets None); MainMenu keeps the safe area so the buttons and BACK never sit under a notch.
+local GUIS = {
+	{ gui = vignetteGui, insets = Enum.ScreenInsets.None, order = 9 },
+	{ gui = menu, insets = Enum.ScreenInsets.DeviceSafeInsets, order = 10 },
+	{ gui = faderGui, insets = Enum.ScreenInsets.None, order = 11 },
+}
+for _, spec in GUIS do
+	local gui = spec.gui
+	assert(gui.ScreenInsets == spec.insets, ("%s.ScreenInsets must be %s, got %s"):format(gui.Name, tostring(spec.insets), tostring(gui.ScreenInsets)))
+	assert(gui.IgnoreGuiInset == true, gui.Name .. ".IgnoreGuiInset must be true")
+	assert(gui.DisplayOrder == spec.order, ("%s.DisplayOrder must be %d, got %d"):format(gui.Name, spec.order, gui.DisplayOrder))
+	assert(gui.ResetOnSpawn == false, gui.Name .. ".ResetOnSpawn must be false")
+	assert(gui.ZIndexBehavior == Enum.ZIndexBehavior.Sibling, gui.Name .. ".ZIndexBehavior must be Sibling")
+end
+assert(
+	vignetteGui.DisplayOrder < menu.DisplayOrder and menu.DisplayOrder < faderGui.DisplayOrder,
+	"DisplayOrder must run MainMenuVignette < MainMenu < MainMenuFader"
+)
+
+-- Each ScreenGui holds only what it is for: Vignette and Fader are no longer children of MainMenu, and MainMenu has
+-- exactly Root and Back as GuiObject children.
+assert(menu:FindFirstChild("Vignette") == nil, "Vignette must no longer be a child of MainMenu")
+assert(menu:FindFirstChild("Fader") == nil, "Fader must no longer be a child of MainMenu")
+local function guiObjectChildren(gui)
+	local names = {}
+	for _, child in gui:GetChildren() do
+		if child:IsA("GuiObject") then
+			table.insert(names, child.Name)
+		end
+	end
+	table.sort(names)
+	return table.concat(names, ",")
+end
+assert(guiObjectChildren(menu) == "Back,Root", "MainMenu must have exactly Root and Back as GuiObject children, got " .. guiObjectChildren(menu))
+assert(guiObjectChildren(vignetteGui) == "Vignette", "MainMenuVignette must hold only the Vignette, got " .. guiObjectChildren(vignetteGui))
+assert(guiObjectChildren(faderGui) == "Fader", "MainMenuFader must hold only the Fader, got " .. guiObjectChildren(faderGui))
 
 -- Title: sits above the buttons, sharing their left edge. Oswald Bold with an amber outline.
 local title = get("Root.Title")
@@ -162,7 +220,8 @@ local titleRight = get("Root.Title").Position.X.Scale + get("Root.Title").Size.X
 assert(characterView.Position.X.Scale >= titleRight, "CharacterView must start to the right of the Title frame")
 assert(characterView.Position.X.Scale + characterView.Size.X.Scale <= 1 + TOLERANCE, "CharacterView must stay inside the screen")
 
--- Vignette: full screen, under the Fader, never in the way of a click. Four edges, darkest at the outside.
+-- Vignette: full screen, never in the way of a click. Four edges, darkest at the outside. Its ScreenGui sits behind
+-- the menu (DisplayOrder 9), so its ZIndex only orders it inside that ScreenGui.
 local vignette = get("Vignette")
 assert(vignette.ZIndex == 50, "Vignette.ZIndex must be 50")
 assert(vignette.BackgroundTransparency == 1, "Vignette must be transparent")
@@ -212,19 +271,23 @@ assert(back.TextColor3 == Color3.new(1, 1, 1), "Back text must be white")
 expectUDim2("Back.Accent", "Size", 0.03, 0, 1, 0)
 expectColor("Back.Accent", "BackgroundColor3", AMBER)
 
--- Fader: over everything.
-assert(get("Fader").BackgroundTransparency == 1, "Fader must start transparent")
-assert(get("Fader").ZIndex == 100, "Fader.ZIndex must be 100")
--- Root (title, buttons, avatar) sits above the Vignette so the dark edges never dim it, and below BACK.
-assert(
-	get("Root").ZIndex > get("Vignette").ZIndex and get("Root").ZIndex < get("Back").ZIndex,
-	"Root.ZIndex must be above the Vignette and below Back, got Root " .. get("Root").ZIndex
-)
-assert(get("Vignette").ZIndex < get("Back").ZIndex and get("Back").ZIndex < get("Fader").ZIndex, "ZIndex order must be Vignette < Back < Fader")
+-- Fader: over everything (its ScreenGui has the highest DisplayOrder), full screen, clear until a fade starts.
+local fader = get("Fader")
+assert(fader.BackgroundTransparency == 1, "Fader must start transparent")
+assert(fader.BackgroundColor3 == Color3.new(0, 0, 0), "Fader must be black")
+assert(fader.ZIndex == 100, "Fader.ZIndex must be 100")
+expectUDim2("Fader", "Position", 0, 0, 0, 0)
+expectUDim2("Fader", "Size", 1, 0, 1, 0)
+-- Root (title, buttons, avatar) stays below BACK. The ordering against the Vignette and the Fader comes from
+-- DisplayOrder (checked above) now that they are ScreenGuis of their own.
+assert(get("Root").ZIndex == 55, "Root.ZIndex must be 55, got " .. get("Root").ZIndex)
+assert(get("Root").ZIndex < get("Back").ZIndex, "Root.ZIndex must be below Back, got Root " .. get("Root").ZIndex)
 
 -- The build script no longer touches StarterGui, so nothing is asserted about it (a ScreenGui of the developer's own
 -- there is fine).
-assert(menu:FindFirstChildWhichIsA("ImageLabel", true) == nil, "placeholder ImageLabel must be removed")
+for _, gui in { vignetteGui, menu, faderGui } do
+	assert(gui:FindFirstChildWhichIsA("ImageLabel", true) == nil, "placeholder ImageLabel must be removed from " .. gui.Name)
+end
 
 -- Sound groups
 local music = SoundService:FindFirstChild("Music")
@@ -234,13 +297,15 @@ local sfx = SoundService:FindFirstChild("SFX")
 assert(sfx, "SoundService.SFX missing")
 assert(sfx:IsA("SoundGroup"), "SoundService.SFX must be a SoundGroup")
 
--- Scale-only sizing: every GuiObject under MainMenu has zero Size offsets
+-- Scale-only sizing: every GuiObject in the three ScreenGuis has zero Size and Position offsets
 local checked = 0
-for _, d in menu:GetDescendants() do
-	if d:IsA("GuiObject") then
-		checked += 1
-		assert(d.Size.X.Offset == 0 and d.Size.Y.Offset == 0, d:GetFullName() .. " has a non-zero Size offset")
-		assert(d.Position.X.Offset == 0 and d.Position.Y.Offset == 0, d:GetFullName() .. " has a non-zero Position offset")
+for _, gui in { vignetteGui, menu, faderGui } do
+	for _, d in gui:GetDescendants() do
+		if d:IsA("GuiObject") then
+			checked += 1
+			assert(d.Size.X.Offset == 0 and d.Size.Y.Offset == 0, d:GetFullName() .. " has a non-zero Size offset")
+			assert(d.Position.X.Offset == 0 and d.Position.Y.Offset == 0, d:GetFullName() .. " has a non-zero Position offset")
+		end
 	end
 end
 assert(checked > 0, "no GuiObjects were checked")
