@@ -87,10 +87,12 @@ if CASE == "A" then
 	)
 
 	-- The tip changes every TIP_SECONDS, and a change lands a frame or two late, so only a screen that lasted a little
-	-- longer than TIP_SECONDS has to have changed.
+	-- longer than TIP_SECONDS has to have changed. The tip stops changing when the fade to black starts, and LoadingDoneAt
+	-- is stamped after that 0.4s fade, so the time the tip had is elapsed - 0.4.
+	local FADE_SECONDS = 0.4
 	local tipChanges = playerGui:GetAttribute("LoadingTipChanges")
 	assert(type(tipChanges) == "number", "LoadingTipChanges missing")
-	if elapsed >= TIP_SECONDS + 0.2 then
+	if elapsed - FADE_SECONDS >= TIP_SECONDS + 0.2 then
 		assert(
 			tipChanges >= 1,
 			"the loading screen lasted " .. string.format("%.2f", elapsed) .. "s but its tip never changed"
