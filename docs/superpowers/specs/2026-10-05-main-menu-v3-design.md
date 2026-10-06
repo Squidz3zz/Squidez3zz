@@ -36,8 +36,8 @@ Add four things, all in the existing heavy-factory theme:
 **Loading screen**
 - The factory loading screen appears within the first second of joining. Roblox's default loading screen is removed.
 - It shows:
-  - the game title, in Oswald Bold with amber trim;
-  - a spinning amber gear/hazard ring;
+  - the game title, in the theme's title font and colours (Factory: Oswald Bold with amber trim);
+  - a spinning ring in the theme's spinner colour (Factory: amber);
   - one tip, which changes every 4 s.
 - It stays up for at least 2 s. It hands over once assets are loaded, or after 20 s at most. In Studio, with the shipped config, a join sees it for about 3 s (2 s minimum, 0.4 s fade, plus preload).
 - It fades to black, then the menu fades in.
@@ -95,7 +95,7 @@ Disk path: `src/ReplicatedFirst/LoadingScreen.client.luau`.
 1. **Build the UI.** Build a ScreenGui `LoadingScreen` in code and parent it to PlayerGui immediately. Then call `ReplicatedFirst:RemoveDefaultLoadingScreen()`. The ScreenGui has:
    - IgnoreGuiInset true, ScreenInsets None, DisplayOrder 20, so it sits above every menu gui;
    - ResetOnSpawn false;
-   - a full-screen backdrop RGB(16,14,12) with the same four-edge vignette gradient as the menu;
+   - a full-screen backdrop RGB(16,14,12) with the same four-edge vignette gradient as the menu (these are the Factory values: see "Menu themes" below, the active theme sets the colours and fonts of the backdrop, vignette, title, spinner, tip and the optional hazard stripe, and the loader keeps the Factory look as its built-in defaults);
    - a `Title` TextLabel reading "A Regular Experiment" (`MenuAssets.GAME_TITLE`; the main menu's own title is the `Title` label in `ReplicatedStorage.MainMenu`, edited in Studio), Oswald Bold, amber UIStroke;
    - a `Spinner` (amber ring or gear, built from Frames and UICorner, or a UIStroke ring with a hazard gap) that rotates continuously;
    - a `Tip` TextLabel, which cycles through `MenuAssets.Tips` every `TIP_SECONDS`.
@@ -121,9 +121,9 @@ When everything has loaded and at least `LOADING_MIN_SECONDS` have passed, or on
 
 **Failed asset keys** are written to the attribute `LoadingFailedSounds`, a comma-separated string (empty if none failed), so tests and the audio module can see them.
 
-The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() values), `LoadingTipChanges` (how often the tip changed) and `LoadingParts` (`"Title,Spinner,Tip"`, the parts it built). The gui is destroyed before a late test call could look inside it, so the tests read these instead.
+The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() values), `LoadingTipChanges` (how often the tip changed) and `LoadingParts` (`"Title,Spinner,Tip"`, plus `HazardStripe` when the theme has one: the parts it built). The gui is destroyed before a late test call could look inside it, so the tests read these instead.
 
-**Studio-only:** if `RunService:IsStudio()`, a `TestHook` BindableFunction under the script supports `Invoke("state")`. It returns `{ done, elapsed, failed }`.
+**Studio-only:** if `RunService:IsStudio()`, a `TestHook` BindableFunction under the script supports `Invoke("state")`, which returns `{ done, elapsed, failed }`, and `Invoke("look")`, which returns the colours, fonts and stripe the gui was built with (read off the gui as it is built, before the fades). The attribute `LoadingTestNoTheme = true` on the script (Studio only, a test seam) makes it ignore `MenuAssets.theme()`.
 
 ## MainMenuClient changes
 
@@ -208,6 +208,22 @@ The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() 
 - The loop stops when the clone is destroyed (on Play, or when the viewport goes).
 - It runs in its own `task.spawn` and never yields the caller. Before each replay it checks that the clone is still in the game (`clone:IsDescendantOf(game)`), and it replays the same `AnimationTrack` (one `LoadAnimation`, no tracks piling up on the Animator).
 
+## Menu themes: `MenuAssets.THEME` and `MenuTheme`
+
+Added on `feature/menu-themes` (approved in chat 2026-10-06). Every colour and font of the menu UI is switchable through one setting. Scope is the UI only: the 3D rooms and their lamps, the Fader (always black) and the RoomLighting profile are not themed.
+
+- **The setting.** `ReplicatedFirst.MenuAssets` has `THEME = "SterileBright"` and `Themes = { Factory = {...}, SterileBright = {...} }`. `MenuAssets.theme()` returns a fresh table: Factory's keys with the chosen preset's keys on top. A key a preset leaves out falls back to Factory's value. An unknown `THEME` name (or none) gives Factory with one warning. A value of a different kind than Factory's, or a key Factory does not have, is ignored with one warning. The header comment tells a beginner to change `THEME`, or to copy a preset under a new name and edit its colours.
+- **Presets.** `Factory` reproduces the look as it was before themes: amber RGB(255,150,30), steel panels RGB(38,36,34), vignette RGB(12,9,6) at 0.15, loading backdrop RGB(16,14,12), Oswald (Bold for the title). Property for property, the menu, Vignette, Fader, Settings board and Credits label under `THEME = "Factory"` equal what the code built before (70 instances compared on 2026-10-06), and the loading screen matches its old literal values. `SterileBright` is a bright bio-lab: title RGB(52,73,90) (`#34495A`) with a thin white stroke, text RGB(75,101,119) (`#4B6577`), muted text RGB(110,130,145), white panels with a thin RGB(185,201,205) border, teal RGB(19,184,166) accent, pale frosted vignette RGB(205,218,222) at 0.35, loading backdrop RGB(233,239,241), a thin yellow RGB(242,193,46) and near-black RGB(29,37,41) diagonal hazard stripe across the top, Michroma for titles and Titillium Web (SemiBold for body text, Bold for switch and label text) for the rest.
+- **Keys.** Fonts `titleFont`, `bodyFont`, `labelFont` (the ON / OFF switches and the Credits label); title `titleText`, `titleStroke`, `titleStrokeTransparency`, `titleStrokeThickness`; buttons `panel`, `panelBorder` (optional: none means no border), `accent`, `text`, `textMuted`; `hoverStroke`; screen `vignette`, `vignetteTransparency` (the outer-edge value, the gradient still fades to 1), `hazardStripe` (bool), `hazardYellow`, `hazardDark`; loading `loadingBackdrop`, `spinner`; board `boardBackdrop`, `boardPanel`, `boardAccent`, `boardHeader`, `sliderTrack`, `sliderKnob`, `switchOn`, `switchOff`, `switchOnText`, `switchOffText`; Credits `creditHighlight`, `nameLabelBg`, `nameLabelText`, `nameLabelBorder`. The title's words are never themed.
+- **Where it is applied.**
+  - `MainMenuClient/MenuTheme.luau` (new ModuleScript): `get()` returns `MenuAssets.theme()`, or its built-in `FACTORY` copy when MenuAssets is missing or broken (it never throws). `applyToMenu(menu, vignetteGui, theme)` paints the cloned guis in `setupMenu`, before they are parented: the Title's colour, font and stroke (never its Text), every TextButton (fill, letters, font, the `Accent` bar, and a 1px `PanelBorder` UIStroke when the theme has `panelBorder`), the four Vignette edges, and the `HazardStripe`. Each piece is guarded, skips what is missing and is safe to repeat. init calls it in pcall, like every other module; a failure leaves the Factory look the template is built with. The I-1 fallback is unchanged. The Fader is not handed in.
+  - `ButtonEffects.attach(button, { strokeColor = ... })`: the PopStroke hover colour (Factory amber when none is given). init passes `theme.hoverStroke`. `setState` is still stateless.
+  - `SettingsBoard.mount` reads the theme once per mount (rows get a `PanelBorder` stroke when the theme has a border). `CreditsRoom.decorate` reads it when it makes the highlight and the label.
+  - `LoadingScreen` reads `MenuAssets.theme()` in `readConfig` (in its own pcall) over its built-in Factory defaults, key by key.
+- **Hazard stripe.** `HazardStripe` is a `CanvasGroup` at the top of the screen, 0.015 of the screen height, built from square tiles (each a Frame, `SizeConstraint` RelativeYY, laid out by a `UIListLayout`) with a `UIGradient` of hard yellow / dark steps along the diagonal, so the diagonals of neighbouring tiles line up into one repeating stripe at every screen shape. Scale only. On the menu it is a child of the `Vignette` frame (so it follows Screen Effects); on the loading screen it is a child of the gui, and fades to black and out with the rest (`GroupColor3`, `GroupTransparency`).
+- **Build script.** `studio/build_main_menu_ui.luau` is still the Factory baseline (with the Title's words "A Regular Experiment"); the runtime theme recolours the clone. While a theme is active, editing the colours or fonts of the themed pieces in Studio has no effect. Positions, sizes and text are still edited in Studio.
+- **Tests.** `tests/menu_theme.edit.luau` (unit tests on clones: Factory is the old look, SterileBright's values, unknown name, missing keys, wrong types, fresh tables, `MenuTheme.FACTORY` equals `Themes.Factory`, `applyToMenu` on clones of the real ScreenGuis) and `tests/menu_theme.client.luau` (the real menu, the loading screen's look, the PopStroke colour, the Fader, the board and the Credits label all match `MenuAssets.theme()`; case LF checks the loading screen's built-in Factory fallback with the `LoadingTestNoTheme` seam). `button_effects`, `settings_board`, `credits_room`, `loading` and `ui_layout` compare against the theme (or say they check the Factory baseline) instead of hard-coding amber and Oswald.
+
 ## Components
 
 | Component | Type | Location | Change |
@@ -222,6 +238,8 @@ The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() 
 | `CreditsRoom` | ModuleScript | under MainMenuClient | Viewer on `ViewerSpot`, label YOU |
 | `CharacterPreview` | ModuleScript | under MainMenuClient | Repeating wave |
 | `RoomLighting` | ModuleScript | under MainMenuClient | New: outdoor light off while a room shows, restored on exit and on Play |
+| `MenuTheme` | ModuleScript | under MainMenuClient | New: `get()` (the active theme, Factory fallback) and `applyToMenu` (paints the cloned guis) |
+| `MenuAssets` (themes) | ModuleScript | ReplicatedFirst | `THEME`, `Themes` (Factory, SterileBright), `theme()` |
 | `MainMenuClient` (init) | LocalScript | StarterPlayerScripts | Waits for LoadingDone; wires audio and SFX; stops music on Play |
 | `build_menu_rooms.luau` | build script | studio/ | Adds ViewerSpot |
 | `default.project.json` | Rojo | repo root | Maps `src/ReplicatedFirst` |

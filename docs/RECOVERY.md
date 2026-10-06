@@ -51,7 +51,7 @@ It builds the three ScreenGuis again and adds `SoundService.Music` and `SoundSer
 
 ### c) Put the scripts back
 
-There are fifteen scripts. The file names are in `src/`.
+There are sixteen scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -77,15 +77,37 @@ The file `default.project.json` already says where everything goes. It only touc
 | `MenuAudio` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuAudio.luau` |
 | `MenuCamera` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuCamera.luau` |
 | `MenuSettings` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuSettings.luau` |
+| `MenuTheme` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuTheme.luau` |
 | `RoomLighting` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/RoomLighting.luau` |
 | `SceneDirector` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SceneDirector.luau` |
 | `SettingsBoard` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SettingsBoard.luau` |
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 
-The eleven ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
+The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
-menu's sound ids (a plain number works too), the loading screen's title (`GAME_TITLE`) and tips, and its timings. The main
+menu's look (`THEME`, see below), its sound ids (a plain number works too), the loading screen's title (`GAME_TITLE`) and tips, and its timings. The main
 menu's own title is a different thing: it is the `Title` label inside `ReplicatedStorage.MainMenu`, which you edit in Studio. The names must match exactly.
+`MenuTheme` paints the theme on the menu when it opens (see "Themes").
+
+### Themes: changing how the menu looks
+
+The look of the whole menu is one setting at the top of `ReplicatedFirst.MenuAssets`: `THEME = "SterileBright"`. Two presets
+ship in `Themes`: `Factory` (the rusty factory look: dark steel, amber, Oswald) and `SterileBright` (a bright bio-lab: white
+panels, teal, storm-blue text, Michroma and Titillium Web, a thin yellow and black hazard stripe at the top of the screen).
+To switch, change the name in quotes. To make your own, copy a whole preset inside `Themes`, give it a new name and edit its
+colours (`Color3.fromRGB(red, green, blue)`) and fonts, then set `THEME` to that name. A preset can leave keys out (they use
+Factory's value), and a wrong name or a value of the wrong kind falls back to Factory with a warning in the Output window, so a
+typo never breaks the menu.
+
+What a theme paints: the main menu's title colours and font, PLAY / SETTINGS / CREDITS / BACK, the dark screen edges and the
+hazard stripe, the loading screen, the Settings room's board, and the name label and outline in Credits. What it does **not**
+touch: the 3D rooms and their lamps, the black fade, and the room lighting.
+
+Important: the colours and fonts of those pieces come from the theme **at runtime**. When the menu opens it is painted over, so
+editing the colours or fonts of `ReplicatedStorage.MainMenu` (the buttons, the Title's colour or font, the Vignette) in Studio
+has no effect while a theme is active; change the theme instead. Positions, sizes and the **words** (such as the Title's text,
+"A Regular Experiment") are still edited in Studio. `studio/build_main_menu_ui.luau` always builds the Factory baseline; the
+theme is what turns it into another look.
 
 ### d) Turn off automatic spawning
 
@@ -109,7 +131,8 @@ part, the menu uses a default angle.
 
 Press **Play** in Studio (the Test tab) and check each of these:
 
-1. A dark loading screen shows first, with the title, a spinning amber ring and a tip. It stays for at least 2 seconds,
+1. A loading screen shows first, in the theme's colours (dark with an amber ring in Factory, light with a teal ring and the
+   hazard stripe in SterileBright), with the title, a spinning ring and a tip. It stays for at least 2 seconds,
    fades to black, and the menu fades in.
 2. The menu opens with the title, three buttons, and your avatar on the right after a few seconds. In the Device
    Emulator (a phone, landscape) the dark border and the fades reach every screen edge, notch included. Music plays and
@@ -127,4 +150,6 @@ Press **Play** in Studio (the Test tab) and check each of these:
 
 The build scripts make the **baseline look**. If you restyled the menu or the rooms in Studio after your last publish,
 for example moved a button, changed a colour, or added a lamp, those changes were not in the scripts. Redo them, and
-publish again straight away.
+publish again straight away. The menu's colours and fonts are the exception: they live in `MenuAssets` (the theme), not in
+Studio, so they come back with the scripts. The menu Title's words are built as "A Regular Experiment"; if you changed them in
+Studio since, redo that.
