@@ -1,4 +1,5 @@
--- RoomLighting: makes the Settings and Credits rooms look dark and amber from the very first frame.
+-- RoomLighting: meant to make the Settings and Credits rooms look dark and amber from the very first frame.
+-- (That the first frames really match the settled look is checked by eye in Studio: a screenshot cannot catch them.)
 --
 -- WHY THIS EXISTS
 -- The two rooms are models about 200 studs under the map. Roblox works out shadows and bounced light progressively, in a
@@ -9,8 +10,10 @@
 -- lighting that fixes itself" you could see on every visit.
 --
 -- WHAT IT CHANGES
--- While a room is showing, apply() turns off the four things that come from outdoors (the room does not need them, since it
--- is lit by its own lamps):
+-- While a room is showing, apply() turns off the four things that come from outdoors. The room is lit by its own lamps, so
+-- it should get none of them. Be aware that, once settled, the rooms still get a little sky light, so with these off they
+-- come out somewhat darker: the mean brightness measured about 15% lower in Settings and 22% lower in Credits (the two
+-- Environment scales cause nearly all of it):
 --   Lighting.Brightness                 -> 0       (the sun's strength)
 --   Lighting.OutdoorAmbient             -> black   (the sky's fill light on things that are not under a roof)
 --   Lighting.EnvironmentDiffuseScale    -> 0       (how much of the sky's soft light reaches surfaces)

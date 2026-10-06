@@ -5,9 +5,9 @@
 -- overlays of their own (ScreenInsets None) so they reach the notch strips and rounded corners.
 -- Settings and Credits are 3D rooms: their buttons ask SceneDirector (a module under this script) to fade and cut there.
 -- The Credits room shows the developer's avatar (built by MenuServer in ReplicatedStorage.CreditAvatars) and the player's own.
--- While either room shows, RoomLighting switches the outdoor light off (client-only), so the room already looks right on the
--- first frames after the cut (Roblox lights it like open ground until its lighting catches up). Leaving the room and Play
--- put the normal lighting back, so gameplay never sees it.
+-- While either room shows, RoomLighting switches the outdoor light off (client-only). It is meant to make the first frames
+-- after the cut match the room's settled look (Roblox lights the room like open ground until its lighting catches up); that
+-- is checked by eye in Studio. Leaving the room and Play put the normal lighting back, so gameplay never sees it.
 -- At join the factory loading screen (ReplicatedFirst.LoadingScreen) preloads the menu's assets first: setup waits for its
 -- LoadingDone attribute before it shows anything, and a missing, disabled or broken loading screen is simply not waited for.
 -- The buttons make sounds (ButtonSounds, on the Sound Effects slider): hover when the pointer enters one, confirm when one is
@@ -230,8 +230,9 @@ local function runPlay()
 			warn("MainMenuClient: SceneDirector.stop failed: " .. tostring(err))
 		end
 	end
-	-- Gameplay always gets the normal lighting, even if the room's exit hook (stop() runs it detached) has not run yet.
-	-- Never yields. Guarded like the above.
+	-- Gameplay always gets the normal lighting. stop() has already run the room's exit hook, which restores it: task.spawn runs
+	-- the hook at once up to its first yield, and that hook has none. So this call is purely defensive (a hook that failed or
+	-- was never registered). Never yields. Guarded like the above.
 	restoreRoomLighting()
 	-- The music fades out over the screen fade below and is gone after it. Never yields, and leaves the button sounds
 	-- alone (the play sound keeps going). Guarded like the above.
