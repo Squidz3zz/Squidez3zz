@@ -98,6 +98,14 @@ local MenuAssets = {
 			textMuted = Color3.fromRGB(220, 208, 190),
 			-- The outline that appears around a button when it is hovered or selected.
 			hoverStroke = Color3.fromRGB(255, 150, 30),
+			-- true: Roblox darkens a button a little while the pointer is on it. Switch it off (false) for light panels, where the
+			-- darkening turns white into grey.
+			buttonHoverShade = true,
+
+			-- The colour grade over the menu screens (the menu, Settings and Credits; it never reaches gameplay): gradeTint
+			-- multiplies the whole picture, gradeSaturation pulls colour out (0 leaves it, negative is greyer).
+			gradeTint = Color3.fromRGB(255, 235, 210),
+			gradeSaturation = -0.15,
 
 			-- The shaded screen edges (transparency of the outer edge: 0 is solid, 1 is invisible; they always fade to invisible
 			-- on the inside). hazardStripe = true adds a thin diagonal stripe of hazardYellow and hazardDark across the top of
@@ -148,6 +156,10 @@ local MenuAssets = {
 			text = Color3.fromRGB(75, 101, 119),
 			textMuted = Color3.fromRGB(110, 130, 145),
 			hoverStroke = Color3.fromRGB(19, 184, 166),
+			buttonHoverShade = false,
+
+			gradeTint = Color3.fromRGB(240, 246, 252),
+			gradeSaturation = -0.05,
 
 			vignette = Color3.fromRGB(205, 218, 222),
 			vignetteTransparency = 0.35,

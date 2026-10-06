@@ -20,6 +20,9 @@ local SKIP_B2 = false
 
 local player = Players.LocalPlayer
 
+-- The colour grade's tint and saturation are the active theme's (MenuAssets.THEME: gradeTint, gradeSaturation).
+local THEME = require(game:GetService("ReplicatedFirst"):WaitForChild("MenuAssets", 10)).theme()
+
 local MAX_SWAY_DEGREES = 2.83 -- the diagonal of 2 degrees yaw and 2 degrees pitch
 local ANGLE_SLACK = 0.05
 local POSITION_TOLERANCE = 0.01
@@ -83,13 +86,13 @@ local grade = Lighting:FindFirstChild("MenuColorCorrection")
 assert(grade and grade:IsA("ColorCorrectionEffect"), "Lighting.MenuColorCorrection (ColorCorrectionEffect) missing")
 assert(math.abs(grade.Contrast - 0.1) <= 0.001, "MenuColorCorrection.Contrast should be 0.1, got " .. grade.Contrast)
 assert(
-	math.abs(grade.Saturation - -0.15) <= 0.001,
-	"MenuColorCorrection.Saturation should be -0.15, got " .. grade.Saturation
+	math.abs(grade.Saturation - THEME.gradeSaturation) <= 0.001,
+	"MenuColorCorrection.Saturation should be the theme's gradeSaturation " .. THEME.gradeSaturation .. ", got " .. grade.Saturation
 )
 local tint = grade.TintColor
 assert(
-	math.abs(tint.R * 255 - 255) < 0.5 and math.abs(tint.G * 255 - 235) < 0.5 and math.abs(tint.B * 255 - 210) < 0.5,
-	"MenuColorCorrection.TintColor should be RGB(255, 235, 210), got " .. tostring(tint)
+	math.abs(tint.R - THEME.gradeTint.R) * 255 < 0.5 and math.abs(tint.G - THEME.gradeTint.G) * 255 < 0.5 and math.abs(tint.B - THEME.gradeTint.B) * 255 < 0.5,
+	"MenuColorCorrection.TintColor should be the theme's gradeTint " .. tostring(THEME.gradeTint) .. ", got " .. tostring(tint)
 )
 assert(grade.Enabled, "MenuColorCorrection should be enabled")
 

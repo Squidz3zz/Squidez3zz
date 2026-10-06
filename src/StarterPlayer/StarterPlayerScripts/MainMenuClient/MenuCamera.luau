@@ -4,6 +4,8 @@
 -- stop() never yields: it is on the Play path, which must not wait for the blur fade.
 -- The grade covers every scene, the blur only the scenes setBase asks it for (the Menu: in the rooms the 3D board and
 -- the avatars are the interface and must stay sharp). Screen Effects off removes both everywhere.
+-- The grade's tint and saturation come from the menu theme (MenuAssets.THEME): warm in Factory, cool and nearly neutral in
+-- SterileBright. They only colour the menu screens; stop() removes the grade, so gameplay never sees it.
 --
 -- Where the map shot is: add a Part named MenuCameraShot to Workspace and the camera sits at that part's CFrame,
 -- looking out of the part's Front face (the way its LookVector points); without one it uses a default angle.
@@ -26,6 +28,7 @@ local DEFAULT_BASE = CFrame.lookAt(Vector3.new(0, 40, 80), Vector3.zero)
 local BLUR_SIZE = 6
 local BLUR_FADE = TweenInfo.new(0.4)
 local GRADE_CONTRAST = 0.1
+-- The Factory grade. The menu theme (MenuAssets.THEME: gradeTint and gradeSaturation) can replace these two, see gradeLook().
 local GRADE_SATURATION = -0.15
 local GRADE_TINT = Color3.fromRGB(255, 235, 210)
 local MAX_SWAY = math.rad(2) -- at most this much yaw and this much pitch
@@ -60,13 +63,36 @@ local function ensureBlur()
 	end
 end
 
+-- The grade's tint and saturation: the active theme's gradeTint and gradeSaturation, or the Factory constants above. MenuTheme
+-- is read in pcall and every value is type-checked, so a missing or broken theme leaves the Factory grade and the camera never
+-- depends on it. Never yields.
+local function gradeLook()
+	local tint, saturation = GRADE_TINT, GRADE_SATURATION
+	local module = script.Parent:FindFirstChild("MenuTheme")
+	if module then
+		local ok, theme = pcall(function()
+			return require(module).get()
+		end)
+		if ok and type(theme) == "table" then
+			if typeof(theme.gradeTint) == "Color3" then
+				tint = theme.gradeTint
+			end
+			if type(theme.gradeSaturation) == "number" then
+				saturation = theme.gradeSaturation
+			end
+		end
+	end
+	return tint, saturation
+end
+
 local function ensureGrade()
 	if not Lighting:FindFirstChild("MenuColorCorrection") then
+		local tint, saturation = gradeLook()
 		local grade = Instance.new("ColorCorrectionEffect")
 		grade.Name = "MenuColorCorrection"
 		grade.Contrast = GRADE_CONTRAST
-		grade.Saturation = GRADE_SATURATION
-		grade.TintColor = GRADE_TINT
+		grade.Saturation = saturation
+		grade.TintColor = tint
 		grade.Parent = Lighting
 	end
 end

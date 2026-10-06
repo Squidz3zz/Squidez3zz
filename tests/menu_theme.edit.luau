@@ -49,7 +49,7 @@ local TYPES = {
 	titleFont = "Font", bodyFont = "Font", labelFont = "Font",
 	titleText = "Color3", titleStroke = "Color3", titleStrokeTransparency = "number", titleStrokeThickness = "number",
 	panel = "Color3", accent = "Color3", text = "Color3", textMuted = "Color3",
-	hoverStroke = "Color3",
+	hoverStroke = "Color3", buttonHoverShade = "boolean", gradeTint = "Color3", gradeSaturation = "number",
 	vignette = "Color3", vignetteTransparency = "number", hazardStripe = "boolean", hazardYellow = "Color3", hazardDark = "Color3",
 	loadingBackdrop = "Color3", spinner = "Color3",
 	boardBackdrop = "Color3", boardPanel = "Color3", boardAccent = "Color3", boardHeader = "Color3",
@@ -137,6 +137,9 @@ do
 	expect("Factory.titleStrokeThickness", theme.titleStrokeThickness, 2)
 	expect("Factory.titleStrokeTransparency", theme.titleStrokeTransparency, 0)
 	expect("Factory.hazardStripe", theme.hazardStripe, false)
+	expect("Factory.buttonHoverShade", theme.buttonHoverShade, true)
+	expect("Factory.gradeTint", theme.gradeTint, rgb(255, 235, 210))
+	expect("Factory.gradeSaturation", theme.gradeSaturation, -0.15)
 	assert(theme.panelBorder == nil, "Factory has no panel border")
 	expect("Factory.titleFont", theme.titleFont, Font.new(oswald.Family, Enum.FontWeight.Bold))
 	expect("Factory.labelFont", theme.labelFont, Font.new(oswald.Family, Enum.FontWeight.Bold))
@@ -168,6 +171,9 @@ do
 	expect("SterileBright.hazardStripe", theme.hazardStripe, true)
 	expect("SterileBright.hazardYellow", theme.hazardYellow, rgb(242, 193, 46))
 	expect("SterileBright.hazardDark", theme.hazardDark, rgb(29, 37, 41))
+	expect("SterileBright.buttonHoverShade", theme.buttonHoverShade, false)
+	expect("SterileBright.gradeTint", theme.gradeTint, rgb(240, 246, 252))
+	assert(theme.gradeSaturation <= 0 and theme.gradeSaturation > -0.15, "the Sterile grade should be less grey than Factory's")
 	expect("SterileBright.loadingBackdrop", theme.loadingBackdrop, rgb(233, 239, 241))
 	expect("SterileBright.titleFont", theme.titleFont, Font.new("rbxasset://fonts/families/Michroma.json"))
 	expect(
@@ -360,6 +366,7 @@ do
 		expect(button.Name .. " border colour", border.Color, sterileTheme.panelBorder)
 		assert(border.Thickness == 1 and border.ApplyStrokeMode == Enum.ApplyStrokeMode.Border, button.Name .. " border should be 1px, Border mode")
 		assert(button.Text == string.upper(button.Text), button.Name .. " text should stay as it was")
+		assert(button.AutoButtonColor == sterileTheme.buttonHoverShade and button.AutoButtonColor == false, button.Name .. ".AutoButtonColor should follow buttonHoverShade (false)")
 	end
 
 	local vignette = vignetteGui.Vignette
@@ -415,6 +422,7 @@ do
 	assert(countNamed(menu, "PanelBorder") == 0, "a Factory apply should remove the borders")
 	for _, button in buttonsOf(menu) do
 		expect(button.Name .. " Factory colour", button.BackgroundColor3, before[button])
+		assert(button.AutoButtonColor == true, button.Name .. ".AutoButtonColor should be back to true under Factory")
 	end
 	menu:Destroy()
 	vignetteGui:Destroy()
@@ -430,6 +438,9 @@ do
 	expect("Factory Play.FontFace", menu.Root.Buttons.Play.FontFace, menuTemplate.Root.Buttons.Play.FontFace)
 	expect("Factory Play Accent", menu.Root.Buttons.Play.Accent.BackgroundColor3, menuTemplate.Root.Buttons.Play.Accent.BackgroundColor3)
 	expect("Factory Back.TextColor3", menu.Back.TextColor3, menuTemplate.Back.TextColor3)
+	for _, button in buttonsOf(menu) do
+		assert(button.AutoButtonColor == true, button.Name .. ".AutoButtonColor should stay true under Factory (the template's value)")
+	end
 	for _, edge in vignetteGui.Vignette:GetChildren() do
 		if edge:IsA("Frame") then
 			expect("Factory " .. edge.Name .. " edge", edge.BackgroundColor3, vignetteTemplate.Vignette[edge.Name].BackgroundColor3)

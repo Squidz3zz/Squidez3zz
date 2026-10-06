@@ -155,6 +155,7 @@ for name, button in buttons do
 	expect(name .. ".TextColor3", button.TextColor3, T.text)
 	expect(name .. ".FontFace", button.FontFace, T.bodyFont)
 	expect(name .. ".Accent", button.Accent.BackgroundColor3, T.accent)
+	assert(button.AutoButtonColor == T.buttonHoverShade, ("%s.AutoButtonColor should be the theme's buttonHoverShade (%s), it is %s"):format(name, tostring(T.buttonHoverShade), tostring(button.AutoButtonColor)))
 	local border = button:FindFirstChild("PanelBorder")
 	if T.panelBorder then
 		assert(border and border:IsA("UIStroke"), name .. " should have the border UIStroke PanelBorder")
@@ -214,6 +215,16 @@ else
 end
 
 assert(fader.BackgroundColor3 == Color3.new(0, 0, 0), "the Fader must stay black in every theme, it is " .. tostring(fader.BackgroundColor3))
+
+-- The colour grade over the menu screens (MenuCamera's MenuColorCorrection) takes the theme's tint and saturation.
+local grade = game:GetService("Lighting"):FindFirstChild("MenuColorCorrection")
+assert(grade, "Lighting.MenuColorCorrection should exist while the menu is open")
+local tint = grade.TintColor
+assert(
+	math.abs(tint.R - T.gradeTint.R) < 1 / 255 and math.abs(tint.G - T.gradeTint.G) < 1 / 255 and math.abs(tint.B - T.gradeTint.B) < 1 / 255,
+	("the grade's TintColor should be the theme's gradeTint %s, it is %s"):format(tostring(T.gradeTint), tostring(tint))
+)
+expect("grade Saturation", grade.Saturation, T.gradeSaturation)
 
 -- Loading ---------------------------------------------------------------------------------------------------------------
 checkLoading(T)

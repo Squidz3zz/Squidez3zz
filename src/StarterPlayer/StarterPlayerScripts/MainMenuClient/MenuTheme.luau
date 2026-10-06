@@ -4,17 +4,22 @@
 --                                             aside: Factory has none), so a caller can read any key without checking.
 --   applyToMenu(menu, vignetteGui, theme)     paints the CLONED MainMenu and MainMenuVignette before they are parented: the
 --                                             Title (colour, font and outline, never its words), every button (fill, letters,
---                                             font, accent bar, thin border) and BACK, the four Vignette edges and, when the
+--                                             font, hover shading, accent bar, thin border) and BACK, the four Vignette edges and, when the
 --                                             theme asks for it, the hazard stripe at the top of the screen. Safe to repeat,
 --                                             skips whatever is missing (a renamed Title, a deleted button) and never throws:
 --                                             a failing piece is warned about and the rest is still painted. The Fader is not
 --                                             handed in, so it is never themed.
+--   merge(result)                             lays a MenuAssets.theme() result over a copy of FACTORY: a value of another kind
+--                                             than Factory's is ignored, a key FACTORY does not have is kept (so a key added
+--                                             only in MenuAssets is not dropped). get() is merge(MenuAssets.theme()).
 --   FACTORY                                   the built-in Factory look. It must stay equal to MenuAssets.Themes.Factory
 --                                             (tests/menu_theme.edit.luau checks that).
 -- Because the theme paints over the template's colours and fonts when the menu opens, editing those in Studio has no effect
 -- while a theme is active. The Studio template (studio/build_main_menu_ui.luau) stays the Factory baseline.
--- The ButtonEffects hover outline, SettingsBoard and CreditsRoom read get() themselves; LoadingScreen reads MenuAssets itself
--- (it runs before this module has replicated) and keeps its own Factory defaults.
+-- The ButtonEffects hover outline, SettingsBoard, CreditsRoom and MenuCamera (the colour grade) read get() themselves;
+-- LoadingScreen reads MenuAssets itself (it runs before this module has replicated) and keeps its own Factory defaults.
+-- SettingsBoard and CreditsRoom require this module, so without it those two rooms stay empty; the menu, Play and
+-- MenuCamera (which reads it in pcall) never depend on it.
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 
 local MenuTheme = {}
@@ -36,6 +41,9 @@ MenuTheme.FACTORY = {
 	text = Color3.fromRGB(255, 255, 255),
 	textMuted = Color3.fromRGB(220, 208, 190),
 	hoverStroke = AMBER,
+	buttonHoverShade = true,
+	gradeTint = Color3.fromRGB(255, 235, 210),
+	gradeSaturation = -0.15,
 	vignette = Color3.fromRGB(12, 9, 6),
 	vignetteTransparency = 0.15,
 	hazardStripe = false,
@@ -161,16 +169,21 @@ local function paintTitle(menu, theme)
 	end
 end
 
--- Every TextButton in the menu (PLAY, SETTINGS, CREDITS, BACK and any button added later): fill, letters, font, the accent bar
--- and the thin border. The border is the UIStroke "PanelBorder": added when the theme has a panelBorder, removed when not.
+-- Every TextButton in the menu (PLAY, SETTINGS, CREDITS, BACK and any button added later): fill, letters, font, hover
+-- shading, the accent bar and the thin border. The border is the UIStroke "PanelBorder": added when the theme has a panelBorder, removed when not.
 local function paintButtons(menu, theme)
 	local panel = colorOf(theme, "panel")
 	local text = colorOf(theme, "text")
 	local bodyFont = fontOf(theme, "bodyFont")
 	local accent = colorOf(theme, "accent")
 	local borderColor = colorOf(theme, "panelBorder")
+	-- Roblox's own hover darkening (AutoButtonColor): on for Factory (the template already has it), off for light panels.
+	local hoverShade = theme.buttonHoverShade
 	for _, button in menu:GetDescendants() do
 		if button:IsA("TextButton") then
+			if type(hoverShade) == "boolean" then
+				button.AutoButtonColor = hoverShade
+			end
 			button.BackgroundColor3 = panel or button.BackgroundColor3
 			button.TextColor3 = text or button.TextColor3
 			button.FontFace = bodyFont or button.FontFace
