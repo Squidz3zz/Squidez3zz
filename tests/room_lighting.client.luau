@@ -6,11 +6,15 @@
 -- seconds after the camera cuts there. RoomLighting switches the outdoor light contributions off while a room shows
 -- (Brightness, OutdoorAmbient, EnvironmentDiffuseScale and EnvironmentSpecularScale all go to 0) and puts them back after.
 --   A   room and back. Records the four values on the Menu (they must be non-zero, or the test proves nothing). For
---       Settings and then Credits: within 1s of MenuScene reaching the room Brightness is 0, OutdoorAmbient is black and
---       both Environment scales are 0 (Ambient and ClockTime are untouched); going back to the Menu puts all four back,
---       exactly, the moment MenuScene says Menu, and leaves no MenuRoomLighting_* attribute on Lighting. Then a hop from
---       one room straight to the other (the profile stays on), and back to the Menu (the same originals come back).
---   B   Play from a room. Goes to Credits (the profile is on), presses Play. The values are the Menu's originals again as
+--       Settings and then Credits, every cut into the room is watched frame by frame (goWatched): each Heartbeat samples the
+--       scene, the Fader's transparency and the four Lighting values together, and from the first sample of the room on
+--       (behind the black Fader), through the first sample where the Fader is clearing, to the end of the fade-in, Brightness
+--       is 0, OutdoorAmbient is black and both Environment scales are 0. So an apply() that is late (after a yield, once the
+--       fade-in has begun) fails; polling for it within a second would not notice. Ambient and ClockTime are untouched.
+--       Going back to the Menu puts all four back, exactly, the moment MenuScene says Menu, and leaves no MenuRoomLighting_*
+--       attribute on Lighting. Then a hop from one room straight to the other (watched the same way: the profile stays on),
+--       and back to the Menu (the same originals come back).
+--   B   Play from a room. Goes to Credits (watched like A; the profile is on), presses Play. The values are the Menu's originals again as
 --       soon as the press returns (before any character exists), and still are when the character arrives (within 10s)
 --       and a second later. Leaves no MenuRoomLighting_* attribute.
 --   C   unit test on a separate copy of the ModuleScript (a clone, so it shares no state with the one init loaded; the
@@ -149,6 +153,75 @@ local function go(name)
 	return os.clock()
 end
 
+-- Like go(), for a cut INTO a room, but watched frame by frame from the press until the Fader is clear again. Every frame
+-- (a Heartbeat) it reads, together, the scene, the Fader's transparency and the four Lighting values. Once the scene is the
+-- room, the profile must be on in EVERY sample: at the first one (behind the black Fader), at the first one where the room is
+-- starting to show (the Fader clearing), and from then on. An apply() that comes late, after a yield or after the fade-in has
+-- begun, fails here although the polling in assertRoom() below would not notice it. (An apply() moved to the end of enter
+-- cannot be told apart from one at the start: the hook runs in one go, so no frame sits between them.)
+-- Returns the time of the first sample of the new scene, and a one-line description of what was seen.
+local SHOWING = 0.05 -- the Fader is this clear (transparency) or more: the room has started to show
+local WATCH_SECONDS = 4
+local function goWatched(name)
+	local faderGui = playerGui:FindFirstChild("MainMenuFader")
+	local fader = faderGui and faderGui:FindFirstChild("Fader")
+	assert(fader, "MainMenuFader.Fader missing")
+	local started = waitFor(function()
+		return hook:Invoke("goTo", name)
+	end, 3)
+	assert(started, "goTo(" .. name .. ") did not start a transition")
+	local samples = {}
+	local deadline = os.clock() + WATCH_SECONDS
+	repeat
+		local sample = {
+			at = os.clock(),
+			scene = playerGui:GetAttribute("MenuScene"),
+			fader = fader.BackgroundTransparency,
+			values = snapshot(),
+		}
+		table.insert(samples, sample)
+		-- In the new scene and the Fader clear again: the cut and the fade-in are over.
+		if sample.scene == name and sample.fader == 1 then
+			break
+		end
+		RunService.Heartbeat:Wait()
+	until os.clock() > deadline
+	local cut, showing
+	for index, sample in samples do
+		if sample.scene == name then
+			cut = cut or index
+			if not showing and sample.fader >= SHOWING then
+				showing = index
+			end
+			assert(
+				isProfile(sample.values),
+				("%s: the profile was NOT on in sample %d (the room's sample %d, %.0f ms after the cut, Fader transparency %.3f): %s"):format(
+					name,
+					index,
+					index - cut + 1,
+					(sample.at - samples[cut].at) * 1000,
+					sample.fader,
+					describe(sample.values)
+				)
+			)
+		end
+	end
+	assert(cut, name .. ": MenuScene never became " .. name .. " within " .. WATCH_SECONDS .. "s")
+	assert(
+		showing,
+		name .. ": the Fader never started to clear while in the new scene (no sample with transparency >= " .. SHOWING .. "), so the check proves nothing"
+	)
+	return samples[cut].at,
+		("%s: profile on at the cut (frame %d, Fader %.2f), when the room started to show (frame %d, Fader %.2f) and in all %d samples of the room"):format(
+			name,
+			cut,
+			samples[cut].fader,
+			showing,
+			samples[showing].fader,
+			#samples - cut + 1
+		)
+end
+
 -- In a room: the profile is in place within 1s of MenuScene, and the sun-independent values are left alone.
 local function assertRoom(name, seenAt)
 	local profiled = waitFor(function()
@@ -175,8 +248,9 @@ local report = {}
 
 if CASE == "A" then
 	for _, room in { "Settings", "Credits" } do
-		local took = assertRoom(room, go(room))
-		table.insert(report, ("%s profile after %.2fs"):format(room, took))
+		local seenAt, watched = goWatched(room)
+		local took = assertRoom(room, seenAt)
+		table.insert(report, watched)
 		task.wait(BETWEEN_CUTS)
 		go("Menu")
 		assertMenu("back from " .. room)
@@ -184,16 +258,22 @@ if CASE == "A" then
 		task.wait(BETWEEN_CUTS)
 	end
 	-- Room to room: the profile stays on, and the originals that come back at the end are still the Menu's.
-	assertRoom("Settings", go("Settings"))
+	local hopSeenAt, hopWatched = goWatched("Settings")
+	assertRoom("Settings", hopSeenAt)
+	table.insert(report, hopWatched .. " (second visit)")
 	task.wait(BETWEEN_CUTS)
-	assertRoom("Credits (from Settings)", go("Credits"))
+	local fromSeenAt, fromWatched = goWatched("Credits")
+	assertRoom("Credits (from Settings)", fromSeenAt)
+	table.insert(report, fromWatched .. " (from Settings)")
 	assert(#savedAttributes() == #PROPERTIES, "going room to room should keep exactly one saved original per property")
 	task.wait(BETWEEN_CUTS)
 	go("Menu")
 	assertMenu("back from Settings -> Credits")
 	table.insert(report, "Settings -> Credits -> Menu restored")
 elseif CASE == "B" then
-	assertRoom("Credits", go("Credits"))
+	local creditsSeenAt, creditsWatched = goWatched("Credits")
+	assertRoom("Credits", creditsSeenAt)
+	table.insert(report, creditsWatched)
 	task.wait(BETWEEN_CUTS)
 	local started = hook:Invoke("play")
 	assert(started == true, "Invoke(play) should start Play")
