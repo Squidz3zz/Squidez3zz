@@ -80,7 +80,10 @@ This is the one place to edit sound IDs and tips. It lives in ReplicatedFirst so
 
 - `Sounds`: a table of the six keys and asset IDs above.
 - `Tips`: an array of 6–8 short factory-flavoured placeholder tips. One example: "TIP: THE FURNACE NEVER SLEEPS. NEITHER DO WE." The user edits these.
-- `LOADING_MIN_SECONDS = 2`, `LOADING_MAX_SECONDS = 20`, `TIP_SECONDS = 4`.
+- `LOADING_MIN_SECONDS = 2`, `LOADING_MAX_SECONDS = 20`, `TIP_SECONDS = 4`. MIN should be at most MAX. MainMenuClient reads the two as well: it waits for the longer of them, plus 5 s, for the loading screen.
+- `MENU_AVATAR_WAIT = 5`: the loading screen waits at most this long for the player's menu avatar (its own cap; the menu shows a late avatar by itself).
+- `GAME_TITLE = "GAME TITLE"`: the loading screen's title.
+- `soundId(value)`: turns a typed sound id (`123456`, `"123456"` or `"rbxassetid://123456"`) into `"rbxassetid://123456"`, or nil if there is no usable id. ButtonSounds, MenuAudio and the loading screen's preload read `Sounds` through it.
 
 Disk path: `src/ReplicatedFirst/MenuAssets.luau`.
 
@@ -93,7 +96,7 @@ Disk path: `src/ReplicatedFirst/LoadingScreen.client.luau`.
    - IgnoreGuiInset true, ScreenInsets None, DisplayOrder 20, so it sits above every menu gui;
    - ResetOnSpawn false;
    - a full-screen backdrop RGB(16,14,12) with the same four-edge vignette gradient as the menu;
-   - a `Title` TextLabel reading "GAME TITLE", Oswald Bold, amber UIStroke;
+   - a `Title` TextLabel reading "GAME TITLE" (`MenuAssets.GAME_TITLE`; the main menu's own title is the `Title` label in `ReplicatedStorage.MainMenu`, edited in Studio), Oswald Bold, amber UIStroke;
    - a `Spinner` (amber ring or gear, built from Frames and UICorner, or a UIStroke ring with a hazard gap) that rotates continuously;
    - a `Tip` TextLabel, which cycles through `MenuAssets.Tips` every `TIP_SECONDS`.
    - Layout is Scale only. Phones keep everything inside the safe area: the content sits in an inner Frame. The backdrop and vignette fill the whole screen.
@@ -107,7 +110,7 @@ Load these in parallel:
 - `workspace.SettingsRoom` and `workspace.CreditsRoom` appearing;
 - `ReplicatedStorage.MenuAvatars[userId]` appearing.
 
-Each wait has its own cap, and the overall time is capped by `LOADING_MAX_SECONDS`.
+Each wait has its own cap, and the overall time is capped by `LOADING_MAX_SECONDS`. The menu avatar's cap is the shorter `MENU_AVATAR_WAIT`: the menu does not need the avatar (MainMenuClient shows a late one), so a slow or failed avatar build never holds a join for the full 20 s.
 
 ### Handoff
 When everything has loaded and at least `LOADING_MIN_SECONDS` have passed, or once `LOADING_MAX_SECONDS` have passed:
@@ -124,7 +127,7 @@ The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() 
 
 ## MainMenuClient changes
 
-- **Waiting for the loading screen.** Before `setupMenu()` parents the menu, wait for `PlayerGui:GetAttribute("LoadingDone") == true`, for at most `LOADING_MAX_SECONDS + 5`. This happens in setup, never on the Play path.
+- **Waiting for the loading screen.** Before `setupMenu()` parents the menu, wait for `PlayerGui:GetAttribute("LoadingDone") == true`, for at most `max(LOADING_MIN_SECONDS, LOADING_MAX_SECONDS) + 5`. This happens in setup, never on the Play path.
   - If `ReplicatedFirst.LoadingScreen` doesn't exist, or is disabled (it could never set the attribute), don't wait.
   - If the wait times out, open the menu anyway and warn.
   - Once the menu is open, init destroys a leftover `PlayerGui.LoadingScreen` after 1.5 s (not at once, so the loader's own 0.4 s fade-out is not cut off).

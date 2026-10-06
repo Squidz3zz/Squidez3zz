@@ -1,6 +1,7 @@
--- MenuAssets: the one place to edit the menu's sound ids, the loading screen's tips and its timings.
+-- MenuAssets: the one place to edit the menu's sound ids, the loading screen's title and tips, and the loading timings.
 -- It lives in ReplicatedFirst so the loading screen can read it before anything else has replicated.
--- Used by LoadingScreen (this folder) and, later, by the menu's music and button sounds.
+-- Used by LoadingScreen (this folder) and by the menu itself (MainMenuClient: its music, its button sounds, and how long it
+-- waits for the loading screen).
 --
 -- Sounds: the keys are fixed (the menu looks them up by name); change only the asset ids. An id can be typed as a plain
 -- number (123456) or in quotes ("123456" or "rbxassetid://123456"): the menu turns all three into rbxassetid://123456
@@ -13,15 +14,22 @@
 --   SettingsMusic  the Settings room's looping track
 --   CreditsMusic   the Credits room's looping track
 --
+-- GAME_TITLE: the big title on the loading screen. The main menu has its own title, which is not set here: it is the Title
+-- TextLabel inside ReplicatedStorage.MainMenu, edited in Studio.
+--
 -- Tips: shown one at a time on the loading screen, a new one every TIP_SECONDS. Keep them UPPERCASE and short
 -- (about 50 characters or fewer, so they stay on one line on a phone).
 --
 -- LOADING_MIN_SECONDS: the loading screen always stays up at least this long (so it never just flashes by).
 -- LOADING_MAX_SECONDS: it hands over to the menu after this long at the latest, even if an asset is still loading.
+--   Keep MIN at most MAX. MainMenuClient reads both too: the menu waits for the longer of the two, plus 5 seconds, for the
+--   loading screen to hand over.
 -- TIP_SECONDS: how long each tip is shown.
 -- MENU_AVATAR_WAIT: how long the loading screen waits for your avatar (the one the menu shows on the right). The menu does not
 -- need it: if it is not ready in time the loading screen hands over anyway, and the avatar appears as soon as it is ready.
 local MenuAssets = {
+	GAME_TITLE = "GAME TITLE",
+
 	Sounds = {
 		Hover = "rbxassetid://113223325628963",
 		Confirm = "rbxassetid://111174530730534",

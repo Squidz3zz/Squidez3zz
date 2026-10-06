@@ -1,7 +1,7 @@
 -- LoadingScreen: the factory loading screen. It shows at once, preloads what the main menu needs, then fades to black
 -- and hands over to the menu (MainMenuClient waits for it before it shows anything).
 -- It lives in ReplicatedFirst so it runs before the rest of the game has replicated, and it builds its UI in code
--- (a template in ReplicatedStorage would not have arrived yet). Sound ids, tips and timings: ReplicatedFirst.MenuAssets.
+-- (a template in ReplicatedStorage would not have arrived yet). Title, sound ids, tips and timings: ReplicatedFirst.MenuAssets.
 --
 -- What it does:
 --   1. Builds the ScreenGui "LoadingScreen" (above every menu gui), parents it, then removes Roblox's own loading screen.
@@ -40,7 +40,6 @@ local POLL = 0.05
 local SPINNER_DEGREES_PER_SECOND = 220
 
 -- Factory look, the same as the menu (see studio/build_main_menu_ui.luau).
-local TITLE_TEXT = "GAME TITLE"
 local AMBER = Color3.fromRGB(255, 150, 30)
 local BACKDROP_COLOR = Color3.fromRGB(16, 14, 12)
 local VIGNETTE_COLOR = Color3.fromRGB(12, 9, 6)
@@ -50,6 +49,7 @@ local FONT = Font.fromEnum(Enum.Font.Oswald)
 local FONT_BOLD = Font.new(FONT.Family, Enum.FontWeight.Bold)
 
 -- Defaults, used only if ReplicatedFirst.MenuAssets is missing or broken.
+local titleText = "GAME TITLE"
 local minSeconds = 2
 local maxSeconds = 20
 local tipSeconds = 4
@@ -78,6 +78,9 @@ local function readConfig()
 	local module = ReplicatedFirst:WaitForChild("MenuAssets", ASSETS_MODULE_TIMEOUT)
 	assert(module, "ReplicatedFirst.MenuAssets is missing")
 	local assets = require(module)
+	if type(assets.GAME_TITLE) == "string" and assets.GAME_TITLE ~= "" then
+		titleText = assets.GAME_TITLE
+	end
 	if type(assets.LOADING_MIN_SECONDS) == "number" then
 		minSeconds = assets.LOADING_MIN_SECONDS
 	end
@@ -185,7 +188,7 @@ local function build(firstTip)
 
 	local title = label({
 		Name = "Title",
-		Text = TITLE_TEXT,
+		Text = titleText,
 		FontFace = FONT_BOLD,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.26),

@@ -83,7 +83,8 @@ The file `default.project.json` already says where everything goes. It only touc
 
 The ten ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `MenuAssets` is the one place to change the
-menu's sound ids, the loading screen's tips and its timings. The names must match exactly.
+menu's sound ids (a plain number works too), the loading screen's title (`GAME_TITLE`) and tips, and its timings. The main
+menu's own title is a different thing: it is the `Title` label inside `ReplicatedStorage.MainMenu`, which you edit in Studio. The names must match exactly.
 
 ### d) Turn off automatic spawning
 
