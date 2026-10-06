@@ -31,7 +31,8 @@
 --     Vignette
 --   MainMenuFader
 --     Fader
--- Root.Title is never looked up, so it can be renamed or restyled freely.
+-- Root.Title is looked up by MenuTheme (by its name) for its colour, font and outline, and by nothing else. Keep the name, or
+-- the theme simply skips it (it can still be moved, resized and reworded freely: the theme never touches its words).
 -- If the UI is broken or never appears, setup warns and the player is spawned straight away instead: nobody
 -- spawns until PlayPressed (CharacterAutoLoads is off), so a menu that cannot open must not trap the player.
 local GuiService = game:GetService("GuiService")
@@ -98,7 +99,9 @@ local CreditsRoom = loadModule("CreditsRoom")
 -- for the first few seconds after the cut, but nothing else is affected.
 local RoomLighting = loadModule("RoomLighting")
 -- The menu's colours and fonts (MenuAssets.THEME). Without it the menu keeps the Factory look it is built with (the Studio
--- template), and the buttons' hover outline keeps its own Factory colour.
+-- template), the buttons' hover outline keeps its own Factory colour and the colour grade keeps the Factory tint. SettingsBoard
+-- and CreditsRoom require MenuTheme themselves, so a missing or broken MenuTheme leaves those two rooms empty (their modules
+-- fail to load, with a warning), but it never blocks the menu or Play.
 local MenuTheme = loadModule("MenuTheme")
 
 -- Set by setupMenu: the three cloned ScreenGuis, and the frames this script uses from them.

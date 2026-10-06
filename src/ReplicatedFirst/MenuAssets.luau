@@ -29,14 +29,21 @@
 -- need it: if it is not ready in time the loading screen hands over anyway, and the avatar appears as soon as it is ready.
 --
 -- THEME: the look of the whole menu, as the name of one preset in Themes (further down). It paints the colours and fonts of the
--- main menu (title, PLAY / SETTINGS / CREDITS / BACK, the dark screen edges), the loading screen, the Settings board and the
--- name label in Credits.
+-- main menu (title, PLAY / SETTINGS / CREDITS / BACK, the screen edges), the loading screen, the Settings board and the
+-- name label in Credits, and tints the colour grade that sits over the menu screens (the menu, Settings and Credits, never
+-- gameplay).
 --   THEME = "Factory"        the rusty factory look: dark steel panels, amber, Oswald.
 --   THEME = "SterileBright"  a bright bio-lab: white panels, teal, storm-blue text, Michroma and Titillium Web.
 -- To make your own, copy a whole preset inside Themes, give the copy a new name (CleanRoom = { ... }), change the colours you
--- like, and set THEME = "CleanRoom". A preset may leave a key out: that key then uses Factory's value, so a half-written preset
--- never breaks the menu. An unknown THEME name, or a value of the wrong kind (text where a colour belongs), uses Factory's
--- value too, with one warning in the Output window.
+-- like, and set THEME = "CleanRoom". To change the factory look, copy Factory under a new name rather than editing Factory
+-- itself. Never rename or delete Factory: every preset falls back to it.
+-- A preset may leave a key out: that key then uses Factory's value, so a preset with keys missing never breaks the menu. An
+-- unknown THEME name, or a value of the wrong kind (text where a colour belongs), uses Factory's value too, with one warning in
+-- the Output window.
+-- A mistake in the file's own writing (a missing comma, quote or bracket) is different: the whole of MenuAssets then fails to
+-- load, so the sound ids, the loading title and tips and the timings are lost with the theme. The menu and the loading screen
+-- still open, in the Factory look, with no sounds, "LOADING..." as the only tip and the default timings, and the Output window
+-- names the error: fix it and run again.
 -- MenuAssets.theme() hands the finished theme (your preset on top of Factory) to the menu, the loading screen, the Settings
 -- board and Credits; it returns a fresh table each time.
 -- What a theme does NOT do: it paints colours and fonts only. The main menu's words (its Title), positions and sizes are still

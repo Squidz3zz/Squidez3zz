@@ -26,7 +26,8 @@ local AMBER = Color3.fromRGB(255, 150, 30)
 local VIGNETTE_COLOR = Color3.fromRGB(12, 9, 6)
 local WHITE = Color3.new(1, 1, 1)
 
--- One font for the whole menu: Oswald, with uppercase labels (new text objects default to Legacy fonts).
+-- One font for the whole menu: Oswald (new text objects default to Legacy fonts). The button labels are uppercase; the
+-- Title's words are the developer's own and are not.
 local FONT = Font.fromEnum(Enum.Font.Oswald)
 local FONT_BOLD = Font.new(FONT.Family, Enum.FontWeight.Bold)
 

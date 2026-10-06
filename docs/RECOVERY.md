@@ -97,11 +97,17 @@ panels, teal, storm-blue text, Michroma and Titillium Web, a thin yellow and bla
 To switch, change the name in quotes. To make your own, copy a whole preset inside `Themes`, give it a new name and edit its
 colours (`Color3.fromRGB(red, green, blue)`) and fonts, then set `THEME` to that name. A preset can leave keys out (they use
 Factory's value), and a wrong name or a value of the wrong kind falls back to Factory with a warning in the Output window, so a
-typo never breaks the menu.
+mistyped name or colour never breaks the menu. Never rename or delete `Factory` (every preset falls back to it), and to change the
+factory look copy it under a new name instead of editing it. A mistake in the file's own writing (a missing comma, quote or
+bracket) is different: the whole of `MenuAssets` then fails to load, so the sound ids, the loading screen's title and tips and its
+timings are lost along with the theme. The menu still opens and Play still works, in the Factory look, with no sounds, "LOADING..."
+as the only tip and the default timings, and the Output window names the error.
 
-What a theme paints: the main menu's title colours and font, PLAY / SETTINGS / CREDITS / BACK, the dark screen edges and the
-hazard stripe, the loading screen, the Settings room's board, and the name label and outline in Credits. What it does **not**
-touch: the 3D rooms and their lamps, the black fade, and the room lighting.
+What a theme paints: the main menu's title colours and font, PLAY / SETTINGS / CREDITS / BACK (and whether they darken when
+hovered), the screen edges and the hazard stripe, the loading screen, the Settings room's board, the name label and outline in
+Credits, and the tint of the colour grade over the menu screens (warm in Factory, cool and nearly neutral in SterileBright; it only
+affects the menu, Settings and Credits). What it does **not** touch: the 3D rooms and their lamps, the black fade, and the room
+lighting.
 
 Important: the colours and fonts of those pieces come from the theme **at runtime**. When the menu opens it is painted over, so
 editing the colours or fonts of `ReplicatedStorage.MainMenu` (the buttons, the Title's colour or font, the Vignette) in Studio
@@ -135,7 +141,7 @@ Press **Play** in Studio (the Test tab) and check each of these:
    hazard stripe in SterileBright), with the title, a spinning ring and a tip. It stays for at least 2 seconds,
    fades to black, and the menu fades in.
 2. The menu opens with the title, three buttons, and your avatar on the right after a few seconds. In the Device
-   Emulator (a phone, landscape) the dark border and the fades reach every screen edge, notch included. Music plays and
+   Emulator (a phone, landscape) the border (dark in Factory, pale in SterileBright) and the fades reach every screen edge, notch included. Music plays and
    changes track with each scene (Menu, Settings, Credits), and fades out when you press Play.
 3. **Settings** fades to a room with a board. The sliders move and the switches flip. **BACK** returns. The buttons and
    the switches make a hover sound and a click sound (PLAY has its own click sound).
