@@ -98,6 +98,8 @@ local function fadeTo(sound, volume, info, onDone)
 end
 
 -- Brings the track of scene `scene` in: resumes it where it paused (or plays it from the start the first time) and fades it up.
+-- Roblox reports IsPaused as true for a Sound that was never played, so "paused" alone does not mean "has progress": only a
+-- paused track that is past its start is resumed, anything else starts with Play().
 local function fadeIn(scene)
 	local name = TRACKS[scene]
 	local sound = findSound(name)
@@ -108,7 +110,7 @@ local function fadeIn(scene)
 		warnOnce(name, skipMessage(name))
 		return
 	end
-	if sound.IsPaused then
+	if sound.IsPaused and sound.TimePosition > 0 then
 		sound:Resume()
 	elseif not sound.Playing then
 		sound:Play()

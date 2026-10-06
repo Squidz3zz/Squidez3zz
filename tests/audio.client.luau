@@ -39,8 +39,9 @@
 -- needs a FRESH playtest. They drive the menu through MainMenuClient's TestHook, as scenes.client.luau does.
 --   M-A   the menu opens: MenuMusic plays, looped, in the Music group, at full volume within 2 s; the other two tracks exist
 --         (looped, Music group) but do not play. Reports the music keys that did not load.
---   M-B   goTo Settings: SettingsMusic plays at full volume and MenuMusic pauses within 1.5 s; back to Menu: MenuMusic RESUMES
---         from where it paused (not from 0). goTo Credits then goTo Menu (refused: a transition is running): after 2 s exactly
+--   M-B   goTo Settings: SettingsMusic plays at full volume and MenuMusic pauses within 1.5 s, and SettingsMusic's FIRST play starts
+--         from its beginning (TimePosition < 1.5, started with Play(), never Resume(); a Sound that was never played reports
+--         IsPaused); back to Menu: MenuMusic RESUMES from where it paused (not from 0). goTo Credits then goTo Menu (refused: a transition is running): after 2 s exactly
 --         one track is audible. Then setScene is hammered through a test copy of the module (Credits, Settings, Menu, Credits, Menu
 --         about a quarter of a second apart): exactly one track is audible at the end and stays that way (no stale fade pauses it).
 --   M-C   Play pressed 0.2 s after goTo Settings (mid fade to black): within 1.5 s none of the music Sounds exist, the character
@@ -731,13 +732,32 @@ elseif CASE == "M-B" then
 	)
 	local before = menuMusic.TimePosition
 
-	-- Menu -> Settings: the Settings track plays at full volume and the Menu track pauses, within 1.5 s.
-	assert(hook:Invoke("goTo", "Settings") == true, "goTo(Settings) should start a transition")
+	-- Menu -> Settings: the Settings track plays at full volume and the Menu track pauses, within 1.5 s. SettingsMusic has
+	-- never played, so its first play must be Play() (the events say which call started it) from the beginning.
 	local settingsMusic = getMusic("Settings")
+	assert(settingsMusic.TimePosition == 0 and not settingsMusic.Playing, "SettingsMusic should not have played yet: " .. describeMusic())
+	local settingsPlayed, settingsResumed = 0, 0
+	local playedConnection = settingsMusic.Played:Connect(function()
+		settingsPlayed += 1
+	end)
+	local resumedConnection = settingsMusic.Resumed:Connect(function()
+		settingsResumed += 1
+	end)
+	assert(hook:Invoke("goTo", "Settings") == true, "goTo(Settings) should start a transition")
 	local switched = waitFor(function()
 		return settingsMusic.Playing and settingsMusic.Volume > 0.9 and not menuMusic.Playing
 	end, 1.5)
+	playedConnection:Disconnect()
+	resumedConnection:Disconnect()
 	assert(switched, "within 1.5s of goTo(Settings) SettingsMusic should play at full volume and MenuMusic pause: " .. describeMusic())
+	assert(
+		settingsMusic.TimePosition < 1.5,
+		("SettingsMusic's first play should start from the beginning, it is at %.2f: %s"):format(settingsMusic.TimePosition, describeMusic())
+	)
+	assert(
+		settingsPlayed == 1 and settingsResumed == 0,
+		("SettingsMusic's first play should be one Play() and no Resume(): Played %d time(s), Resumed %d time(s)"):format(settingsPlayed, settingsResumed)
+	)
 	assert(menuMusic.IsPaused, "MenuMusic should be paused, not stopped: " .. describeMusic())
 	local pausedAt = menuMusic.TimePosition
 	assert(pausedAt >= before, ("MenuMusic went back from %.2f to %.2f while it faded out"):format(before, pausedAt))
