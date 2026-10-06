@@ -142,7 +142,7 @@ The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() 
 
 **Cause.** The place uses unified lighting (the `Lighting` attribute `RBX_LightingTechnologyUnifiedMigration` is `true`), which computes occlusion and indirect light progressively, in a grid around the camera. The rooms are Persistent models about 200 studs under the map, and each cut moves the camera about 265 studs from the menu shot, outside the region already computed. Until the grid catches up, the enclosed room is lit as if it were outdoors: by the sun, and by the sky's ambient and environment light. (An earlier guess, that `Camera.Focus` stays behind at the old place, was tested and ruled out: Focus stays about 20 studs in front of the camera on every frame.)
 
-**Fix.** A client-local profile, `RoomLighting` (ModuleScript under MainMenuClient), removes the outdoor contributions while a room shows, so the unsettled first frames already match the settled look:
+**Fix.** A client-local profile, `RoomLighting` (ModuleScript under MainMenuClient), removes the outdoor contributions while a room shows. It is meant to make the unsettled first frames match the settled look; that is not verified yet (the screenshot tool cannot catch the first second), and the user confirms it by eye in Studio:
 
 | `Lighting` property | While a room shows |
 |---|---|
@@ -158,7 +158,7 @@ The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() 
 - **Client-only.** The profile never reaches the server or other players, and never touches gameplay.
 - **Test.** `tests/room_lighting.client.luau`: A (room and back, for Settings and Credits), B (Play from a room), C (unit test on a separate copy of the module).
 - **Settled look (measured 2026-10-06).** With the same camera in a settled room, the profile on versus the original values (screenshots in `.superpowers/sdd/room-lighting/`) changes the mean frame brightness (luma, 0 to 255) from 19.8 to 16.9 in Settings and from 24.3 to 18.9 in Credits, so the settled rooms are somewhat darker, most noticeably on the avatars' shaded sides. Nearly all of it comes from the two Environment scales (in Settings, `Brightness` and `OutdoorAmbient` alone change the luma by about 0.3): the sky's environment light still reaches these rooms a little once they have settled. If that is too dark, raise `EnvironmentDiffuseScale` and `EnvironmentSpecularScale` in `RoomLighting`'s `PROFILE` table above 0 (untested: that may also bring back part of the brightness seen in the first frames after a cut).
-- **Not covered by the tests.** The first second after a cut cannot be captured by the screenshot tool, so the transient itself is checked by eye. The tests and screenshots cover that the profile is on in the rooms, that it is gone on the Menu and after Play, and that the settled look is unchanged.
+- **Not covered by the tests.** The first second after a cut cannot be captured by the screenshot tool, so whether the profile really makes the first frames match the settled look is checked by eye in Studio (by the user), not by a test. The tests cover that the profile is on in the rooms (from the first sample of the new scene, before the Fader starts to clear), that it is gone on the Menu and after Play, and that the saved originals come back exactly. The settled look is not unchanged: see the measurement above.
 
 ## Music: `MenuAudio` (ModuleScript under MainMenuClient)
 
