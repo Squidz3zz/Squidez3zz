@@ -250,5 +250,5 @@ The loading screen, the credits shot with YOU hovered, and the main menu.
 Run on `feature/main-menu-v3` in Studio, in fresh playtests, with every Studio script equal to its file on disk:
 - All tests pass: `ui_layout` and `rooms` (Edit); `menu_server` A to E (Server); `loading` A and B, `audio` S-A to S-D and M-A to M-F, `menu_client`, `button_effects`, `character_preview` A to E, `volume_slider`, `phone_layout`, `scenes`, `settings_board`, `credits_room` and `sway` (Client).
 - A real-mouse walkthrough (loading screen, menu with hover and a repeating wave, Settings with the Music slider dragged to 0 and a switch flipped, Credits with YOU hovered, PLAY, respawn) ran with an empty Output window.
-- The live UI (29 instances) and both rooms (168 instances each) equal what `studio/build_main_menu_ui.luau` and `studio/build_menu_rooms.luau` build, property by property.
+- The live UI (29 instances) and both rooms (168 instances in total, models included) equal what `studio/build_main_menu_ui.luau` and `studio/build_menu_rooms.luau` build, property by property.
 - Sound keys that failed to load: none. All six `MenuAssets.Sounds` load.
