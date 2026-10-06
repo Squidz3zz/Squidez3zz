@@ -18,6 +18,8 @@
 -- LOADING_MIN_SECONDS: the loading screen always stays up at least this long (so it never just flashes by).
 -- LOADING_MAX_SECONDS: it hands over to the menu after this long at the latest, even if an asset is still loading.
 -- TIP_SECONDS: how long each tip is shown.
+-- MENU_AVATAR_WAIT: how long the loading screen waits for your avatar (the one the menu shows on the right). The menu does not
+-- need it: if it is not ready in time the loading screen hands over anyway, and the avatar appears as soon as it is ready.
 return {
 	Sounds = {
 		Hover = "rbxassetid://113223325628963",
@@ -42,4 +44,5 @@ return {
 	LOADING_MIN_SECONDS = 2,
 	LOADING_MAX_SECONDS = 20,
 	TIP_SECONDS = 4,
+	MENU_AVATAR_WAIT = 5,
 }

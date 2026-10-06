@@ -9,6 +9,11 @@
 --   B  run with the LoadingScreen script disabled (in Edit, set ReplicatedFirst.LoadingScreen.Disabled = true, start a
 --      fresh playtest, run this, stop the playtest, and set Disabled back to false). The menu still opens, there is no
 --      loading gui, and Play still spawns the character: a missing loading screen never stops the menu or Play.
+--   C  the menu avatar never appears: in Edit, set the attribute LoadingTestAvatarId = "0" on ReplicatedFirst.LoadingScreen (a
+--      Studio-only seam: the loader then waits for MenuAvatars["0"], which nothing ever builds), start a fresh playtest, run
+--      this, stop the playtest, and remove the attribute again. The loader must give up on the avatar after its own
+--      MENU_AVATAR_WAIT (not hold the screen for LOADING_MAX_SECONDS) and still hand over to the menu. It warns once about the
+--      missing avatar, and that warning is expected here.
 local CASE = "A"
 
 local Players = game:GetService("Players")
@@ -20,6 +25,7 @@ local player = Players.LocalPlayer
 local LOADING_MIN_SECONDS = 2
 local LOADING_MAX_SECONDS = 20
 local TIP_SECONDS = 4
+local MENU_AVATAR_WAIT = 5
 local assetsModule = ReplicatedFirst:FindFirstChild("MenuAssets")
 if assetsModule then
 	local ok, assets = pcall(require, assetsModule)
@@ -27,6 +33,7 @@ if assetsModule then
 		LOADING_MIN_SECONDS = assets.LOADING_MIN_SECONDS or LOADING_MIN_SECONDS
 		LOADING_MAX_SECONDS = assets.LOADING_MAX_SECONDS or LOADING_MAX_SECONDS
 		TIP_SECONDS = assets.TIP_SECONDS or TIP_SECONDS
+		MENU_AVATAR_WAIT = assets.MENU_AVATAR_WAIT or MENU_AVATAR_WAIT
 	end
 end
 
@@ -156,6 +163,43 @@ elseif CASE == "B" then
 		return player.Character
 	end, 10)
 	assert(character, "player.Character is nil 10s after play() with the loading screen disabled")
+elseif CASE == "C" then
+	local loadingScript = ReplicatedFirst:FindFirstChild("LoadingScreen")
+	assert(loadingScript, "ReplicatedFirst.LoadingScreen does not exist")
+	assert(
+		loadingScript:GetAttribute("LoadingTestAvatarId") ~= nil,
+		"case C needs the attribute LoadingTestAvatarId on ReplicatedFirst.LoadingScreen (set it in Edit first)"
+	)
+	assert(player.Character == nil, "player already has a character; run this in a fresh playtest")
+
+	-- The menu still opens, only without the loader having seen the avatar.
+	local opened = waitFor(function()
+		return playerGui:GetAttribute("MenuOpen") == true
+	end, LOADING_MAX_SECONDS + 10)
+	assert(opened, "MenuOpen did not become true within " .. (LOADING_MAX_SECONDS + 10) .. "s with a menu avatar that never appears")
+	local shownAt = playerGui:GetAttribute("LoadingShownAt")
+	local doneAt = playerGui:GetAttribute("LoadingDoneAt")
+	assert(type(shownAt) == "number" and type(doneAt) == "number", "LoadingShownAt / LoadingDoneAt missing")
+	assert(playerGui:GetAttribute("LoadingDone") == true, "LoadingDone should be true once the menu is open")
+
+	-- It waited for the avatar for its own cap, and no longer: LoadingDoneAt is stamped after the 0.4s fade to black, so
+	-- the hand-over comes about MENU_AVATAR_WAIT + 0.4 s after the screen showed (or MIN + 0.4 s, if that is longer).
+	local elapsed = doneAt - shownAt
+	local expected = math.max(LOADING_MIN_SECONDS, MENU_AVATAR_WAIT)
+	print("loading C: the screen was up for " .. string.format("%.2f", elapsed) .. "s (avatar wait " .. MENU_AVATAR_WAIT .. "s, minimum " .. LOADING_MIN_SECONDS .. "s)")
+	assert(
+		elapsed >= expected,
+		"the loading screen was up for only " .. string.format("%.2f", elapsed) .. "s: it should have waited " .. expected .. "s for the avatar"
+	)
+	assert(
+		elapsed <= expected + 1.5,
+		"the loading screen was up for " .. string.format("%.2f", elapsed) .. "s: a menu avatar that never appears should hold it for about "
+			.. expected .. "s (MENU_AVATAR_WAIT), not up to LOADING_MAX_SECONDS (" .. LOADING_MAX_SECONDS .. "s)"
+	)
+	local gone = waitFor(function()
+		return playerGui:FindFirstChild("LoadingScreen") == nil
+	end, 2)
+	assert(gone, "PlayerGui.LoadingScreen was still there 2s after the menu opened")
 else
 	error("unknown CASE " .. tostring(CASE))
 end

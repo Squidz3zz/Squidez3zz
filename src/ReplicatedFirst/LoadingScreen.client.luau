@@ -7,7 +7,8 @@
 --   1. Builds the ScreenGui "LoadingScreen" (above every menu gui), parents it, then removes Roblox's own loading screen.
 --   2. Preloads in parallel: the game itself, the six menu sounds (ContentProvider:PreloadAsync), the menu's three
 --      ScreenGuis, the Settings and Credits rooms and the player's menu avatar. Each wait is capped, and the whole thing
---      is capped by LOADING_MAX_SECONDS.
+--      is capped by LOADING_MAX_SECONDS. The avatar is the exception with a cap of its own, MENU_AVATAR_WAIT (the menu
+--      shows it whenever it arrives, so it never holds the screen up for long).
 --   3. Once everything is there and at least LOADING_MIN_SECONDS have passed (or LOADING_MAX_SECONDS have), it fades to
 --      black, sets the PlayerGui attribute LoadingDone, waits (briefly) for the menu to open under the black, fades out
 --      and destroys itself.
@@ -22,6 +23,7 @@
 --   LoadingFailedSounds  string   comma-separated keys of the sounds Roblox refused to load, "" if none
 --   LoadingTipChanges    number   how many times the tip has changed
 -- In Studio it also has a TestHook (BindableFunction) under this script: Invoke("state") -> { done, elapsed, failed }.
+-- And in Studio only, the attribute LoadingTestAvatarId on this script makes it wait for a different menu avatar (a test seam).
 --
 -- UI names other code depends on (tests look for them): Title, Spinner, Tip. Restyle anything else freely.
 local ContentProvider = game:GetService("ContentProvider")
@@ -51,6 +53,7 @@ local FONT_BOLD = Font.new(FONT.Family, Enum.FontWeight.Bold)
 local minSeconds = 2
 local maxSeconds = 20
 local tipSeconds = 4
+local avatarWait = 5
 local tips = { "LOADING..." }
 local sounds = {}
 
@@ -78,6 +81,9 @@ local function readConfig()
 	end
 	if type(assets.TIP_SECONDS) == "number" and assets.TIP_SECONDS > 0 then
 		tipSeconds = assets.TIP_SECONDS
+	end
+	if type(assets.MENU_AVATAR_WAIT) == "number" and assets.MENU_AVATAR_WAIT >= 0 then
+		avatarWait = assets.MENU_AVATAR_WAIT
 	end
 	if type(assets.Tips) == "table" and #assets.Tips > 0 then
 		tips = assets.Tips
@@ -310,6 +316,16 @@ local function run()
 	local spinner = gui.Content.Spinner
 	local tip = gui.Content.Tip
 
+	-- Whose menu avatar to wait for. Studio-only test seam: the attribute LoadingTestAvatarId on this script names another
+	-- MenuAvatars entry (one that never appears), so tests/loading.client.luau case C can see the avatar wait run out.
+	local avatarKey = tostring(player.UserId)
+	if RunService:IsStudio() then
+		local testId = script:GetAttribute("LoadingTestAvatarId")
+		if testId ~= nil then
+			avatarKey = tostring(testId)
+		end
+	end
+
 	-- Studio-only test hook: Invoke("state") -> { done, elapsed, failed }.
 	if RunService:IsStudio() then
 		local hook = Instance.new("BindableFunction")
@@ -386,9 +402,14 @@ local function run()
 			pendingCount -= 1
 		end)
 	end
-	-- Waits for parent[name] to appear, for at most what is left of the overall time. Returns it, or nil.
-	local function waitForChild(parent, name)
-		local child = parent:WaitForChild(name, math.max(deadline - os.clock(), 0.1))
+	-- Waits for parent[name] to appear, for at most what is left of the overall time (or `cap` seconds, if that is less).
+	-- Returns it, or nil.
+	local function waitForChild(parent, name, cap)
+		local seconds = math.max(deadline - os.clock(), 0.1)
+		if cap then
+			seconds = math.min(seconds, math.max(cap, 0.1))
+		end
+		local child = parent:WaitForChild(name, seconds)
 		if not child then
 			warn("LoadingScreen: " .. parent:GetFullName() .. "." .. name .. " had not appeared when the time was up")
 		end
@@ -411,10 +432,13 @@ local function run()
 			waitForChild(workspace, name)
 		end)
 	end
+	-- The avatar has a shorter cap of its own (MENU_AVATAR_WAIT for both waits together): the menu does not need it, because
+	-- MainMenuClient shows the avatar whenever it arrives, so a slow or failed avatar build must not hold every join.
 	job("menu avatar", function()
-		local avatars = waitForChild(ReplicatedStorage, "MenuAvatars")
+		local avatarDeadline = os.clock() + avatarWait
+		local avatars = waitForChild(ReplicatedStorage, "MenuAvatars", avatarWait)
 		if avatars then
-			waitForChild(avatars, tostring(player.UserId))
+			waitForChild(avatars, avatarKey, avatarDeadline - os.clock())
 		end
 	end)
 
