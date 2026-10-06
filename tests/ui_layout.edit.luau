@@ -163,7 +163,8 @@ expectUDim2("Root.Title", "Position", 0.06, 0, 0.27, 0)
 expectUDim2("Root.Title", "Size", 0.40, 0, 0.10, 0)
 assert(title.FontFace.Family:find("Oswald", 1, true), "Title must use Oswald, got " .. title.FontFace.Family)
 assert(title.FontFace.Weight == Enum.FontWeight.Bold, "Title must be Bold, got " .. tostring(title.FontFace.Weight))
-assert(title.Text == title.Text:upper(), "Title text must be uppercase")
+-- The words are the developer's to choose in Studio (the game's name, "A Regular Experiment"): any non-blank text is fine.
+assert(title.Text:match("%S") ~= nil, "Title text must not be blank")
 expectColor("Root.Title.UIStroke", "Color", AMBER)
 
 -- Buttons frame: middle-left, vertically centred on 0.56.

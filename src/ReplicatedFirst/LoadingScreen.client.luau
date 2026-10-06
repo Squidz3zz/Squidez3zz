@@ -49,7 +49,7 @@ local FONT = Font.fromEnum(Enum.Font.Oswald)
 local FONT_BOLD = Font.new(FONT.Family, Enum.FontWeight.Bold)
 
 -- Defaults, used only if ReplicatedFirst.MenuAssets is missing or broken.
-local titleText = "GAME TITLE"
+local titleText = "A Regular Experiment"
 local minSeconds = 2
 local maxSeconds = 20
 local tipSeconds = 4

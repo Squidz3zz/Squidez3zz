@@ -28,13 +28,13 @@
 -- MENU_AVATAR_WAIT: how long the loading screen waits for your avatar (the one the menu shows on the right). The menu does not
 -- need it: if it is not ready in time the loading screen hands over anyway, and the avatar appears as soon as it is ready.
 local MenuAssets = {
-	GAME_TITLE = "GAME TITLE",
+	GAME_TITLE = "A Regular Experiment",
 
 	Sounds = {
 		Hover = "rbxassetid://113223325628963",
 		Confirm = "rbxassetid://111174530730534",
 		PlaySelect = "rbxassetid://81613840001484",
-		MenuMusic = "rbxassetid://107320882976955",
+		MenuMusic = "rbxassetid://96770396029175",
 		SettingsMusic = "rbxassetid://108614839813561",
 		CreditsMusic = "rbxassetid://88263973909083",
 	},

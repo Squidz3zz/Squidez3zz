@@ -27,7 +27,7 @@ Add four things, all in the existing heavy-factory theme:
 | `Hover` | rbxassetid://113223325628963 | pointer or gamepad selection enters any menu button, including PLAY |
 | `Confirm` | rbxassetid://111174530730534 | clicking any button except PLAY |
 | `PlaySelect` | rbxassetid://81613840001484 | clicking PLAY |
-| `MenuMusic` | rbxassetid://107320882976955 | Menu scene music (loops) |
+| `MenuMusic` | rbxassetid://96770396029175 | Menu scene music (loops). The user replaced the first track (107320882976955) in Studio on 2026-10-06 |
 | `SettingsMusic` | rbxassetid://108614839813561 | Settings scene music (loops) |
 | `CreditsMusic` | rbxassetid://88263973909083 | Credits scene music (loops) |
 
@@ -82,7 +82,7 @@ This is the one place to edit sound IDs and tips. It lives in ReplicatedFirst so
 - `Tips`: an array of 6–8 short factory-flavoured placeholder tips. One example: "TIP: THE FURNACE NEVER SLEEPS. NEITHER DO WE." The user edits these.
 - `LOADING_MIN_SECONDS = 2`, `LOADING_MAX_SECONDS = 20`, `TIP_SECONDS = 4`. MIN should be at most MAX. MainMenuClient reads the two as well: it waits for the longer of them, plus 5 s, for the loading screen.
 - `MENU_AVATAR_WAIT = 5`: the loading screen waits at most this long for the player's menu avatar (its own cap; the menu shows a late avatar by itself).
-- `GAME_TITLE = "GAME TITLE"`: the loading screen's title.
+- `GAME_TITLE = "A Regular Experiment"`: the loading screen's title (the game's name; the user renamed the menu's own `Title` the same way in Studio on 2026-10-06, and the loader's built-in fallback title is the same text).
 - `soundId(value)`: turns a typed sound id (`123456`, `"123456"` or `"rbxassetid://123456"`) into `"rbxassetid://123456"`, or nil if there is no usable id. ButtonSounds, MenuAudio and the loading screen's preload read `Sounds` through it.
 
 Disk path: `src/ReplicatedFirst/MenuAssets.luau`.
@@ -96,7 +96,7 @@ Disk path: `src/ReplicatedFirst/LoadingScreen.client.luau`.
    - IgnoreGuiInset true, ScreenInsets None, DisplayOrder 20, so it sits above every menu gui;
    - ResetOnSpawn false;
    - a full-screen backdrop RGB(16,14,12) with the same four-edge vignette gradient as the menu;
-   - a `Title` TextLabel reading "GAME TITLE" (`MenuAssets.GAME_TITLE`; the main menu's own title is the `Title` label in `ReplicatedStorage.MainMenu`, edited in Studio), Oswald Bold, amber UIStroke;
+   - a `Title` TextLabel reading "A Regular Experiment" (`MenuAssets.GAME_TITLE`; the main menu's own title is the `Title` label in `ReplicatedStorage.MainMenu`, edited in Studio), Oswald Bold, amber UIStroke;
    - a `Spinner` (amber ring or gear, built from Frames and UICorner, or a UIStroke ring with a hazard gap) that rotates continuously;
    - a `Tip` TextLabel, which cycles through `MenuAssets.Tips` every `TIP_SECONDS`.
    - Layout is Scale only. Phones keep everything inside the safe area: the content sits in an inner Frame. The backdrop and vignette fill the whole screen.

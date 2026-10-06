@@ -112,7 +112,7 @@ local root = make("Frame", {
 -- (about 58pt at 844x390).
 local title = label({
 	Name = "Title",
-	Text = "GAME TITLE",
+	Text = "A Regular Experiment",
 	FontFace = FONT_BOLD,
 	TextXAlignment = Enum.TextXAlignment.Left,
 	AnchorPoint = Vector2.new(0, 1),
