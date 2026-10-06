@@ -2,6 +2,8 @@
 -- Checks that MainMenuClient attached ButtonEffects to every menu button, then drives ButtonEffects.setState
 -- directly (the module is required from its ModuleScript; setState finds PopScale/PopStroke on the button,
 -- so this copy of the module acts on the same Instances the menu uses).
+local GuiService = game:GetService("GuiService")
+local LogService = game:GetService("LogService")
 local Players = game:GetService("Players")
 
 local player = Players.LocalPlayer
@@ -106,5 +108,40 @@ expectState("final idle", 1, 1)
 
 -- Invalid input is rejected, not silently ignored.
 assert(not pcall(ButtonEffects.setState, play, "bogus"), "setState should reject an unknown state")
+
+-- A button that is not attached (no PopScale / PopStroke) is a quiet no-op: no error, nothing created on it.
+local loose = Instance.new("TextButton")
+for _, state in { "hover", "press", "idle" } do
+	local fine, why = pcall(ButtonEffects.setState, loose, state)
+	assert(fine, "setState(unattached button, " .. state .. ") should be a quiet no-op, it threw: " .. tostring(why))
+end
+assert(#loose:GetChildren() == 0, "setState must not add anything to a button that is not attached")
+assert(not pcall(ButtonEffects.setState, loose, "bogus"), "setState should still reject an unknown state on an unattached button")
+loose:Destroy()
+
+-- The real path: a controller selects a button, then the menu is destroyed under it. Destroying the button fires
+-- SelectionLost into setState after its PopScale / PopStroke are gone, which must not log an error.
+local errors = {}
+local connection = LogService.MessageOut:Connect(function(message, messageType)
+	if messageType == Enum.MessageType.MessageError then
+		table.insert(errors, message)
+	end
+end)
+local gui = Instance.new("ScreenGui")
+gui.Name = "ButtonEffectsTestGui"
+gui.Parent = playerGui
+local doomed = Instance.new("TextButton")
+doomed.Selectable = true
+doomed.Size = UDim2.fromOffset(40, 40)
+doomed.Parent = gui
+ButtonEffects.attach(doomed)
+GuiService.SelectedObject = doomed
+task.wait(0.2)
+assert(GuiService.SelectedObject == doomed, "the test button should be the selected object")
+gui:Destroy()
+task.wait(0.3)
+connection:Disconnect()
+assert(#errors == 0, "destroying a selected button logged an error: " .. tostring(errors[1]))
+assert(GuiService.SelectedObject == nil or GuiService.SelectedObject ~= doomed, "the destroyed button should not stay selected")
 
 return "PASS"

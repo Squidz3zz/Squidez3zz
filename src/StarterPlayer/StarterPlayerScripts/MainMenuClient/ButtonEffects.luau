@@ -5,8 +5,9 @@
 -- is, not on a press, and not when the hover comes back after a press while the cursor is still over it. The menu uses it
 -- for the hover sound (ButtonSounds.hover).
 -- setState(button, state) is the only place tweens happen: events call it, and so do the tests. It finds
--- PopScale/PopStroke on the button itself, so it works on any attached button. The only thing it remembers is whether
--- a button is idle (and its onHover), which is what turns "hover" into a hover sound once and not on every event.
+-- PopScale/PopStroke on the button itself, so it works on any attached button, and does nothing (no error) on a button
+-- that is not attached. The only thing it remembers is whether a button is idle (and its onHover), which is what turns
+-- "hover" into a hover sound once and not on every event.
 local TweenService = game:GetService("TweenService")
 
 local TWEEN_INFO = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -29,7 +30,11 @@ function ButtonEffects.setState(button, state)
 	assert(target, "ButtonEffects.setState: unknown state " .. tostring(state))
 	local popScale = button:FindFirstChild("PopScale")
 	local popStroke = button:FindFirstChild("PopStroke")
-	assert(popScale and popStroke, "ButtonEffects.setState: " .. button:GetFullName() .. " is not attached")
+	if not (popScale and popStroke) then
+		-- Not attached (or its menu is gone): nothing to tween. A selection can still be lost while the menu is destroyed (a
+		-- controller D-pad press during Play's fade selects a button, then root:Destroy() fires SelectionLost), so this is quiet.
+		return
+	end
 
 	-- Playing a tween cancels any tween already running on the same property, so quick state changes never fight.
 	TweenService:Create(popScale, TWEEN_INFO, { Scale = target.scale }):Play()
