@@ -2,6 +2,9 @@
 -- and hands over to the menu (MainMenuClient waits for it before it shows anything).
 -- It lives in ReplicatedFirst so it runs before the rest of the game has replicated, and it builds its UI in code
 -- (a template in ReplicatedStorage would not have arrived yet). Title, sound ids, tips and timings: ReplicatedFirst.MenuAssets.
+-- Its look (backdrop, edges, title font / colour / outline, spinner, tip, and the hazard stripe when the theme has one) is the
+-- active theme, MenuAssets.theme(). The Factory look is built in here as the defaults: a theme that is missing or broken (or a
+-- key of the wrong kind) leaves them, and never stops the loading screen.
 --
 -- What it does:
 --   1. Builds the ScreenGui "LoadingScreen" (above every menu gui), parents it, then removes Roblox's own loading screen.
@@ -19,11 +22,14 @@
 --   LoadingDone          boolean  false while loading, true once it has faded to black (the menu may open now)
 --   LoadingShownAt       number   os.clock() when the gui was shown
 --   LoadingDoneAt        number   os.clock() when LoadingDone was set
---   LoadingParts         string   the parts it built, e.g. "Title,Spinner,Tip" (the gui is gone before a test can look)
+--   LoadingParts         string   the parts it built, e.g. "Title,Spinner,Tip" ("HazardStripe" too when the theme has one;
+--                                 the gui is gone before a test can look)
 --   LoadingFailedSounds  string   comma-separated keys of the sounds Roblox refused to load, "" if none
 --   LoadingTipChanges    number   how many times the tip has changed
--- In Studio it also has a TestHook (BindableFunction) under this script: Invoke("state") -> { done, elapsed, failed }.
--- And in Studio only, the attribute LoadingTestAvatarId on this script makes it wait for a different menu avatar (a test seam).
+-- In Studio it also has a TestHook (BindableFunction) under this script: Invoke("state") -> { done, elapsed, failed }, and
+-- Invoke("look") -> the colours, fonts and stripe the gui was built with (read off the gui as it is built).
+-- And in Studio only, the attribute LoadingTestAvatarId on this script makes it wait for a different menu avatar, and
+-- LoadingTestNoTheme = true makes it ignore MenuAssets.theme() (both are test seams).
 --
 -- UI names other code depends on (tests look for them): Title, Spinner, Tip. Restyle anything else freely.
 local ContentProvider = game:GetService("ContentProvider")
@@ -39,14 +45,40 @@ local ASSETS_MODULE_TIMEOUT = 2
 local POLL = 0.05
 local SPINNER_DEGREES_PER_SECOND = 220
 
--- Factory look, the same as the menu (see studio/build_main_menu_ui.luau).
-local AMBER = Color3.fromRGB(255, 150, 30)
-local BACKDROP_COLOR = Color3.fromRGB(16, 14, 12)
-local VIGNETTE_COLOR = Color3.fromRGB(12, 9, 6)
 local VIGNETTE_DEPTH = 0.18
-local TIP_COLOR = Color3.fromRGB(220, 208, 190)
+
+-- The hazard stripe (when the theme has hazardStripe): the same bar of tiles as MenuTheme builds on the menu (that module has
+-- not replicated yet when this script runs, so it cannot be required). A thin bar across the top, its height a fraction of the
+-- screen's; each tile is a square STRIPE_TILE bar heights on a side (RelativeYY) whose UIGradient has hard yellow / dark steps
+-- along its diagonal, so the diagonals of neighbouring tiles line up into one repeating stripe. The bar clips the extra tiles.
+local STRIPE_HEIGHT = 0.015
+local STRIPE_TILE = 4
+local STRIPE_TILES = 70
+local STRIPE_PERIODS = 4
+local STRIPE_STEP = 0.0001
+
+-- The look: the theme's keys (ReplicatedFirst.MenuAssets.theme()) that this screen uses. What is here is the Factory look, the
+-- same as the menu (see studio/build_main_menu_ui.luau and MenuAssets.Themes.Factory): the defaults, used if MenuAssets or its
+-- theme is missing or broken. readTheme overwrites them with the theme's values, key by key (a value of the wrong kind is
+-- ignored).
+local AMBER = Color3.fromRGB(255, 150, 30)
 local FONT = Font.fromEnum(Enum.Font.Oswald)
-local FONT_BOLD = Font.new(FONT.Family, Enum.FontWeight.Bold)
+local look = {
+	loadingBackdrop = Color3.fromRGB(16, 14, 12),
+	vignette = Color3.fromRGB(12, 9, 6),
+	vignetteTransparency = 0.15,
+	titleText = Color3.fromRGB(255, 255, 255),
+	titleFont = Font.new(FONT.Family, Enum.FontWeight.Bold),
+	titleStroke = AMBER,
+	titleStrokeTransparency = 0,
+	titleStrokeThickness = 2,
+	spinner = AMBER,
+	textMuted = Color3.fromRGB(220, 208, 190),
+	bodyFont = FONT,
+	hazardStripe = false,
+	hazardYellow = Color3.fromRGB(242, 193, 46),
+	hazardDark = Color3.fromRGB(29, 37, 41),
+}
 
 -- Defaults, used only if ReplicatedFirst.MenuAssets is missing or broken.
 local titleText = "A Regular Experiment"
@@ -74,10 +106,34 @@ local shownAt = 0
 local finishing = false
 local failedKeys = {}
 
+-- Copies the theme's values over `look`, key by key. A missing or broken theme leaves the Factory defaults above; it never
+-- throws (and never stops the rest of readConfig).
+local function readTheme(assets)
+	-- Studio-only test seam: the attribute LoadingTestNoTheme on this script makes the loader behave as if the theme were
+	-- missing, so tests/menu_theme.client.luau case LF can see the Factory defaults.
+	if RunService:IsStudio() and script:GetAttribute("LoadingTestNoTheme") == true then
+		return
+	end
+	local ok, theme = pcall(function()
+		return assets.theme()
+	end)
+	if not ok or type(theme) ~= "table" then
+		warn("LoadingScreen: could not read MenuAssets.theme(), using the Factory look: " .. tostring(theme))
+		return
+	end
+	for key, default in look do
+		local value = theme[key]
+		if typeof(value) == typeof(default) then
+			look[key] = value
+		end
+	end
+end
+
 local function readConfig()
 	local module = ReplicatedFirst:WaitForChild("MenuAssets", ASSETS_MODULE_TIMEOUT)
 	assert(module, "ReplicatedFirst.MenuAssets is missing")
 	local assets = require(module)
+	readTheme(assets)
 	if type(assets.GAME_TITLE) == "string" and assets.GAME_TITLE ~= "" then
 		titleText = assets.GAME_TITLE
 	end
@@ -120,8 +176,55 @@ local function label(props, parent)
 	props.TextColor3 = props.TextColor3 or Color3.new(1, 1, 1)
 	props.TextScaled = true
 	props.TextWrapped = true
-	props.FontFace = props.FontFace or FONT
+	props.FontFace = props.FontFace or look.bodyFont
 	return make("TextLabel", props, parent)
+end
+
+-- The yellow / dark ColorSequence of one stripe tile: STRIPE_PERIODS periods, each half yellow and half dark, hard steps.
+local function stripeColors(yellow, dark)
+	local points = {}
+	local length = 1 / STRIPE_PERIODS
+	for period = 0, STRIPE_PERIODS - 1 do
+		local start = period * length
+		table.insert(points, ColorSequenceKeypoint.new(start, yellow))
+		table.insert(points, ColorSequenceKeypoint.new(start + length / 2 - STRIPE_STEP, yellow))
+		table.insert(points, ColorSequenceKeypoint.new(start + length / 2, dark))
+		table.insert(points, ColorSequenceKeypoint.new(start + length - STRIPE_STEP, dark))
+	end
+	table.insert(points, ColorSequenceKeypoint.new(1, dark))
+	return ColorSequence.new(points)
+end
+
+-- The hazard stripe bar (detached). A CanvasGroup, so it clips its tiles and fades as one piece (see fadeToBlack / fadeOut).
+local function buildStripe(yellow, dark)
+	local bar = make("CanvasGroup", {
+		Name = "HazardStripe",
+		Position = UDim2.fromScale(0, 0),
+		Size = UDim2.fromScale(1, STRIPE_HEIGHT),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Active = false,
+		ZIndex = 2,
+	})
+	make("UIListLayout", {
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 0),
+	}, bar)
+	local colors = stripeColors(yellow, dark)
+	for index = 1, STRIPE_TILES do
+		local tile = make("Frame", {
+			Name = "Tile",
+			LayoutOrder = index,
+			SizeConstraint = Enum.SizeConstraint.RelativeYY,
+			Size = UDim2.fromScale(STRIPE_TILE, STRIPE_TILE),
+			BackgroundColor3 = Color3.new(1, 1, 1),
+			BorderSizePixel = 0,
+			Active = false,
+		}, bar)
+		make("UIGradient", { Rotation = 45, Color = colors }, tile)
+	end
+	return bar
 end
 
 -- Builds the whole gui, detached. Scale only (the UIStroke thickness is the one exception), so it fits every screen. The
@@ -141,13 +244,14 @@ local function build(firstTip)
 	make("Frame", {
 		Name = "Backdrop",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = BACKDROP_COLOR,
+		BackgroundColor3 = look.loadingBackdrop,
 		BorderSizePixel = 0,
 		Active = true,
 		ZIndex = 1,
 	}, built)
 
-	-- Dark edges on all four sides, each fading with a UIGradient from 0.15 at the screen border to 1 on the inside.
+	-- Shaded edges on all four sides, each fading with a UIGradient from the theme's outer transparency (0.15 in Factory) at the
+	-- screen border to 1 on the inside.
 	local vignette = make("Frame", {
 		Name = "Vignette",
 		Size = UDim2.fromScale(1, 1),
@@ -161,13 +265,13 @@ local function build(firstTip)
 			AnchorPoint = anchor,
 			Position = position,
 			Size = size,
-			BackgroundColor3 = VIGNETTE_COLOR,
+			BackgroundColor3 = look.vignette,
 			BorderSizePixel = 0,
 		}, vignette)
 		make("UIGradient", {
 			Rotation = rotation,
 			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.15),
+				NumberSequenceKeypoint.new(0, math.clamp(look.vignetteTransparency, 0, 1)),
 				NumberSequenceKeypoint.new(1, 1),
 			}),
 		}, frame)
@@ -176,6 +280,11 @@ local function build(firstTip)
 	edge("Bottom", Vector2.new(0, 1), UDim2.fromScale(0, 1), UDim2.fromScale(1, VIGNETTE_DEPTH), 270)
 	edge("Left", Vector2.new(0, 0), UDim2.fromScale(0, 0), UDim2.fromScale(VIGNETTE_DEPTH, 1), 0)
 	edge("Right", Vector2.new(1, 0), UDim2.fromScale(1, 0), UDim2.fromScale(VIGNETTE_DEPTH, 1), 180)
+
+	-- The thin hazard stripe across the top, when the theme has one (created after the vignette, so it is drawn over it).
+	if look.hazardStripe == true then
+		buildStripe(look.hazardYellow, look.hazardDark).Parent = built
+	end
 
 	local content = make("Frame", {
 		Name = "Content",
@@ -189,15 +298,22 @@ local function build(firstTip)
 	local title = label({
 		Name = "Title",
 		Text = titleText,
-		FontFace = FONT_BOLD,
+		FontFace = look.titleFont,
+		TextColor3 = look.titleText,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.26),
 		Size = UDim2.fromScale(0.9, 0.26),
 		ZIndex = 3,
 	}, content)
-	make("UIStroke", { Name = "Trim", Color = AMBER, Thickness = 2 }, title)
+	make("UIStroke", {
+		Name = "Trim",
+		Color = look.titleStroke,
+		Thickness = look.titleStrokeThickness,
+		Transparency = look.titleStrokeTransparency,
+	}, title)
 
-	-- An amber ring with a gap (a UIGradient on the stroke hides the last 40% of it), turned by the RenderStepped loop.
+	-- A ring in the theme's spinner colour (amber in Factory) with a gap (a UIGradient on the stroke hides the last 40% of it),
+	-- turned by the RenderStepped loop.
 	local spinner = make("Frame", {
 		Name = "Spinner",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -209,7 +325,7 @@ local function build(firstTip)
 	}, content)
 	make("UIAspectRatioConstraint", { AspectRatio = 1 }, spinner)
 	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, spinner)
-	local ring = make("UIStroke", { Name = "Ring", Color = AMBER, Thickness = 6 }, spinner)
+	local ring = make("UIStroke", { Name = "Ring", Color = look.spinner, Thickness = 6 }, spinner)
 	make("UIGradient", {
 		Transparency = NumberSequence.new({
 			NumberSequenceKeypoint.new(0, 0),
@@ -222,7 +338,7 @@ local function build(firstTip)
 	label({
 		Name = "Tip",
 		Text = string.upper(firstTip),
-		TextColor3 = TIP_COLOR,
+		TextColor3 = look.textMuted,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.9),
 		Size = UDim2.fromScale(1, 0.1),
@@ -303,6 +419,11 @@ local function fadeToBlack()
 	for _, edge in gui.Vignette:GetChildren() do
 		table.insert(entries, { edge, { BackgroundColor3 = black } })
 	end
+	-- The hazard stripe (a CanvasGroup) goes black with the rest: GroupColor3 multiplies its colours.
+	local stripe = gui:FindFirstChild("HazardStripe")
+	if stripe then
+		table.insert(entries, { stripe, { GroupColor3 = black } })
+	end
 	tweenAll(entries, FADE_TIME)
 end
 
@@ -311,6 +432,10 @@ local function fadeOut()
 	local entries = { { gui.Backdrop, { BackgroundTransparency = 1 } } }
 	for _, edge in gui.Vignette:GetChildren() do
 		table.insert(entries, { edge, { BackgroundTransparency = 1 } })
+	end
+	local stripe = gui:FindFirstChild("HazardStripe")
+	if stripe then
+		table.insert(entries, { stripe, { GroupTransparency = 1 } })
 	end
 	tweenAll(entries, FADE_TIME)
 end
@@ -338,8 +463,30 @@ local function run()
 		end
 	end
 
-	-- Studio-only test hook: Invoke("state") -> { done, elapsed, failed }.
+	-- Studio-only test hook: Invoke("state") -> { done, elapsed, failed }, Invoke("look") -> what the gui was built with.
 	if RunService:IsStudio() then
+		-- Read off the gui right now, before the fades change its colours: the gui is gone long before a test can look inside it.
+		local topEdge = gui.Vignette.Top
+		local titleLabel = gui.Content.Title
+		local lookSnapshot = {
+			backdrop = gui.Backdrop.BackgroundColor3,
+			vignette = topEdge.BackgroundColor3,
+			vignetteTransparency = topEdge.UIGradient.Transparency.Keypoints[1].Value,
+			titleColor = titleLabel.TextColor3,
+			titleFont = titleLabel.FontFace,
+			titleStroke = titleLabel.Trim.Color,
+			titleStrokeThickness = titleLabel.Trim.Thickness,
+			titleStrokeTransparency = titleLabel.Trim.Transparency,
+			spinner = gui.Content.Spinner.Ring.Color,
+			tipColor = gui.Content.Tip.TextColor3,
+			tipFont = gui.Content.Tip.FontFace,
+			hazardStripe = gui:FindFirstChild("HazardStripe") ~= nil,
+		}
+		local stripeGradient = gui:FindFirstChild("HazardStripe") and gui.HazardStripe:FindFirstChildWhichIsA("UIGradient", true)
+		if stripeGradient then
+			lookSnapshot.stripeYellow = stripeGradient.Color.Keypoints[1].Value
+			lookSnapshot.stripeDark = stripeGradient.Color.Keypoints[#stripeGradient.Color.Keypoints].Value
+		end
 		local hook = Instance.new("BindableFunction")
 		hook.Name = "TestHook"
 		hook.OnInvoke = function(action)
@@ -350,6 +497,8 @@ local function run()
 					elapsed = (type(doneAt) == "number" and doneAt or os.clock()) - shownAt,
 					failed = publishFailed(),
 				}
+			elseif action == "look" then
+				return lookSnapshot
 			end
 			error("TestHook: unknown action " .. tostring(action))
 		end
@@ -370,7 +519,7 @@ local function run()
 		ReplicatedFirst:RemoveDefaultLoadingScreen()
 	end)
 	local parts = {}
-	for _, name in { "Title", "Spinner", "Tip" } do
+	for _, name in { "Title", "Spinner", "Tip", "HazardStripe" } do
 		if gui:FindFirstChild(name, true) then
 			table.insert(parts, name)
 		end
