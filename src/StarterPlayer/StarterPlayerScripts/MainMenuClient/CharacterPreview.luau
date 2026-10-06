@@ -4,6 +4,7 @@
 -- show(viewport, source) returns the clone, or nil if the viewport was already destroyed.
 -- clonePosed and playIdle are the two halves of "a still copy of an avatar that idles": show uses them for the menu, and
 -- CreditsRoom uses them for the avatars standing in the Credits room (which do not wave).
+
 -- Seconds between the starts of two waves. The wave clip is 2 to 3 s long, so the avatar idles in between.
 local WAVE_INTERVAL = 6
 local CAMERA_FOV = 30

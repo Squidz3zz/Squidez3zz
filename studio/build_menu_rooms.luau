@@ -18,8 +18,10 @@ local DROP = Vector3.new(0, -200, 0)
 local VIEWER_OFFSET = -4.5 -- ViewerCreditStand sits this far along BackgroundForCredits' RightVector (camera's right)
 local TAN_HALF_FOV = math.tan(math.rad(70 / 2)) -- default Camera.FieldOfView (vertical)
 local NARROW = 4 / 3 -- narrowest landscape aspect the shots must fit horizontally
--- ViewerSpot, on the floor plan: this fraction of the way from CreditsCameraShot to PlayerCreditStand (about a third), then
--- this many studs to the side away from the developer (toward ViewerCreditStand), facing the developer's stand turned
+-- ViewerSpot, on the floor plan: SPOT_ALONG of the way from CreditsCameraShot to PlayerCreditStand, then SPOT_SIDE studs to
+-- the side away from the developer (toward ViewerCreditStand). The side step is not square to the camera-to-stand line, so
+-- it pulls the spot back along that line a little: 0.4 along plus the side step lands about 0.31 of the way (about a
+-- third), 2.9 studs off the line. It faces the developer's stand turned
 -- SPOT_TURN of the way toward the way the camera looks (0 = straight at the stand, 1 = the camera's own direction), so the
 -- camera sees the viewer's back and not its side. Tuned with screenshots, at 16:9 down to a phone in landscape (844x390):
 -- the viewer's head and shoulders fill the lower right of the Credits shot, seen from behind, without covering the

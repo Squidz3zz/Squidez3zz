@@ -875,8 +875,8 @@ elseif CASE == "M-E" then
 	assert(hook:Invoke("play") == true, "play should start the Play flow")
 	assert(creditsButton:IsDescendantOf(playerGui), "the menu should still be there for the fade out")
 	GuiService.SelectedObject = creditsButton
-	-- A hover sound would start within a frame or two. Short, and the selection is cleared again before the menu is destroyed
-	-- (a button destroyed while selected makes ButtonEffects' SelectionLost handler throw on its already removed pop).
+	-- A hover sound would start within a frame or two, so a short wait is enough. The selection is cleared again before the
+	-- menu is destroyed.
 	task.wait(0.25)
 	assert(starts("Hover") == 0, "no hover sound should play once Play was pressed, it made " .. describeStarts("Hover"))
 	GuiService.SelectedObject = nil
