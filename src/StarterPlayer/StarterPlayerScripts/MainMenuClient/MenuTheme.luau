@@ -88,8 +88,23 @@ local function copy(source)
 	return result
 end
 
-function MenuTheme.get()
+function MenuTheme.merge(result)
 	local theme = copy(MenuTheme.FACTORY)
+	if type(result) ~= "table" then
+		return theme
+	end
+	for key, value in result do
+		-- A value of the right kind replaces Factory's (panelBorder has none, and is a colour); a key FACTORY does not have is
+		-- kept, since MenuAssets.theme() has already checked it.
+		local want = if key == "panelBorder" then "Color3" else typeof(MenuTheme.FACTORY[key])
+		if want == "nil" or typeof(value) == want then
+			theme[key] = value
+		end
+	end
+	return theme
+end
+
+function MenuTheme.get()
 	local module = ReplicatedFirst:FindFirstChild("MenuAssets")
 	local ok, result = false, nil
 	if module then
@@ -99,16 +114,9 @@ function MenuTheme.get()
 	end
 	if not ok or type(result) ~= "table" then
 		warnOnce("MenuTheme: could not read MenuAssets.theme() (" .. tostring(result) .. "); using the built-in Factory look")
-		return theme
+		return copy(MenuTheme.FACTORY)
 	end
-	for key, value in result do
-		-- Only a value of the right kind replaces Factory's (panelBorder has none, and is a colour).
-		local want = if key == "panelBorder" then "Color3" else typeof(MenuTheme.FACTORY[key])
-		if typeof(value) == want then
-			theme[key] = value
-		end
-	end
-	return theme
+	return MenuTheme.merge(result)
 end
 
 -- A theme value if it is of the right kind, else nil (so a theme with a key missing paints nothing there).

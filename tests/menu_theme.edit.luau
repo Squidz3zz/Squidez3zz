@@ -10,8 +10,9 @@
 --   4  a preset that misses keys falls back to Factory key by key, and a value of the wrong type is ignored.
 --   5  theme() hands out a fresh table every time.
 --   6  MenuTheme's built-in Factory fallback equals MenuAssets.Themes.Factory, and get() equals theme().
---   7  applyToMenu recolours clones of the real ScreenGuis (never the Title's words), is safe to repeat, skips what is missing
---      and builds the hazard stripe only when the theme asks for it.
+--   7  applyToMenu recolours clones of the real ScreenGuis (never the Title's words), is safe to repeat, skips what is missing,
+--      sets the buttons' hover shading and builds the hazard stripe only when the theme asks for it.
+--   8  with Themes.Factory missing, the chosen preset is taken as it is, with exactly one warning (not one per key).
 local LogService = game:GetService("LogService")
 local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -275,11 +276,27 @@ do
 		expect("MenuTheme.FACTORY." .. key, MenuTheme.FACTORY[key], assets.Themes.Factory[key])
 	end
 	assert(MenuTheme.FACTORY.panelBorder == assets.Themes.Factory.panelBorder, "MenuTheme.FACTORY.panelBorder should match Factory")
-	local live = require(assetsScript:Clone()).theme()
+	-- get() requires the real MenuAssets and is merge() of its theme(). Compare it with exactly that, from the same module (not
+	-- a clone): a require cache that outlived an edit in this Studio session would otherwise make the two differ without
+	-- anything being wrong.
+	local live = MenuTheme.merge(require(assetsScript).theme())
 	local viaMenuTheme = MenuTheme.get()
 	for key in TYPES do
 		expect("MenuTheme.get()." .. key, viaMenuTheme[key], live[key])
 	end
+
+	-- merge keeps a key MenuAssets has and FACTORY lacks (a new key added only there is not dropped), ignores a value of the
+	-- wrong kind, and leaves everything else as Factory.
+	assert(type(MenuTheme.merge) == "function", "MenuTheme.merge missing")
+	local merged = MenuTheme.merge({ brandNewKey = 42, accent = "red", text = rgb(7, 8, 9), panelBorder = rgb(4, 5, 6) })
+	assert(merged.brandNewKey == 42, "merge should keep a key FACTORY does not have")
+	expect("merge: a wrong-typed accent is ignored", merged.accent, MenuTheme.FACTORY.accent)
+	expect("merge: a good value is kept", merged.text, rgb(7, 8, 9))
+	expect("merge: panelBorder is accepted", merged.panelBorder, rgb(4, 5, 6))
+	expect("merge: untouched keys stay Factory", merged.panel, MenuTheme.FACTORY.panel)
+	local fromNothing = MenuTheme.merge(nil)
+	expect("merge(nil) is the Factory copy", fromNothing.accent, MenuTheme.FACTORY.accent)
+	assert(fromNothing ~= MenuTheme.FACTORY, "merge must return a copy, not FACTORY itself")
 end
 
 -- 7  applyToMenu on clones of the real ScreenGuis --------------------------------------------------------------------
@@ -446,6 +463,43 @@ do
 	assert(countNamed(plainVignette, "HazardStripe") == 0 and countNamed(plain, "PanelBorder") == 0, "an empty theme builds nothing")
 	for _, gui in { menu, vignetteGui, plain, plainVignette } do
 		gui:Destroy()
+	end
+end
+
+-- 8  Themes.Factory renamed or deleted: the chosen preset is still used, with one warning ---------------------------------------
+do
+	local intact = freshAssets()
+	intact.THEME = "SterileBright"
+	local wanted = intact.theme()
+
+	local assets = freshAssets()
+	assets.Themes.Factory = nil
+	assets.THEME = "SterileBright"
+	local theme, warnings = withWarnings(function()
+		local first = assets.theme()
+		assets.theme()
+		return first
+	end)
+	for key in TYPES do
+		expect("no Factory: " .. key, theme[key], wanted[key])
+	end
+	expect("no Factory: panelBorder", theme.panelBorder, wanted.panelBorder)
+	assert(#warnings == 1, "a missing Factory should warn exactly once (not once per key), it warned " .. #warnings .. " times: " .. table.concat(warnings, " | "))
+	assert(string.find(warnings[1], "Factory", 1, true), "the warning should name Factory: " .. warnings[1])
+
+	-- MenuTheme fills what a preset leaves out from its built-in Factory copy, so a half-written preset still has every key.
+	local renamed = freshAssets()
+	renamed.Themes.TheOldFactory = renamed.Themes.Factory
+	renamed.Themes.Factory = nil
+	renamed.Themes.Half = { accent = rgb(1, 2, 3) }
+	renamed.THEME = "Half"
+	local half = withWarnings(function()
+		return renamed.theme()
+	end)
+	expect("no Factory, half preset: accent", half.accent, rgb(1, 2, 3))
+	local merged = MenuTheme.merge(half)
+	for key in TYPES do
+		assert(merged[key] ~= nil, "no Factory, half preset: MenuTheme.merge should supply " .. key)
 	end
 end
 

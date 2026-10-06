@@ -195,8 +195,11 @@ end
 function MenuAssets.theme()
 	local presets = if type(MenuAssets.Themes) == "table" then MenuAssets.Themes else {}
 	local factory = presets.Factory
-	if type(factory) ~= "table" then
-		warnOnce("noFactory", "MenuAssets: Themes.Factory is missing; the menu uses its built-in Factory look")
+	-- Factory renamed or deleted: the chosen preset is taken as it is (there is nothing to check its values against), and the
+	-- keys it leaves out are filled from the menu's built-in Factory look by MenuTheme and the loading screen.
+	local factoryMissing = type(factory) ~= "table"
+	if factoryMissing then
+		warnOnce("noFactory", "MenuAssets: Themes.Factory is missing (never rename or delete it); using the chosen preset as it is, and the built-in Factory look for what it leaves out")
 		factory = {}
 	end
 	local theme = {}
@@ -214,7 +217,7 @@ function MenuAssets.theme()
 		return theme
 	end
 	for key, value in chosen do
-		local want = if key == "panelBorder" then "Color3" else typeof(factory[key])
+		local want = if factoryMissing then typeof(value) elseif key == "panelBorder" then "Color3" else typeof(factory[key])
 		if want == "nil" then
 			warnOnce(name .. "." .. tostring(key), "MenuAssets: theme '" .. name .. "' has an unknown key '" .. tostring(key) .. "' (ignored)")
 		elseif typeof(value) == want then
