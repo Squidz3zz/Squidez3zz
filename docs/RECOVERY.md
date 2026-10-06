@@ -51,7 +51,7 @@ It builds the three ScreenGuis again and adds `SoundService.Music` and `SoundSer
 
 ### c) Put the scripts back
 
-There are fourteen scripts. The file names are in `src/`.
+There are fifteen scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -77,12 +77,13 @@ The file `default.project.json` already says where everything goes. It only touc
 | `MenuAudio` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuAudio.luau` |
 | `MenuCamera` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuCamera.luau` |
 | `MenuSettings` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/MenuSettings.luau` |
+| `RoomLighting` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/RoomLighting.luau` |
 | `SceneDirector` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SceneDirector.luau` |
 | `SettingsBoard` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SettingsBoard.luau` |
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 
-The ten ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
-`LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `MenuAssets` is the one place to change the
+The eleven ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
+`LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows (so the room is dark and amber from its first frame, not after a few seconds) and puts it back on the way out and on Play. `MenuAssets` is the one place to change the
 menu's sound ids (a plain number works too), the loading screen's title (`GAME_TITLE`) and tips, and its timings. The main
 menu's own title is a different thing: it is the `Title` label inside `ReplicatedStorage.MainMenu`, which you edit in Studio. The names must match exactly.
 

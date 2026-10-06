@@ -136,6 +136,29 @@ The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() 
   - `MenuAudio` (music);
   - `ButtonSounds` (SFX).
 
+### Room lighting
+
+**Symptom.** On every cut into Settings or Credits the room first showed the game's regular outdoor lighting, and settled into its dark, amber-lit factory look a few seconds later.
+
+**Cause.** The place uses unified lighting (the `Lighting` attribute `RBX_LightingTechnologyUnifiedMigration` is `true`), which computes occlusion and indirect light progressively, in a grid around the camera. The rooms are Persistent models about 200 studs under the map, and each cut moves the camera about 265 studs from the menu shot, outside the region already computed. Until the grid catches up, the enclosed room is lit as if it were outdoors: by the sun, and by the sky's ambient and environment light. (An earlier guess, that `Camera.Focus` stays behind at the old place, was tested and ruled out: Focus stays about 20 studs in front of the camera on every frame.)
+
+**Fix.** A client-local profile, `RoomLighting` (ModuleScript under MainMenuClient), removes the outdoor contributions while a room shows, so the unsettled first frames already match the settled look:
+
+| `Lighting` property | While a room shows |
+|---|---|
+| `Brightness` | `0` |
+| `OutdoorAmbient` | `Color3.new(0, 0, 0)` |
+| `EnvironmentDiffuseScale` | `0` |
+| `EnvironmentSpecularScale` | `0` |
+
+- `Ambient`, `ClockTime`, the Sky, the Atmosphere and the screen effects are unchanged.
+- **`apply()`** saves the current values as attributes on `Lighting`, named `MenuRoomLighting_<Property>`, then sets the profile. It is non-yielding and idempotent: existing attributes are never overwritten, so the saved originals are always the real ones. A property that cannot be read or written from a LocalScript is skipped (pcall'd), with a single warning.
+- **`restore()`** writes the saved originals back and removes the attributes. It is non-yielding and idempotent, and does nothing if nothing was saved.
+- **Wiring (init).** The Settings and Credits scene hooks call `apply()` at the start of `enter` (behind the black Fader, after the camera cut, so the profile is in place before the fade-in) and `restore()` at the start of `exit`. `runPlay` also calls `restore()` right after `SceneDirector.stop()` (guarded, and with no yield), so gameplay gets the normal lighting even if a detached exit hook has not run yet. The I-1 fallback needs nothing new: only the room hooks ever apply the profile.
+- **Client-only.** The profile never reaches the server or other players, and never touches gameplay.
+- **Test.** `tests/room_lighting.client.luau`: A (room and back, for Settings and Credits), B (Play from a room), C (unit test on a separate copy of the module).
+- **Not covered by the tests.** The first second after a cut cannot be captured by the screenshot tool, so the transient itself is checked by eye. The tests and screenshots cover that the profile is on in the rooms, that it is gone on the Menu and after Play, and that the settled look is unchanged.
+
 ## Music: `MenuAudio` (ModuleScript under MainMenuClient)
 
 - **`start()`**
@@ -197,6 +220,7 @@ The loading screen also leaves `LoadingShownAt` and `LoadingDoneAt` (os.clock() 
 | `SettingsBoard` | ModuleScript | under MainMenuClient | Switch rows play hover and confirm |
 | `CreditsRoom` | ModuleScript | under MainMenuClient | Viewer on `ViewerSpot`, label YOU |
 | `CharacterPreview` | ModuleScript | under MainMenuClient | Repeating wave |
+| `RoomLighting` | ModuleScript | under MainMenuClient | New: outdoor light off while a room shows, restored on exit and on Play |
 | `MainMenuClient` (init) | LocalScript | StarterPlayerScripts | Waits for LoadingDone; wires audio and SFX; stops music on Play |
 | `build_menu_rooms.luau` | build script | studio/ | Adds ViewerSpot |
 | `default.project.json` | Rojo | repo root | Maps `src/ReplicatedFirst` |
