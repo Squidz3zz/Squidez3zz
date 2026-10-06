@@ -174,9 +174,10 @@ local function build(assetsModule)
 
 	local made = {}
 	for _, name in TRACKS do
-		local id = assets.Sounds[name]
-		if type(id) ~= "string" or id == "" then
-			warn(("MenuAudio: MenuAssets.Sounds.%s is not set; that track is off"):format(name))
+		-- A number or a bare digit string becomes rbxassetid://<digits>; nil if there is no usable id.
+		local id = assets.soundId(assets.Sounds[name])
+		if not id then
+			warn(("MenuAudio: MenuAssets.Sounds.%s is not set (or is not a sound id); that track is off"):format(name))
 			failed[name] = true
 		else
 			local sound = findSound(name)

@@ -58,9 +58,10 @@ local function build(assetsModule)
 
 	local made = {}
 	for key, name in SOUND_NAMES do
-		local id = assets.Sounds[key]
-		if type(id) ~= "string" or id == "" then
-			warn(("ButtonSounds: MenuAssets.Sounds.%s is not set; that sound is off"):format(key))
+		-- A number or a bare digit string becomes rbxassetid://<digits>; nil if there is no usable id.
+		local id = assets.soundId(assets.Sounds[key])
+		if not id then
+			warn(("ButtonSounds: MenuAssets.Sounds.%s is not set (or is not a sound id); that sound is off"):format(key))
 		else
 			local sound = SoundService:FindFirstChild(name)
 			if not sound then

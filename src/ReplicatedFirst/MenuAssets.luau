@@ -2,9 +2,10 @@
 -- It lives in ReplicatedFirst so the loading screen can read it before anything else has replicated.
 -- Used by LoadingScreen (this folder) and, later, by the menu's music and button sounds.
 --
--- Sounds: the keys are fixed (the menu looks them up by name); change only the asset ids. A sound that Roblox refuses to
--- load (wrong id, or the asset is not yours / not public) is skipped with a warning, and its key is listed in the
--- PlayerGui attribute LoadingFailedSounds.
+-- Sounds: the keys are fixed (the menu looks them up by name); change only the asset ids. An id can be typed as a plain
+-- number (123456) or in quotes ("123456" or "rbxassetid://123456"): the menu turns all three into rbxassetid://123456
+-- (soundId below). A sound that Roblox refuses to load (wrong id, or the asset is not yours / not public) is skipped with a
+-- warning, and its key is listed in the PlayerGui attribute LoadingFailedSounds.
 --   Hover          pointer or gamepad selection enters a menu button
 --   Confirm        clicking a button (except PLAY)
 --   PlaySelect     clicking PLAY
@@ -20,7 +21,7 @@
 -- TIP_SECONDS: how long each tip is shown.
 -- MENU_AVATAR_WAIT: how long the loading screen waits for your avatar (the one the menu shows on the right). The menu does not
 -- need it: if it is not ready in time the loading screen hands over anyway, and the avatar appears as soon as it is ready.
-return {
+local MenuAssets = {
 	Sounds = {
 		Hover = "rbxassetid://113223325628963",
 		Confirm = "rbxassetid://111174530730534",
@@ -46,3 +47,29 @@ return {
 	TIP_SECONDS = 4,
 	MENU_AVATAR_WAIT = 5,
 }
+
+-- The one place a typed sound id becomes what a Sound's SoundId needs: 123456 and "123456" both give "rbxassetid://123456".
+-- Any other text is kept as it is ("rbxassetid://123456" already is one). Returns nil for no usable id: nothing, empty or blank
+-- text, a number that is not a whole number above 0, or anything that is not a number or text. ButtonSounds, MenuAudio and
+-- LoadingScreen all read MenuAssets.Sounds through this.
+function MenuAssets.soundId(value)
+	if type(value) == "number" then
+		if value >= 1 and value == math.floor(value) and value < 2 ^ 53 then
+			return string.format("rbxassetid://%d", value)
+		end
+		return nil
+	end
+	if type(value) ~= "string" then
+		return nil
+	end
+	local text = string.match(value, "^%s*(.-)%s*$")
+	if text == "" then
+		return nil
+	end
+	if string.match(text, "^%d+$") then
+		return "rbxassetid://" .. text
+	end
+	return text
+end
+
+return MenuAssets

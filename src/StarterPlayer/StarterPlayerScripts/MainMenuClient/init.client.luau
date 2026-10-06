@@ -35,9 +35,11 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local FADE_TIME = 0.4
--- The loading screen (ReplicatedFirst.LoadingScreen) hands over after LOADING_MAX_SECONDS at the latest (the value in
--- ReplicatedFirst.MenuAssets; this one is only used if that module cannot be read), so the menu waits that long, and a
--- few seconds more, for it.
+-- The loading screen (ReplicatedFirst.LoadingScreen) hands over after LOADING_MAX_SECONDS at the latest, or after
+-- LOADING_MIN_SECONDS if that is longer (it never ends before its minimum). These are the values in
+-- ReplicatedFirst.MenuAssets; the ones here are only used if that module cannot be read. The menu waits for the longer of
+-- the two, and a few seconds more, for it.
+local LOADING_MIN_SECONDS = 2
 local LOADING_MAX_SECONDS = 20
 local LOADING_WAIT_EXTRA = 5
 -- How long the loading screen has to remove itself once the menu is open (its fade out takes 0.4s) before this script
@@ -273,15 +275,21 @@ local function waitForLoading()
 	if playerGui:GetAttribute("LoadingDone") == true then
 		return
 	end
-	local limit = LOADING_MAX_SECONDS
+	local minimum, limit = LOADING_MIN_SECONDS, LOADING_MAX_SECONDS
 	local assetsModule = ReplicatedFirst:FindFirstChild("MenuAssets")
 	if assetsModule then
 		local ok, assets = pcall(require, assetsModule)
-		if ok and type(assets) == "table" and type(assets.LOADING_MAX_SECONDS) == "number" then
-			limit = assets.LOADING_MAX_SECONDS
+		if ok and type(assets) == "table" then
+			if type(assets.LOADING_MIN_SECONDS) == "number" then
+				minimum = assets.LOADING_MIN_SECONDS
+			end
+			if type(assets.LOADING_MAX_SECONDS) == "number" then
+				limit = assets.LOADING_MAX_SECONDS
+			end
 		end
 	end
-	limit += LOADING_WAIT_EXTRA
+	-- A MIN set above MAX still makes the loading screen stay MIN seconds, so the menu must not give up before that.
+	limit = math.max(minimum, limit) + LOADING_WAIT_EXTRA
 
 	local thread = coroutine.running()
 	local connection, timer

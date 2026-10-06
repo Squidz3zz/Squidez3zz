@@ -691,7 +691,7 @@ elseif CASE == "M-A" then
 	assert(menuMusic, "MenuMusic should be playing (Volume > 0.9) within 2s of the menu opening: " .. describeMusic())
 	assert(menuMusic.SoundGroup == musicGroup, "MenuMusic should be in SoundService.Music, it is in " .. tostring(menuMusic.SoundGroup))
 	assert(menuMusic.Looped, "MenuMusic should loop")
-	assert(menuMusic.SoundId == MenuAssets.Sounds.MenuMusic, "MenuMusic should use MenuAssets.Sounds.MenuMusic, it uses " .. menuMusic.SoundId)
+	assert(menuMusic.SoundId == MenuAssets.soundId(MenuAssets.Sounds.MenuMusic), "MenuMusic should use MenuAssets.Sounds.MenuMusic, it uses " .. menuMusic.SoundId)
 
 	-- The other two exist, set up the same way, and are not playing.
 	for _, scene in { "Settings", "Credits" } do
@@ -699,7 +699,7 @@ elseif CASE == "M-A" then
 		assert(not sound.Playing, sound.Name .. " should not play on the main menu: " .. describeMusic())
 		assert(sound.SoundGroup == musicGroup, sound.Name .. " should be in SoundService.Music, it is in " .. tostring(sound.SoundGroup))
 		assert(sound.Looped, sound.Name .. " should loop")
-		assert(sound.SoundId == MenuAssets.Sounds[sound.Name], sound.Name .. " should use MenuAssets.Sounds." .. sound.Name .. ", it uses " .. sound.SoundId)
+		assert(sound.SoundId == MenuAssets.soundId(MenuAssets.Sounds[sound.Name]), sound.Name .. " should use MenuAssets.Sounds." .. sound.Name .. ", it uses " .. sound.SoundId)
 		assert(sound.Volume < 0.01, sound.Name .. " should be at Volume 0 until its scene, it is at " .. sound.Volume)
 	end
 	assert(#audibleTracks() == 1, "exactly one track should be audible on the main menu: " .. describeMusic())

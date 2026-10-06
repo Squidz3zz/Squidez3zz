@@ -56,6 +56,11 @@ local tipSeconds = 4
 local avatarWait = 5
 local tips = { "LOADING..." }
 local sounds = {}
+-- MenuAssets.soundId (a typed id: a number, a digit string or rbxassetid://... -> the SoundId text, or nil), set by readConfig.
+-- Without it no sound id is usable, and each one is reported as failed.
+local soundIdOf = function()
+	return nil
+end
 
 local player = Players.LocalPlayer
 if not player then
@@ -90,6 +95,9 @@ local function readConfig()
 	end
 	if type(assets.Sounds) == "table" then
 		sounds = assets.Sounds
+	end
+	if type(assets.soundId) == "function" then
+		soundIdOf = assets.soundId
 	end
 	maxSeconds = math.max(maxSeconds, minSeconds)
 end
@@ -249,8 +257,9 @@ local function preloadSounds()
 	end
 	local keyById = {}
 	local instances = {}
-	for key, soundId in sounds do
-		if idNumber(soundId) then
+	for key, typed in sounds do
+		local soundId = soundIdOf(typed)
+		if soundId and idNumber(soundId) then
 			local sound = make("Sound", { Name = key, SoundId = soundId }, gui)
 			table.insert(instances, sound)
 			keyById[idNumber(soundId)] = key
