@@ -6,7 +6,7 @@
 --
 -- The avatars are client-only copies in room.CreditAvatars (a Folder this module makes), named "Developer" and "Viewer",
 -- each carrying its name as the attribute DisplayName. They are made once and reused on later visits. Without a ViewerSpot
--- the viewer is skipped with a warning and the developer still shows.
+-- the viewer is skipped with a warning (one per room, however often place() retries) and the developer still shows.
 --
 --   enter(room, sources)   shows the room: makes the folder, places the copies of sources.Developer and sources.Viewer
 --                          (Models, either may be nil) that are not placed yet, and starts hover tracking
@@ -51,6 +51,22 @@ local CreditsRoom = {}
 
 -- room -> { connections } between enter and exit / dispose. Weak, so a room that is destroyed with no exit is forgotten.
 local active = setmetatable({}, { __mode = "k" })
+-- room -> { [warning key] = true }: what has been warned about already. place() retries a missing avatar every poll, so
+-- without this a missing ViewerSpot would warn about 80 times per visit. Weak like `active`.
+local warned = setmetatable({}, { __mode = "k" })
+
+-- Warns once per room and key (a slot and what is wrong with it); later calls with the same key say nothing.
+local function warnOnce(room, key, message)
+	local seen = warned[room]
+	if not seen then
+		seen = {}
+		warned[room] = seen
+	end
+	if not seen[key] then
+		seen[key] = true
+		warn(message)
+	end
+end
 
 local function stopTracking(room)
 	local state = active[room]
@@ -130,8 +146,9 @@ local function placeAvatar(folder, name, source, position, forward)
 	CharacterPreview.playIdle(clone, idleId)
 end
 
--- Places each given source that is not placed yet. A missing stand or spot, or a broken source, is a warning and an
--- empty place (the viewer is skipped and the developer still shows), never an error.
+-- Places each given source that is not placed yet. A missing stand or spot, or a broken source, is a warning (once per room
+-- and slot, however often place() retries) and an empty place (the viewer is skipped and the developer still shows), never
+-- an error.
 local function placeSources(room, sources)
 	local folder = room:FindFirstChild("CreditAvatars")
 	if not folder then
@@ -144,10 +161,14 @@ local function placeSources(room, sources)
 			if position then
 				local ok, err = pcall(placeAvatar, folder, slot.name, source, position, forward)
 				if not ok then
-					warn("CreditsRoom: could not place the " .. slot.name .. ": " .. tostring(err))
+					warnOnce(room, slot.name .. ":failed", "CreditsRoom: could not place the " .. slot.name .. ": " .. tostring(err))
 				end
 			else
-				warn("CreditsRoom: " .. room.Name .. "." .. missing .. " is missing; no " .. slot.name .. " avatar")
+				warnOnce(
+					room,
+					slot.name .. ":missing",
+					"CreditsRoom: " .. room.Name .. "." .. missing .. " is missing; no " .. slot.name .. " avatar"
+				)
 			end
 		end
 	end

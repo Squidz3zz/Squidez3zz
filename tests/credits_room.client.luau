@@ -25,7 +25,8 @@
 --          the same two avatars (nothing is cloned twice). Hover tracking is also alive again after the re-entry.
 --   C      CreditsRoom.enter on a fresh copy of the room with only the Developer places exactly one avatar and raises
 --          no error; enter / exit / dispose twice is harmless; dispose removes the folder. On a copy of the room without
---          ViewerSpot, enter with both sources places only the Developer, warns about ViewerSpot and raises no error.
+--          ViewerSpot, enter with both sources places only the Developer and raises no error, and a full poll window of
+--          place() retries (init's poll: every 0.25s for 20s, so 80 calls) warns about ViewerSpot exactly once.
 --   D      Touch path (Studio has no touch): CreditsRoom.tap forwards the first touch position to hoverAt and ignores
 --          taps a GUI already used. Touch positions are in SCREEN space (the viewport minus the GUI inset, ~58 px), so
 --          every tap here is fed the head's screen point, with the REAL camera aimed at the Credits shot (a spare
@@ -653,6 +654,12 @@ elseif CASE == "C" then
 		end
 	end)
 	ok, err = pcall(CreditsRoom.enter, noSpotRoom, { Developer = developerSource, Viewer = viewerSource })
+	-- MainMenuClient polls place() every 0.25s for up to 20s while an avatar is missing, so a full poll window is 80 more
+	-- calls with the Viewer still unplaceable. They must not each warn again.
+	for call = 1, 80 do
+		local placed, placeErr = pcall(CreditsRoom.place, noSpotRoom, { Developer = developerSource, Viewer = viewerSource })
+		assert(placed, "place threw with ViewerSpot missing (call " .. call .. "): " .. tostring(placeErr))
+	end
 	task.wait(0.3) -- LogService delivers messages a moment later
 	warnConnection:Disconnect()
 	assert(ok, "enter threw with ViewerSpot missing: " .. tostring(err))
@@ -661,13 +668,17 @@ elseif CASE == "C" then
 	assert(noSpotFolder:FindFirstChild("Developer"), "the Developer should still be placed when ViewerSpot is missing")
 	assert(noSpotFolder:FindFirstChild("Viewer") == nil, "the Viewer must not be placed when ViewerSpot is missing")
 	assert(#noSpotFolder:GetChildren() == 1, "exactly the Developer expected, found " .. #noSpotFolder:GetChildren() .. " children")
-	local warnedAboutSpot = false
+	local spotWarnings = 0
 	for _, message in warnings do
 		if string.find(message, "ViewerSpot", 1, true) then
-			warnedAboutSpot = true
+			spotWarnings += 1
 		end
 	end
-	assert(warnedAboutSpot, "a missing ViewerSpot should be warned about; warnings were: " .. table.concat(warnings, " | "))
+	assert(spotWarnings >= 1, "a missing ViewerSpot should be warned about; warnings were: " .. table.concat(warnings, " | "))
+	assert(
+		spotWarnings == 1,
+		"a missing ViewerSpot should be warned about once per room, not once per poll: " .. spotWarnings .. " warnings over 81 placement attempts"
+	)
 	pcall(CreditsRoom.dispose, noSpotRoom)
 	noSpotRoom:Destroy()
 	assert(errorCount == 0, "errors: " .. table.concat(errorLog, " | "))
