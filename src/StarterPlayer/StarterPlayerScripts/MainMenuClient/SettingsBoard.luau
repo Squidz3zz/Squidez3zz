@@ -12,6 +12,9 @@
 -- `sounds` (optional, ButtonSounds) gives the switch rows their sound effects: hover() when the pointer enters a row (once,
 -- not again while it moves around inside it, on its button or its RowHit) and confirm() when the row flips the switch.
 -- Both are called in pcall; without `sounds` the rows are silent.
+-- Colours and fonts come from the menu theme (MenuTheme.get(): ReplicatedFirst.MenuAssets THEME and Themes, Factory when that
+-- cannot be read), read once per mount(): the backdrop, the frame, the header, the rows (and their thin border), the accent
+-- bars, the sliders and the ON / OFF switches. Editing them in Studio has no effect: the board is built here, in code.
 --
 -- Touch targets: on a phone in landscape the board is only about 270 px tall on screen, so the sliders and the ON / OFF
 -- buttons themselves are far under the 40 px a finger needs. The whole ROW (about 45 px there) is the target instead: a
@@ -20,24 +23,11 @@
 local SoundService = game:GetService("SoundService")
 
 local MenuSettings = require(script.Parent.MenuSettings)
+local MenuTheme = require(script.Parent.MenuTheme)
 local VolumeSlider = require(script.Parent.VolumeSlider)
 
 local GUI_NAME = "SettingsBoardGui"
 local PIXELS_PER_STUD = 50
-
--- Factory palette, the same as the menu buttons: dark steel panels with an amber accent.
-local PANEL = Color3.fromRGB(38, 36, 34)
-local BACKDROP = Color3.fromRGB(22, 20, 18)
-local TRACK = Color3.fromRGB(62, 58, 54)
-local AMBER = Color3.fromRGB(255, 150, 30)
-local WHITE = Color3.new(1, 1, 1)
-local KNOB = Color3.fromRGB(235, 230, 224)
-local OFF_FILL = Color3.fromRGB(58, 55, 52)
-local OFF_TEXT = Color3.fromRGB(165, 160, 154)
-
--- Oswald with uppercase labels, like the menu (new text objects default to Legacy fonts).
-local FONT = Font.fromEnum(Enum.Font.Oswald)
-local FONT_BOLD = Font.new(FONT.Family, Enum.FontWeight.Bold)
 
 -- Row layout, as fractions of the canvas height.
 local ROWS_TOP = 0.19
@@ -55,12 +45,13 @@ local function create(className, props, parent)
 	return inst
 end
 
-local function label(props, parent)
+-- Text in the theme's body font and text colour (new text objects default to Legacy fonts); `props` can override either.
+local function label(theme, props, parent)
 	local inst = Instance.new("TextLabel")
 	inst.BackgroundTransparency = 1
 	inst.BorderSizePixel = 0
-	inst.FontFace = FONT
-	inst.TextColor3 = WHITE
+	inst.FontFace = theme.bodyFont
+	inst.TextColor3 = theme.text
 	inst.TextScaled = true
 	inst.TextXAlignment = Enum.TextXAlignment.Left
 	for key, value in props do
@@ -70,32 +61,41 @@ local function label(props, parent)
 	return inst
 end
 
--- A steel row with an amber bar down its left edge, like a menu button. `index` is 1 (top) to 4.
-local function newRow(gui, name, index)
+-- A row with an accent bar down its left edge (and the theme's thin border, if it has one), like a menu button. `index` is 1
+-- (top) to 4.
+local function newRow(theme, gui, name, index)
 	local row = create("Frame", {
 		Name = name,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, ROWS_TOP + (index - 1) * ROW_PITCH),
 		Size = UDim2.fromScale(0.84, ROW_HEIGHT),
-		BackgroundColor3 = PANEL,
+		BackgroundColor3 = theme.boardPanel,
 		BorderSizePixel = 0,
 	}, gui)
 	create("Frame", {
 		Name = "Accent",
 		Size = UDim2.fromScale(0.015, 1),
-		BackgroundColor3 = AMBER,
+		BackgroundColor3 = theme.boardAccent,
 		BorderSizePixel = 0,
 	}, row)
+	if theme.panelBorder then
+		create("UIStroke", {
+			Name = "PanelBorder",
+			Color = theme.panelBorder,
+			Thickness = 1,
+			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
+		}, row)
+	end
 	return row
 end
 
--- A volume slider row: the title on top, a thick track with an amber Fill and a Knob under it (the shape VolumeSlider
+-- A volume slider row: the title on top, a thick track with an accent Fill and a Knob under it (the shape VolumeSlider
 -- drives). The track is tall so it is easy to hit from the camera, and the knob stands out above and below it. The
 -- whole row starts a drag, so a finger need not find the thin track.
-local function newSliderRow(gui, name, title, index, group)
-	local row = newRow(gui, name, index)
+local function newSliderRow(theme, gui, name, title, index, group)
+	local row = newRow(theme, gui, name, index)
 	row.Active = true
-	label({
+	label(theme, {
 		Name = "Title",
 		Text = title,
 		Position = UDim2.fromScale(0.05, 0.06),
@@ -106,13 +106,13 @@ local function newSliderRow(gui, name, title, index, group)
 		Active = true,
 		Position = UDim2.fromScale(0.05, 0.6),
 		Size = UDim2.fromScale(0.9, 0.28),
-		BackgroundColor3 = TRACK,
+		BackgroundColor3 = theme.sliderTrack,
 		BorderSizePixel = 0,
 	}, row)
 	create("Frame", {
 		Name = "Fill",
 		Size = UDim2.fromScale(0.5, 1),
-		BackgroundColor3 = AMBER,
+		BackgroundColor3 = theme.boardAccent,
 		BorderSizePixel = 0,
 	}, slider)
 	create("Frame", {
@@ -120,7 +120,7 @@ local function newSliderRow(gui, name, title, index, group)
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
 		Size = UDim2.fromScale(0.045, 1.8),
-		BackgroundColor3 = KNOB,
+		BackgroundColor3 = theme.sliderKnob,
 		BorderSizePixel = 0,
 	}, slider)
 
@@ -132,16 +132,16 @@ local function newSliderRow(gui, name, title, index, group)
 	return row
 end
 
-local function renderToggle(toggle, on)
+local function renderToggle(theme, toggle, on)
 	toggle.Text = if on then "ON" else "OFF"
-	toggle.BackgroundColor3 = if on then AMBER else OFF_FILL
-	toggle.TextColor3 = if on then BACKDROP else OFF_TEXT
+	toggle.BackgroundColor3 = if on then theme.switchOn else theme.switchOff
+	toggle.TextColor3 = if on then theme.switchOnText else theme.switchOffText
 end
 
 -- An ON / OFF switch row. Returns the row and the connection that keeps the switch in step with MenuSettings
 -- (the caller disconnects it with the gui).
-local function newSwitchRow(gui, name, title, index, settingName, sounds)
-	local row = newRow(gui, name, index)
+local function newSwitchRow(theme, gui, name, title, index, settingName, sounds)
+	local row = newRow(theme, gui, name, index)
 	local function sfx(soundName)
 		if sounds then
 			pcall(sounds[soundName])
@@ -156,11 +156,11 @@ local function newSwitchRow(gui, name, title, index, settingName, sounds)
 		BorderSizePixel = 0,
 		AutoButtonColor = false,
 		Selectable = false,
-		FontFace = FONT,
+		FontFace = theme.bodyFont,
 		Text = "",
 		TextScaled = true,
 	}, row)
-	label({
+	label(theme, {
 		Name = "Title",
 		Text = title,
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -174,13 +174,13 @@ local function newSwitchRow(gui, name, title, index, settingName, sounds)
 		Size = UDim2.fromScale(0.26, 0.64),
 		AutoButtonColor = false,
 		BorderSizePixel = 0,
-		FontFace = FONT_BOLD,
+		FontFace = theme.labelFont,
 		TextScaled = true,
 	}, row)
-	create("UIStroke", { Color = AMBER, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, toggle)
+	create("UIStroke", { Color = theme.boardAccent, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, toggle)
 
 	local function render()
-		renderToggle(toggle, MenuSettings.get(settingName))
+		renderToggle(theme, toggle, MenuSettings.get(settingName))
 	end
 	render()
 	local function flip()
@@ -228,6 +228,9 @@ function SettingsBoard.mount(board, playerGui, sounds)
 		existing:Destroy()
 	end
 
+	-- The theme: read once, so one board is never half one look and half another.
+	local theme = MenuTheme.get()
+
 	-- The face that points at the camera shot; a missing or unknown BoardFace attribute means the Front.
 	local faceName = board:GetAttribute("BoardFace")
 	local face = if type(faceName) == "string" then Enum.NormalId:FromName(faceName) else nil
@@ -251,10 +254,10 @@ function SettingsBoard.mount(board, playerGui, sounds)
 	create("Frame", {
 		Name = "Backdrop",
 		Size = UDim2.fromScale(1, 1),
-		BackgroundColor3 = BACKDROP,
+		BackgroundColor3 = theme.boardBackdrop,
 		BorderSizePixel = 0,
 	}, gui)
-	-- The amber frame around the board. Its stroke is drawn outside the frame, so the frame sits inside the canvas.
+	-- The accent frame around the board. Its stroke is drawn outside the frame, so the frame sits inside the canvas.
 	local border = create("Frame", {
 		Name = "Border",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -263,13 +266,13 @@ function SettingsBoard.mount(board, playerGui, sounds)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 	}, gui)
-	create("UIStroke", { Color = AMBER, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, border)
+	create("UIStroke", { Color = theme.boardAccent, Thickness = 3, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, border)
 
-	label({
+	label(theme, {
 		Name = "Header",
 		Text = "SETTINGS",
-		FontFace = FONT_BOLD,
-		TextColor3 = AMBER,
+		FontFace = theme.titleFont,
+		TextColor3 = theme.boardHeader,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, 0.04),
 		Size = UDim2.fromScale(0.84, 0.10),
@@ -279,14 +282,14 @@ function SettingsBoard.mount(board, playerGui, sounds)
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.fromScale(0.5, 0.15),
 		Size = UDim2.fromScale(0.84, 0.007),
-		BackgroundColor3 = AMBER,
+		BackgroundColor3 = theme.boardAccent,
 		BorderSizePixel = 0,
 	}, gui)
 
-	newSliderRow(gui, "MusicRow", "MUSIC", 1, SoundService:FindFirstChild("Music"))
-	newSliderRow(gui, "SfxRow", "SOUND EFFECTS", 2, SoundService:FindFirstChild("SFX"))
-	local _, swayConnection = newSwitchRow(gui, "SwayRow", "CAMERA SWAY", 3, "CameraSway", sounds)
-	local _, effectsConnection = newSwitchRow(gui, "EffectsRow", "SCREEN EFFECTS", 4, "ScreenEffects", sounds)
+	newSliderRow(theme, gui, "MusicRow", "MUSIC", 1, SoundService:FindFirstChild("Music"))
+	newSliderRow(theme, gui, "SfxRow", "SOUND EFFECTS", 2, SoundService:FindFirstChild("SFX"))
+	local _, swayConnection = newSwitchRow(theme, gui, "SwayRow", "CAMERA SWAY", 3, "CameraSway", sounds)
+	local _, effectsConnection = newSwitchRow(theme, gui, "EffectsRow", "SCREEN EFFECTS", 4, "ScreenEffects", sounds)
 	-- MenuSettings outlives the board: stop listening once it is gone.
 	gui.Destroying:Connect(function()
 		swayConnection:Disconnect()

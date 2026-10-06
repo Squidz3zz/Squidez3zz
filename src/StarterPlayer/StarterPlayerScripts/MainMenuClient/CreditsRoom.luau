@@ -1,8 +1,9 @@
 -- CreditsRoom: the avatars in the Credits room, both idling. The developer stands on a stand, facing the camera. The
 -- viewing player stands in the foreground on the floor spot room.ViewerSpot, with their back to the camera, looking at the
 -- developer's stand like a visitor at an exhibit (the second stand, ViewerCreditStand, stays empty). The one under the
--- mouse (or the last one tapped) gets an amber outline and a name label; the viewer's label reads YOU, not their name,
--- so it does not look as if they were inside the game twice.
+-- mouse (or the last one tapped) gets an outline and a name label; the viewer's label reads YOU, not their name,
+-- so it does not look as if they were inside the game twice. The outline's colour and the label's fill, text, border and font
+-- come from the menu theme (MenuTheme.get(), read when the decoration is made; Factory is amber on dark steel).
 --
 -- The avatars are client-only copies in room.CreditAvatars (a Folder this module makes), named "Developer" and "Viewer",
 -- each carrying its name as the attribute DisplayName. They are made once and reused on later visits. Without a ViewerSpot
@@ -28,10 +29,8 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local CharacterPreview = require(script.Parent.CharacterPreview)
+local MenuTheme = require(script.Parent.MenuTheme)
 
-local AMBER = Color3.fromRGB(255, 150, 30)
-local PLATE = Color3.fromRGB(38, 36, 34)
-local FONT = Font.new(Font.fromEnum(Enum.Font.Oswald).Family, Enum.FontWeight.Bold)
 local RAY_LENGTH = 200
 -- Above the head's centre. Low enough that the 56 px label stays inside the view of a 390 px high phone in landscape.
 local NAME_OFFSET = Vector3.new(0, 1.5, 0)
@@ -183,19 +182,26 @@ local function clearDecorations(avatar)
 	end
 end
 
--- The amber outline and the name label above the head. Whatever is there already stays, so hovering one avatar for
--- many frames leaves one highlight and one label, not a new pair per frame.
+-- The outline and the name label above the head, in the theme's colours. Whatever is there already stays, so hovering one
+-- avatar for many frames leaves one highlight and one label, not a new pair per frame (and the theme is only read when
+-- something has to be made).
 local function decorate(avatar)
-	if not avatar:FindFirstChild("CreditHighlight") then
+	local needHighlight = not avatar:FindFirstChild("CreditHighlight")
+	local head = avatar:FindFirstChild("Head")
+	local needLabel = head and not avatar:FindFirstChild("CreditName")
+	if not (needHighlight or needLabel) then
+		return
+	end
+	local theme = MenuTheme.get()
+	if needHighlight then
 		local highlight = Instance.new("Highlight")
 		highlight.Name = "CreditHighlight"
-		highlight.OutlineColor = AMBER
+		highlight.OutlineColor = theme.creditHighlight
 		highlight.FillTransparency = 1
 		highlight.Adornee = avatar
 		highlight.Parent = avatar
 	end
-	local head = avatar:FindFirstChild("Head")
-	if head and not avatar:FindFirstChild("CreditName") then
+	if needLabel then
 		-- A BillboardGui sized in pixels keeps its size at any camera distance, so the name reads from the Credits shot.
 		local gui = Instance.new("BillboardGui")
 		gui.Name = "CreditName"
@@ -206,10 +212,10 @@ local function decorate(avatar)
 
 		local label = Instance.new("TextLabel")
 		label.Size = UDim2.fromScale(1, 1)
-		label.BackgroundColor3 = PLATE
+		label.BackgroundColor3 = theme.nameLabelBg
 		label.BackgroundTransparency = 0.1
-		label.FontFace = FONT
-		label.TextColor3 = Color3.new(1, 1, 1)
+		label.FontFace = theme.labelFont
+		label.TextColor3 = theme.nameLabelText
 		label.TextScaled = true
 		local displayName = avatar:GetAttribute("DisplayName")
 		label.Text = if type(displayName) == "string" and displayName ~= "" then displayName else avatar.Name
@@ -223,7 +229,7 @@ local function decorate(avatar)
 		padding.Parent = label
 		local stroke = Instance.new("UIStroke")
 		stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-		stroke.Color = AMBER
+		stroke.Color = theme.nameLabelBorder
 		stroke.Thickness = 2
 		stroke.Parent = label
 		gui.Parent = avatar
