@@ -201,6 +201,9 @@ local effectsOk, effectsError = pcall(function()
 	end, 1)
 	assert(back, "MenuBlur / MenuColorCorrection should reappear within 1s of ScreenEffects on")
 	assert(math.abs(Lighting.MenuBlur.Size - 6) <= 0.01, "re-added MenuBlur should have Size 6")
+	-- The re-created grade still takes the theme's tint (it is read again each time the effect is made).
+	local again = Lighting:FindFirstChild("MenuColorCorrection")
+	assert(math.abs(again.TintColor.R - THEME.gradeTint.R) * 255 < 0.5 and math.abs(again.TintColor.B - THEME.gradeTint.B) * 255 < 0.5, "the re-added grade should keep the theme's tint")
 
 	for _ = 1, 3 do
 		MenuSettings.set("ScreenEffects", false)
