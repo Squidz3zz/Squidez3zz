@@ -5,6 +5,9 @@
 -- overlays of their own (ScreenInsets None) so they reach the notch strips and rounded corners.
 -- Settings and Credits are 3D rooms: their buttons ask SceneDirector (a module under this script) to fade and cut there.
 -- The Credits room shows the developer's avatar (built by MenuServer in ReplicatedStorage.CreditAvatars) and the player's own.
+-- While either room shows, RoomLighting switches the outdoor light off (client-only), so the room already looks right on the
+-- first frames after the cut (Roblox lights it like open ground until its lighting catches up). Leaving the room and Play
+-- put the normal lighting back, so gameplay never sees it.
 -- At join the factory loading screen (ReplicatedFirst.LoadingScreen) preloads the menu's assets first: setup waits for its
 -- LoadingDone attribute before it shows anything, and a missing, disabled or broken loading screen is simply not waited for.
 -- The buttons make sounds (ButtonSounds, on the Sound Effects slider): hover when the pointer enters one, confirm when one is
@@ -86,6 +89,9 @@ local SceneDirector = loadModule("SceneDirector")
 local SettingsBoard = loadModule("SettingsBoard")
 -- The Credits room's avatars. Without it that room is empty, but the menu and Play are not affected.
 local CreditsRoom = loadModule("CreditsRoom")
+-- The rooms' lighting profile (outdoor light off while a room shows). Without it the rooms show the game's normal lighting
+-- for the first few seconds after the cut, but nothing else is affected.
+local RoomLighting = loadModule("RoomLighting")
 
 -- Set by setupMenu: the three cloned ScreenGuis, and the frames this script uses from them.
 local menu, vignetteGui, faderGui
@@ -185,6 +191,26 @@ local function quietRooms()
 	end
 end
 
+-- Puts the room lighting profile on, or the normal lighting back (see RoomLighting). Neither yields, both are safe to repeat,
+-- and neither throws: a failing one is warned about and must never stop a room's own hook, the fade or Play.
+local function applyRoomLighting()
+	if RoomLighting then
+		local ok, err = pcall(RoomLighting.apply)
+		if not ok then
+			warn("MainMenuClient: RoomLighting.apply failed: " .. tostring(err))
+		end
+	end
+end
+
+local function restoreRoomLighting()
+	if RoomLighting then
+		local ok, err = pcall(RoomLighting.restore)
+		if not ok then
+			warn("MainMenuClient: RoomLighting.restore failed: " .. tostring(err))
+		end
+	end
+end
+
 -- Destroys the clones of the menu's three ScreenGuis (MainMenu, MainMenuVignette, MainMenuFader). Never yields. One that
 -- was never cloned (a setup that failed half way) is still nil and is skipped by the loop.
 local function destroyMenuGuis()
@@ -204,6 +230,9 @@ local function runPlay()
 			warn("MainMenuClient: SceneDirector.stop failed: " .. tostring(err))
 		end
 	end
+	-- Gameplay always gets the normal lighting, even if the room's exit hook (stop() runs it detached) has not run yet.
+	-- Never yields. Guarded like the above.
+	restoreRoomLighting()
 	-- The music fades out over the screen fade below and is gone after it. Never yields, and leaves the button sounds
 	-- alone (the play sound keeps going). Guarded like the above.
 	if MenuAudio then
@@ -439,6 +468,8 @@ local function setupMenu()
 	if SceneDirector and SettingsBoard then
 		local ok, err = pcall(SceneDirector.register, "Settings", {
 			enter = function()
+				-- First, behind the black screen, so the room already has its own lighting on the first frame it is seen.
+				applyRoomLighting()
 				-- Mounted on the first visit and reused after that (dispose unmounts it, so it is looked up each time).
 				local boardGui = playerGui:FindFirstChild("SettingsBoardGui")
 				if not boardGui then
@@ -453,6 +484,8 @@ local function setupMenu()
 				SettingsBoard.setEnabled(boardGui, true)
 			end,
 			exit = function()
+				-- First, so nothing below can keep the normal lighting from coming back.
+				restoreRoomLighting()
 				local boardGui = playerGui:FindFirstChild("SettingsBoardGui")
 				if boardGui then
 					SettingsBoard.setEnabled(boardGui, false)
@@ -476,6 +509,8 @@ local function setupMenu()
 		end
 		local ok, err = pcall(SceneDirector.register, "Credits", {
 			enter = function()
+				-- First, behind the black screen, so the room already has its own lighting on the first frame it is seen.
+				applyRoomLighting()
 				creditsVisit += 1
 				local visit = creditsVisit
 				local room = findCreditsRoom()
@@ -501,6 +536,8 @@ local function setupMenu()
 				end)
 			end,
 			exit = function()
+				-- First, so nothing below can keep the normal lighting from coming back.
+				restoreRoomLighting()
 				creditsVisit += 1
 				local room = findCreditsRoom()
 				if room then
