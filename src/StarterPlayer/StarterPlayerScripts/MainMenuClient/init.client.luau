@@ -15,6 +15,11 @@
 -- never touches the menu or Play, and Play's fade does not cut the play sound (it lives in SoundService).
 -- The menu has background music (MenuAudio, on the Music slider): one looping track per scene, started when the menu opens,
 -- crossfaded by SceneDirector's onSceneChanged callback and faded out by runPlay. Same rules: pcall'd, never yields.
+-- The menu's colours and fonts are a theme (ReplicatedFirst.MenuAssets: THEME and Themes). MenuTheme paints the cloned guis in
+-- setupMenu before they are parented (the Title's colours and font, never its words; the buttons and BACK; the Vignette and its
+-- hazard stripe; the Fader stays black), and ButtonEffects, SettingsBoard, CreditsRoom and the loading screen read the same
+-- theme. While a theme is active, editing those colours and fonts in Studio has no effect; the words, positions and sizes are
+-- still Studio's. A broken or missing theme leaves the Factory look: it never stops the menu or Play.
 --
 -- UI names this script depends on (three ScreenGuis under ReplicatedStorage). Restyle anything, but keep these names:
 --   MainMenu
@@ -92,6 +97,9 @@ local CreditsRoom = loadModule("CreditsRoom")
 -- The rooms' lighting profile (outdoor light off while a room shows). Without it the rooms show the game's normal lighting
 -- for the first few seconds after the cut, but nothing else is affected.
 local RoomLighting = loadModule("RoomLighting")
+-- The menu's colours and fonts (MenuAssets.THEME). Without it the menu keeps the Factory look it is built with (the Studio
+-- template), and the buttons' hover outline keeps its own Factory colour.
+local MenuTheme = loadModule("MenuTheme")
 
 -- Set by setupMenu: the three cloned ScreenGuis, and the frames this script uses from them.
 local menu, vignetteGui, faderGui
@@ -374,6 +382,25 @@ local function setupMenu()
 	vignette = vignetteGui.Vignette
 	fader = faderGui.Fader
 
+	-- The theme (MenuAssets.THEME) paints the clones before they are parented: the Title's colours and font (never its words),
+	-- the buttons, BACK, the Vignette and the hazard stripe. The Fader stays black. Guarded like everything else: a broken theme
+	-- leaves the Factory look the template is built with, never a menu that does not open.
+	local theme = nil
+	if MenuTheme then
+		local ok, result = pcall(MenuTheme.get)
+		if ok then
+			theme = result
+		else
+			warn("MainMenuClient: MenuTheme.get failed: " .. tostring(result))
+		end
+		if theme then
+			local applied, err = pcall(MenuTheme.applyToMenu, menu, vignetteGui, theme)
+			if not applied then
+				warn("MainMenuClient: MenuTheme.applyToMenu failed: " .. tostring(err))
+			end
+		end
+	end
+
 	root.Buttons.Play.Activated:Connect(function()
 		-- Before play() sets `playing`, so a second press (which play() ignores) stays silent.
 		playSfx("playSelect")
@@ -397,6 +424,8 @@ local function setupMenu()
 		-- Guarded: a failing effect must never keep the menu from opening (and the player from spawning).
 		-- The hover sound is silent once Play has started (the menu is fading out, nothing there is a choice any more).
 		local hoverOptions = {
+			-- The hover outline's colour comes from the theme (nil without one: ButtonEffects keeps its Factory amber).
+			strokeColor = theme and theme.hoverStroke,
 			onHover = ButtonSounds and function()
 				if not playing then
 					pcall(ButtonSounds.hover)

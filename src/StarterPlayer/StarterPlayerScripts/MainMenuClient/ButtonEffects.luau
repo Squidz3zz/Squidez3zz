@@ -4,6 +4,8 @@
 -- mouse entering it, a controller selecting it or a finger landing on it. Not when it is hovered again while it already
 -- is, not on a press, and not when the hover comes back after a press while the cursor is still over it. The menu uses it
 -- for the hover sound (ButtonSounds.hover).
+-- opts.strokeColor (optional, a Color3) is the colour of the hover outline: the menu passes the theme's hoverStroke. Without
+-- it (or with anything that is not a Color3) the outline is the Factory amber, so an unthemed button looks as it always did.
 -- setState(button, state) is the only place tweens happen: events call it, and so do the tests. It finds
 -- PopScale/PopStroke on the button itself, so it works on any attached button, and does nothing (no error) on a button
 -- that is not attached. The only thing it remembers is whether a button is idle (and its onHover), which is what turns
@@ -11,6 +13,9 @@
 local TweenService = game:GetService("TweenService")
 
 local TWEEN_INFO = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+-- The hover outline's colour when no theme colour is given (Factory amber, the same as MenuAssets.Themes.Factory.hoverStroke).
+local FACTORY_STROKE = Color3.fromRGB(255, 150, 30)
 
 local STATES = {
 	idle = { scale = 1, strokeTransparency = 1 },
@@ -68,7 +73,7 @@ function ButtonEffects.attach(button, opts)
 
 	local popStroke = Instance.new("UIStroke")
 	popStroke.Name = "PopStroke"
-	popStroke.Color = Color3.fromRGB(255, 150, 30) -- factory amber
+	popStroke.Color = if opts and typeof(opts.strokeColor) == "Color3" then opts.strokeColor else FACTORY_STROKE
 	popStroke.Thickness = 2
 	popStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	popStroke.Transparency = STATES.idle.strokeTransparency
