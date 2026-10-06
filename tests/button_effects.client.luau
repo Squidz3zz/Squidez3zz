@@ -5,8 +5,13 @@
 local GuiService = game:GetService("GuiService")
 local LogService = game:GetService("LogService")
 local Players = game:GetService("Players")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
 
 local player = Players.LocalPlayer
+
+-- The hover outline's colour is the active theme's hoverStroke (amber in Factory, teal in SterileBright).
+local theme = require(ReplicatedFirst:WaitForChild("MenuAssets", 10)).theme()
+local FACTORY_AMBER = Color3.fromRGB(255, 150, 30)
 
 local TOLERANCE = 0.01
 
@@ -46,7 +51,7 @@ for name, button in buttons do
 	assert(popScale and popScale:IsA("UIScale"), "PopScale missing on " .. name)
 	local popStroke = button:FindFirstChild("PopStroke")
 	assert(popStroke and popStroke:IsA("UIStroke"), "PopStroke missing on " .. name)
-	assert(popStroke.Color == Color3.fromRGB(255, 150, 30), name .. " PopStroke should be amber RGB(255, 150, 30)")
+	assert(popStroke.Color == theme.hoverStroke, name .. " PopStroke should be the theme's hoverStroke " .. tostring(theme.hoverStroke) .. ", it is " .. tostring(popStroke.Color))
 	assert(popStroke.Thickness == 2, name .. " PopStroke.Thickness should be 2")
 	assert(popStroke.ApplyStrokeMode == Enum.ApplyStrokeMode.Border, name .. " PopStroke should use Border mode")
 	assert(math.abs(popScale.Scale - 1) <= TOLERANCE, name .. " PopScale should start at 1, got " .. popScale.Scale)
@@ -118,6 +123,25 @@ end
 assert(#loose:GetChildren() == 0, "setState must not add anything to a button that is not attached")
 assert(not pcall(ButtonEffects.setState, loose, "bogus"), "setState should still reject an unknown state on an unattached button")
 loose:Destroy()
+
+-- The hover outline's colour: opts.strokeColor when it is a Color3, else the Factory amber (an unthemed button looks as it always did).
+do
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "ButtonEffectsStrokeTestGui"
+	gui.Parent = playerGui
+	local function attached(opts)
+		local button = Instance.new("TextButton")
+		button.Parent = gui
+		ButtonEffects.attach(button, opts)
+		return button.PopStroke.Color
+	end
+	local custom = Color3.fromRGB(1, 2, 3)
+	assert(attached({ strokeColor = custom }) == custom, "attach should use opts.strokeColor")
+	assert(attached(nil) == FACTORY_AMBER, "attach without opts should use the Factory amber")
+	assert(attached({}) == FACTORY_AMBER, "attach without a strokeColor should use the Factory amber")
+	assert(attached({ strokeColor = "red" }) == FACTORY_AMBER, "a strokeColor that is not a Color3 should be ignored")
+	gui:Destroy()
+end
 
 -- The real path: a controller selects a button, then the menu is destroyed under it. Destroying the button fires
 -- SelectionLost into setState after its PopScale / PopStroke are gone, which must not log an error.

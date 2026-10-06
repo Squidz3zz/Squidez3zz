@@ -2,7 +2,7 @@
 -- pick it with CASE below, then run the whole file as an execute_luau call.
 -- Drives the menu through MainMenuClient's Studio-only TestHook and observes the real SettingsBoard on the real board.
 --   A   after goTo Settings the SurfaceGui SettingsBoardGui is on the board (Adornee, Face, PixelsPerStud 50, clipped)
---       with every named child, Scale-only layout, uppercase Oswald text, and sliders / switches that follow the
+--       with every named child, Scale-only layout, uppercase text in the theme's fonts, and sliders / switches that follow the
 --       Music / SFX groups and MenuSettings. Also checks mount() reuses the gui. Restores every setting.
 --   B1  go to Settings, switch Camera Sway off (so the camera holds still while the mouse moves), count Activated on
 --       the Screen Effects switch and print where to click: user_mouse_input moveTo that point, then a left click.
@@ -36,7 +36,11 @@ local D2_STAGE = "press"
 
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local SoundService = game:GetService("SoundService")
+
+-- The board's colours and fonts are the active theme's (MenuAssets.THEME); the checks below read them from here.
+local THEME = require(ReplicatedFirst:WaitForChild("MenuAssets", 10)).theme()
 
 local GUI_NAME = "SettingsBoardGui"
 local INSET = 58
@@ -204,14 +208,18 @@ if CASE == "A" then
 		"the canvas should be the board face at 50 px per stud, is " .. tostring(gui.AbsoluteSize)
 	)
 
-	-- Text: "SETTINGS" header, uppercase Oswald everywhere, switches start ON.
+	-- Text: "SETTINGS" header, uppercase text in the theme's fonts everywhere (title, body or label font), switches start ON.
 	assert(parts.header.Text == "SETTINGS", "Header should read SETTINGS, reads " .. parts.header.Text)
+	local themeFonts = {}
+	for _, key in { "titleFont", "bodyFont", "labelFont" } do
+		themeFonts[THEME[key].Family .. "/" .. THEME[key].Weight.Name] = true
+	end
 	for _, item in gui:GetDescendants() do
 		if item:IsA("TextLabel") or item:IsA("TextButton") then
 			assert(item.Text == string.upper(item.Text), item:GetFullName() .. " text should be uppercase: " .. item.Text)
 			assert(
-				string.find(item.FontFace.Family, "Oswald", 1, true),
-				item:GetFullName() .. " should use Oswald, uses " .. item.FontFace.Family
+				themeFonts[item.FontFace.Family .. "/" .. item.FontFace.Weight.Name],
+				item:GetFullName() .. " should use one of the theme's fonts, uses " .. item.FontFace.Family .. "/" .. item.FontFace.Weight.Name
 			)
 			assert(item.TextScaled, item:GetFullName() .. " should be TextScaled")
 		end

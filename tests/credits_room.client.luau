@@ -48,7 +48,8 @@ local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 
-local AMBER = Color3.fromRGB(255, 150, 30)
+-- The hover outline and the name label take the active theme's colours and font (MenuAssets.THEME).
+local THEME = require(game:GetService("ReplicatedFirst"):WaitForChild("MenuAssets", 10)).theme()
 
 local function waitFor(predicate, timeout)
 	local deadline = os.clock() + timeout
@@ -308,7 +309,7 @@ if CASE == "A" then
 	assert(hit == "Developer", "hoverAt on the Developer's head returned " .. tostring(hit))
 	local highlight = developer:FindFirstChild("CreditHighlight")
 	assert(highlight and highlight:IsA("Highlight"), "Developer has no Highlight named CreditHighlight")
-	assert(highlight.OutlineColor == AMBER, "CreditHighlight outline should be amber")
+	assert(highlight.OutlineColor == THEME.creditHighlight, "CreditHighlight outline should be the theme's creditHighlight " .. tostring(THEME.creditHighlight) .. ", it is " .. tostring(highlight.OutlineColor))
 	assert(highlight.FillTransparency == 1, "CreditHighlight fill should be fully transparent")
 	local gui, label = labelOf(developer)
 	assert(gui and gui:IsA("BillboardGui"), "Developer has no BillboardGui named CreditName")
@@ -326,7 +327,14 @@ if CASE == "A" then
 	assert(top390 >= 0, ("at a 390 px high viewport the name label's top would be %.1f px, clipped by the top edge"):format(top390))
 	assert(gui.AlwaysOnTop == true, "CreditName should be AlwaysOnTop")
 	assert(label and label.Text == developer:GetAttribute("DisplayName"), "CreditName text should be the Developer's DisplayName, got " .. tostring(label and label.Text))
-	assert(label.FontFace.Family == Font.fromEnum(Enum.Font.Oswald).Family, "CreditName should use Oswald")
+	assert(
+		label.FontFace.Family == THEME.labelFont.Family and label.FontFace.Weight == THEME.labelFont.Weight,
+		"CreditName should use the theme's labelFont " .. THEME.labelFont.Family .. "/" .. THEME.labelFont.Weight.Name .. ", it uses " .. label.FontFace.Family .. "/" .. label.FontFace.Weight.Name
+	)
+	assert(label.BackgroundColor3 == THEME.nameLabelBg, "CreditName background should be the theme's nameLabelBg")
+	assert(label.TextColor3 == THEME.nameLabelText, "CreditName text should be the theme's nameLabelText")
+	local nameStroke = label:FindFirstChildOfClass("UIStroke")
+	assert(nameStroke and nameStroke.Color == THEME.nameLabelBorder, "CreditName border should be the theme's nameLabelBorder")
 	assert(viewer:FindFirstChild("CreditHighlight") == nil and viewer:FindFirstChild("CreditName") == nil, "Viewer must have no decorations while the Developer is hovered")
 
 	-- Moving to the other avatar moves the decorations with it.

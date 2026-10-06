@@ -80,6 +80,19 @@ if CASE == "A" then
 	for _, name in { "Title", "Spinner", "Tip" } do
 		assert(built[name], "the loading screen did not build its " .. name .. " (LoadingParts is '" .. parts .. "')")
 	end
+	-- The hazard stripe is built exactly when the active theme asks for one (the look itself is checked by
+	-- tests/menu_theme.client.luau, through the loading screen's TestHook "look").
+	local wantsStripe = false
+	if assetsModule then
+		local themeOk, theme = pcall(function()
+			return require(assetsModule).theme()
+		end)
+		wantsStripe = themeOk and type(theme) == "table" and theme.hazardStripe == true
+	end
+	assert(
+		(built.HazardStripe == true) == wantsStripe,
+		"LoadingParts '" .. parts .. "' should " .. (wantsStripe and "list" or "not list") .. " HazardStripe for the active theme"
+	)
 
 	-- It stays up for at least LOADING_MIN_SECONDS (LoadingDoneAt is stamped after the 0.4s fade to black, so this is
 	-- loose) and hands over at the latest at LOADING_MAX_SECONDS.

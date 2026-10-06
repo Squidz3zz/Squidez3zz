@@ -2,6 +2,9 @@
 -- ReplicatedStorage. MainMenu (the heavy-factory layout: Scale-only Title / Buttons / CharacterView, the BACK button)
 -- stays in the phone's safe area; the Vignette and the Fader live in their own full-screen ScreenGuis (ScreenInsets None)
 -- so they reach the notch strips and rounded corners.
+-- The colours and fonts asserted here (steel, amber, Oswald) are the Factory BASELINE the Studio template is built with. At
+-- runtime the active theme (ReplicatedFirst.MenuAssets.THEME) paints over them; tests/menu_theme.edit.luau and
+-- tests/menu_theme.client.luau check that. The Title's words are the developer's own, so they are not asserted.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SoundService = game:GetService("SoundService")
 
