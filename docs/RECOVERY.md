@@ -81,7 +81,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are twenty scripts. The file names are in `src/`.
+There are twenty-one scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -117,6 +117,14 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `SettingsBoard` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SettingsBoard.luau` |
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 | `LabClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/LabClient/init.client.luau` |
+| `DeathScreen` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/DeathScreen.client.luau` |
+
+`DeathScreen` is the death screen for every death in the game, not only Room 1's: the moment your character dies the screen
+cuts to black, every sound goes silent and a ringing in the ears plays (`LabConfig.Sounds.DeathRing`, fading to nothing over
+`LabConfig.RESPAWN_TIME`). When you respawn the black fades out over 1.5 seconds and the sounds come back at the volumes they
+had. It makes `PlayerGui.DeathScreen` (with a full-screen `Black` Frame) and `SoundService.DeathRing` by itself, and writes each
+SoundGroup's volume to its `DeathSavedVolume` attribute while it is silenced, so do not delete those. Without `LabConfig` it still
+cuts to black, with no ringing, and fades over 5 seconds. If the script breaks, Roblox's normal death shows instead.
 
 `LabServer` is Room 1's server side and needs the pieces that `studio/build_lab.luau` builds (see c). It handles
 claiming and the injections. Claiming: a player who triggers the claim prompt becomes the owner (`Workspace.Room1`'s `Owner` attribute holds their UserId,
@@ -206,7 +214,8 @@ Press **Play** in Studio (the Test tab) and check each of these:
 4. **Credits** fades to a room with the developer's avatar on a stand, and the player's own avatar in the foreground,
    seen from behind, looking at it. Hovering one shows a name (the player's says `YOU`). **BACK** returns.
 5. **Play** spawns your character and the menu goes away.
-6. Reset your character. It respawns and the menu does not come back.
+6. Reset your character. The screen cuts to black at once with a ringing in your ears and no other sound, and after about 5
+   seconds you respawn, the black fades out and the music and sound effects come back. The menu does not come back.
 7. Walk to the panel outside Room 1's window and press its prompt ("Claim Room 1"). The sign changes to your name, a copy of
    your avatar sits in the chair facing the window, and a Tablet is in your toolbar. Press the prompt again ("Release
    Room 1"): the copy and the Tablet go and the sign says FREE. Claim again and reset your character: after it respawns
