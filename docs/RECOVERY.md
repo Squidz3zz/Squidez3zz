@@ -81,7 +81,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are seventeen scripts. The file names are in `src/`.
+There are nineteen scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -101,6 +101,7 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `LoadingScreen` | LocalScript | `ReplicatedFirst` | `src/ReplicatedFirst/LoadingScreen.client.luau` |
 | `LabConfig` | ModuleScript | `ReplicatedStorage` | `src/ReplicatedStorage/LabConfig.luau` |
 | `MenuServer` | Script | `ServerScriptService` | `src/ServerScriptService/MenuServer.server.luau` |
+| `LabServer` | Script | `ServerScriptService` | `src/ServerScriptService/LabServer.server.luau` |
 | `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
 | `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
 | `ButtonSounds` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonSounds.luau` |
@@ -114,6 +115,16 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `SceneDirector` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SceneDirector.luau` |
 | `SettingsBoard` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SettingsBoard.luau` |
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
+| `LabClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/LabClient/init.client.luau` |
+
+`LabServer` is Room 1's server side and needs the pieces that `studio/build_lab.luau` builds (see c). So far it handles
+claiming: a player who triggers the claim prompt becomes the owner (`Workspace.Room1`'s `Owner` attribute holds their UserId,
+0 when free, and the sign reads "ROOM 1 / FREE" or "ROOM 1 / <their name>"), a copy of their avatar sits in the chair as
+`Room1.Subject`, and a `Tablet` goes into their Backpack. If the copy dies the owner dies, and the other way round. The
+owner triggering the prompt again, or leaving the game, frees the room; when the owner respawns, a fresh copy and tablet are
+made. It reads where to seat the copy from `Chair.Seat.SubjectSpot`, so a moved chair works without a code change. It also
+sets `Players.RespawnTime` from `LabConfig.RESPAWN_TIME` at startup. `LabClient` sets the claim prompt's text on each player's
+own screen ("Claim Room 1" when free, "Release Room 1" for the owner, switched off for everyone else).
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
@@ -150,7 +161,8 @@ theme is what turns it into another look.
 ### e) Turn off automatic spawning
 
 In the Explorer, click **Players**. In Properties, untick **CharacterAutoLoads**. The menu holds each player until they
-press Play, so nobody should spawn on their own.
+press Play, so nobody should spawn on their own. (How long a dead player waits before respawning is `Players.RespawnTime`,
+which `LabServer` sets from `LabConfig.RESPAWN_TIME` when the game starts.)
 
 ### f) Optional: the menu's map camera
 
@@ -181,7 +193,11 @@ Press **Play** in Studio (the Test tab) and check each of these:
    seen from behind, looking at it. Hovering one shows a name (the player's says `YOU`). **BACK** returns.
 5. **Play** spawns your character and the menu goes away.
 6. Reset your character. It respawns and the menu does not come back.
-7. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`, `ButtonSounds: ...` or `MenuAudio: ...`) means
+7. Walk to the panel outside Room 1's window and press its prompt ("Claim Room 1"). The sign changes to your name, a copy of
+   your avatar sits in the chair facing the window, and a Tablet is in your toolbar. Press the prompt again ("Release
+   Room 1"): the copy and the Tablet go and the sign says FREE. Claim again and reset your character: after it respawns
+   there is a fresh copy and one Tablet.
+8. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`, `ButtonSounds: ...` or `MenuAudio: ...`) means
    Roblox refused that sound's asset id: fix the id in `MenuAssets`, or its permissions.
 
 ## What these steps cannot bring back
