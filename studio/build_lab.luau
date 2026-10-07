@@ -277,8 +277,24 @@ local function addDisplay(screen, away)
 		PixelsPerStud = 100,
 		LightInfluence = 0,
 	}, screen)
-	label({ Name = "Headline", Text = "STANDBY", FontFace = FONT_BOLD, BackgroundColor3 = BLACK, Size = UDim2.fromScale(1, 0.6) }, display)
-	label({ Name = "Detail", Text = "", BackgroundColor3 = BLACK, Position = UDim2.fromScale(0, 0.6), Size = UDim2.fromScale(1, 0.4) }, display)
+	label({ Name = "Headline", Text = "STANDBY", FontFace = FONT_BOLD, BackgroundColor3 = BLACK }, display)
+	label({ Name = "Detail", Text = "", BackgroundColor3 = BLACK }, display)
+end
+
+-- Lays the screen's two lines out to read upright, Headline over Detail (0.6 and 0.4 of the height). Bob's Display is on the
+-- screen part's Top face, where the canvas's X runs down the screen (along the part's look) and its Y across it (along the part's
+-- X), so unturned text reads top to bottom (seen on the first build). Each line is turned a quarter turn back (Rotation -90) and
+-- sized in pixels, the canvas being the face times PixelsPerStud.
+local function layoutDisplay(display)
+	local screen = display.Parent
+	local across, down = screen.Size.X * display.PixelsPerStud, screen.Size.Z * display.PixelsPerStud
+	for _, line in { { "Headline", 0, 0.6 }, { "Detail", 0.6, 0.4 } } do
+		local inst = display[line[1]]
+		inst.AnchorPoint = Vector2.new(0.5, 0.5)
+		inst.Rotation = -90
+		inst.Position = UDim2.fromScale(line[2] + line[3] / 2, 0.5)
+		inst.Size = UDim2.fromOffset(across, down * line[3])
+	end
 end
 
 local function rewireBob(bob)
@@ -429,6 +445,12 @@ if columnPivot then
 		moveBob(room.BobTheInjector, at.Position, at.LookVector)
 		table.insert(moved, "BobTheInjector")
 	end
+end
+
+-- Bob's screen reads upright, also on a Bob rewired before the layout was fixed.
+local display = columnPivot and room.BobTheInjector:FindFirstChild("Display", true)
+if display then
+	layoutDisplay(display)
 end
 
 -- The tablet becomes a Tool: Handle = its PrimaryPart, every other part welded to it.

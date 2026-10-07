@@ -1,8 +1,9 @@
--- LabClient: this player's side of Room 1's injection lab. Two parts so far:
+-- LabClient: this player's side of Room 1's injection lab:
 --   * the claim prompt's text, set locally. Free: "Claim Room 1". Yours: "Release Room 1". Someone else's: the prompt is switched off
 --     for this player. The server checks every trigger anyway; this only keeps the prompt honest on screen.
 --   * the tablet menu (TabletMenu): activating the Tablet tool opens it; it closes when the tool is unequipped or goes, and when the
 --     character dies.
+--   * Bob (BobAnimator): this player's view of Bob the Injector, moved every frame from what the server says he is doing.
 -- Every piece runs through run(): a failure warns once in Output and never stops the other pieces.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -103,5 +104,11 @@ local function wireTablet()
 	end
 end
 
+local function wireBob()
+	local BobAnimator = require(script:WaitForChild("BobAnimator", 30))
+	BobAnimator.start(workspace:WaitForChild("Room1", 30), require(ReplicatedStorage:WaitForChild("LabConfig", 30)))
+end
+
 task.spawn(run, "claim prompt", wireClaimPrompt)
 task.spawn(run, "tablet menu", wireTablet)
+task.spawn(run, "Bob", wireBob)

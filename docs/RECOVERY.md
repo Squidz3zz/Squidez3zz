@@ -74,7 +74,7 @@ change them.
 
 The script is safe to run again: it only builds what is missing and leaves everything else as it is (if you moved
 `BobHome` or the `Chair`, they stay where you put them). The one thing a re-run moves is the `Gantry` and Bob: they
-line up under `BobHome`. To move Bob's resting spot, drag `BobHome` (keep its
+line up under `BobHome` (and the two lines on Bob's screen are laid out again so they read upright). To move Bob's resting spot, drag `BobHome` (keep its
 front face toward the way Bob's needle should point), then run the script again. To rebuild:
 
 - **A piece of the lab** (for example the `Chair`, the `Gantry` or the `TabletMenu`): delete it, then run `studio/build_lab.luau`.
@@ -86,7 +86,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are twenty-two scripts. The file names are in `src/`.
+There are twenty-four scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -124,6 +124,7 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `LabClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/LabClient/init.client.luau` |
 | `TabletMenu` | ModuleScript | `LabClient` | `.../LabClient/TabletMenu.luau` |
 | `GooglyEyes` | ModuleScript | `LabClient` | `.../LabClient/GooglyEyes.luau` |
+| `BobAnimator` | ModuleScript | `LabClient` | `.../LabClient/BobAnimator.luau` |
 | `DeathScreen` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/DeathScreen.client.luau` |
 
 `DeathScreen` is the death screen for every death in the game, not only Room 1's: the moment your character dies the screen
@@ -165,6 +166,17 @@ Bob is busy the menu opens read-only and shows what he is doing, and a refusal f
 in the top bar for three seconds. It plays the main menu's hover and click sounds (`SoundService.MenuSfxHover` and
 `MenuSfxConfirm`) and is silent without them. If `TabletMenu` or its template is broken, the Output window says so once and
 claiming still works, but there is no tablet menu.
+
+`BobAnimator` (also **inside** `LabClient`) moves Bob on each player's screen from the attributes above: the carriage and
+sleeve slide along the gantry (the crossbeam with them), the column lowers through the sleeve, Bob turns to face the limb and
+the needle slides out into it and back, then he goes home to `BobHome`. Each phase is timed from `PhaseStart`, so a player who
+joins mid-injection sees Bob in the right place. His screen reads the phase ("TARGET: LEFT ARM" over "EXPLOSIVE",
+"INJECTING", "RETURNING", a slowly pulsing "STANDBY"). It adds two sounds of its own on each player's side, in the SFX group:
+`BobMotor` in the carriage (louder the faster Bob moves) and `NeedleHiss` in the needle (while the needle is in). It reads Bob
+as built when the game starts, so it needs the names `studio/build_lab.luau` gives (`Column.Core.ColumnPivot`,
+`Needle.NeedleTip` and `NeedleBase`, `Body.Screen.Display`, `Pupils`, and the `Gantry` parts) and Bob resting at `BobHome`.
+How far the carriage may travel is a list at the top of the script (x 35.5 to 56, z 19.2 to 52.2). If it breaks, the Output
+window says so once and Bob stays still, but injections still happen.
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
