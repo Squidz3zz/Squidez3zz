@@ -109,9 +109,9 @@ return {
 	FOLLOW_DISTANCE = 6,       -- how far Bob keeps from a player he follows (studs)
 	Sounds = {
 		DeathRing = "rbxassetid://9069161602",
-		FuseBeep = "",         -- empty = silent until the user picks one
-		NeedleHiss = "",
-		BobMotor = "",
+		FuseBeep = "rbxassetid://118464872816736",
+		NeedleHiss = "rbxassetid://8375254457",
+		BobMotor = "rbxassetid://18627683806",   -- loops while Bob is moving
 	},
 	HardDrives = {             -- the tablet lists them in this order
 		{ id = "Explosive", name = "EXPLOSIVE" },
@@ -235,6 +235,8 @@ them, so the clients' changes stand.
   it trails and settles when Bob starts and stops. ponytail: whole-body swing; bend individual hose segments if it reads
   as too stiff.
 - **Screen:** set from the attributes above; STANDBY pulses.
+- **Sounds:** BobMotor loops from the carriage while Bob is moving (its volume follows his speed, silent when still);
+  NeedleHiss plays from the needle during Hold. Both are client-side and in the SFX group.
 - **Copy flinch:** while State is Moving or Injecting, the copy's head turns toward the needle tip (Neck C0, clamped to
   70 degrees of yaw and 35 of pitch, smoothed). During Hold the target limb's joint jitters a few degrees. Back to facing
   forward over 0.5 s on Standby. Client-side only.
@@ -284,7 +286,3 @@ Human checks: how Bob's motion and the eyes feel, sounds, the phone emulator, a 
 Collecting Harddrives and using them up, more Harddrive types, more rooms and multiplayer rules, the red warning lamp, the
 lab log, regrouping Room 1's walls into a model. The broken loading screen in Studio (the deleted hazard stripe code) is a
 separate fix, parked at the user's request.
-
-## Open items
-
-- Sound IDs for FuseBeep, NeedleHiss and BobMotor (silent until the user picks them).
