@@ -1,8 +1,12 @@
 -- Run in the Edit datamodel. Checks what studio/build_lab.luau builds: Workspace.Room1 (Zone, Chair, ClaimButton,
 -- Shutter, Gantry, BobHome and the rewired BobTheInjector), ServerStorage.Tablet (a Tool),
 -- ReplicatedStorage.LabAssets.HardDrives.Explosive and the ServerStorage.LabBackup of the user's originals.
--- Two cases: run A (checks the build and records Room1's descendant count), then run studio/build_lab.luau again, then
--- run B (checks the build again and that the second run added nothing to Room1).
+-- Cases, run in this order, with studio/build_lab.luau run where an arrow says:
+--   A   checks the build and records Room1's descendant count            -> run the build again
+--   B   checks the build again and that the second run added nothing
+--   C1  drags BobHome 2 studs toward the window, to x 54                  -> run the build
+--   C2  the drag survived, and the gantry and Bob followed BobHome; drags BobHome back home -> run the build
+--   C3  they followed back, and the whole build checks out as in A (the place is as it started)
 local CASE = "A"
 
 local ServerStorage = game:GetService("ServerStorage")
@@ -11,6 +15,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local STEEL = Color3.fromRGB(58, 55, 52)
 local COUNT_ATTRIBUTE = "LabBuildTestCount" -- on ServerStorage, between case A and case B
 local BACK_WALL_Z = 54.33 -- the inner face of Room 1's back wall (measured)
+local HOME_POSITION = Vector3.new(56, 20.25, 48.5) -- where the build first puts BobHome
+local DRAGGED_POSITION = Vector3.new(54, 20.25, 48.5) -- case C1's drag, inside the gantry's travel (x 35.5 to 56)
 
 local function near(a: Vector3, b: Vector3, tolerance: number): boolean
 	return (a - b).Magnitude <= tolerance
@@ -72,7 +78,7 @@ local function check(): Model
 	ghost(home)
 	assert(home.Transparency == 1, "BobHome must be invisible")
 	assert(near(home.Size, Vector3.one, 0.001), "BobHome must be 1x1x1")
-	assert(near(home.Position, Vector3.new(56, 20.25, 48.5), 0.01), "BobHome position is " .. tostring(home.Position))
+	assert(near(home.Position, HOME_POSITION, 0.01), "BobHome position is " .. tostring(home.Position))
 	assert(near(home.CFrame.LookVector, -Vector3.xAxis, 0.001), "BobHome must look along -X")
 
 	-- Chair: seat centre at x 51.5, z 35, facing -X, the back on the +X side.
@@ -293,14 +299,49 @@ local function check(): Model
 	return room
 end
 
-local room = check()
-local count = #room:GetDescendants()
-if CASE == "A" then
-	ServerStorage:SetAttribute(COUNT_ATTRIBUTE, count)
-	return "PASS lab_build A (Room1 has " .. count .. " descendants; now run studio/build_lab.luau again, then case B)"
+-- BobHome is where it was put, and the gantry's moving parts and Bob's column axis are at its X/Z.
+local function followsBobHome(position: Vector3)
+	local room = workspace.Room1
+	local home = room.BobHome.Position
+	assert(near(home, position, 0.01), "BobHome should still be at " .. tostring(position) .. " after the build, is at " .. tostring(home))
+	local gantry = room.Gantry
+	for _, at in {
+		{ "Carriage", gantry.Carriage.Position },
+		{ "Sleeve", gantry.Sleeve.Position },
+		{ "ColumnPivot", room.BobTheInjector.Column.Core.ColumnPivot.WorldPosition },
+	} do
+		assert(near(flat(at[2]), flat(home), 0.01), at[1] .. " is at " .. tostring(at[2]) .. ", not at BobHome's X/Z " .. tostring(home))
+	end
+	assert(math.abs(gantry.Crossbeam.Position.Z - home.Z) < 0.01, "the Crossbeam is not at BobHome's Z")
 end
-local recorded = ServerStorage:GetAttribute(COUNT_ATTRIBUTE)
-assert(type(recorded) == "number", "run case A first")
-ServerStorage:SetAttribute(COUNT_ATTRIBUTE, nil)
-assert(count == recorded, "the second run changed Room1's descendant count from " .. recorded .. " to " .. count)
-return "PASS lab_build B (second run added nothing: " .. count .. " descendants)"
+
+local function dragBobHome(position: Vector3)
+	workspace.Room1.BobHome.CFrame = CFrame.lookAt(position, position - Vector3.xAxis)
+end
+
+if CASE == "A" or CASE == "B" then
+	local room = check()
+	local count = #room:GetDescendants()
+	if CASE == "A" then
+		ServerStorage:SetAttribute(COUNT_ATTRIBUTE, count)
+		return "PASS lab_build A (Room1 has " .. count .. " descendants; now run studio/build_lab.luau again, then case B)"
+	end
+	local recorded = ServerStorage:GetAttribute(COUNT_ATTRIBUTE)
+	assert(type(recorded) == "number", "run case A first")
+	ServerStorage:SetAttribute(COUNT_ATTRIBUTE, nil)
+	assert(count == recorded, "the second run changed Room1's descendant count from " .. recorded .. " to " .. count)
+	return "PASS lab_build B (second run added nothing: " .. count .. " descendants)"
+elseif CASE == "C1" then
+	check()
+	dragBobHome(DRAGGED_POSITION)
+	return "PASS lab_build C1 (BobHome dragged to " .. tostring(DRAGGED_POSITION) .. "; now run studio/build_lab.luau, then case C2)"
+elseif CASE == "C2" then
+	followsBobHome(DRAGGED_POSITION)
+	dragBobHome(HOME_POSITION)
+	return "PASS lab_build C2 (the gantry and Bob followed the drag; BobHome dragged back, now run studio/build_lab.luau, then case C3)"
+elseif CASE == "C3" then
+	followsBobHome(HOME_POSITION)
+	check()
+	return "PASS lab_build C3 (followed back home; the build checks out as it started)"
+end
+error("unknown CASE " .. CASE)

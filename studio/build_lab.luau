@@ -12,11 +12,11 @@
 --   ReplicatedStorage.LabAssets.HardDrives.Explosive  the user's Workspace.ExplosiveHardDrive part
 -- The first time, before it changes anything, it copies the user's originals (BobTheInjector, Tablet and
 -- ExplosiveHardDrive) into ServerStorage.LabBackup.
--- Safe to run again: only missing pieces are built, and an existing piece is left as it is (a Chair you moved stays
--- moved), except for BobHome, the Gantry and Bob: every run puts BobHome at HOME (below) and the gantry and Bob at
--- BobHome, so to move Bob's resting spot, change HOME and run this again. To rebuild a piece, delete it and run this
--- again. Bob, the Tablet tool and the hard drive are made from the user's originals, so to rebuild one of those, first
--- copy its original from ServerStorage.LabBackup into Workspace.
+-- Safe to run again: only missing pieces are built, and an existing piece is left as it is (a marker or Chair you moved
+-- stays moved). The exception is the Gantry and Bob, which every run lines up under wherever BobHome is: to move Bob's
+-- resting spot, drag BobHome and run this again. To rebuild a piece, delete it and run this again. Bob, the
+-- Tablet tool and the hard drive are made from the user's originals, so to rebuild one of those, first copy its original
+-- from ServerStorage.LabBackup into Workspace.
 -- Bob's parts are told apart only by class, material and colour, never by where they are.
 local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -27,8 +27,9 @@ local FLOOR_Y = 0.334
 local DOOR_LO = Vector3.new(32.15, FLOOR_Y, 40.702)
 local DOOR_HI = Vector3.new(32.75, 6.334, 45.032)
 
--- Where the new pieces go. Every one of them faces the window (-X). HOME is at z 48.5 so Bob's screen, which reaches
--- 4.6 studs to his left, clears the back wall (its inner face is at z 54.33).
+-- Where the new pieces go when first built. Every one of them faces the window (-X). HOME is where BobHome is first
+-- put; after that the marker itself is read. It is at z 48.5 so Bob's screen, which reaches 4.6 studs to his left,
+-- clears the back wall (its inner face is at z 54.33).
 local WEST = -Vector3.xAxis
 local HOME = CFrame.lookAt(Vector3.new(56, 20.25, 48.5), Vector3.new(56, 20.25, 48.5) + WEST)
 local CHAIR = CFrame.lookAt(Vector3.new(51.5, FLOOR_Y, 35), Vector3.new(51.5, FLOOR_Y, 35) + WEST) -- on the floor
@@ -167,8 +168,7 @@ end
 if missing(room, "BobHome") then
 	ghost(part({ Name = "BobHome", CFrame = HOME, Size = Vector3.one, Transparency = 1 }, room))
 end
-place(room.BobHome, HOME, Vector3.one)
-local home = HOME
+local home = room.BobHome.CFrame -- the marker as it is now: the user may have dragged it
 
 -- The chair, built in its own frame: -Z is its front (toward the window), +Z its back.
 if missing(room, "Chair") then

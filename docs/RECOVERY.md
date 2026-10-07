@@ -67,10 +67,10 @@ change them.
 - `ServerStorage.LabBackup`: untouched copies of Bob, the tablet and the hard drive as you built them, made the first time
   the script ran.
 
-The script is safe to run again: it only builds what is missing and leaves everything else as it is (if you moved the
-`Chair`, it stays where you put it). The exceptions are `BobHome`, the `Gantry` and Bob: every run puts `BobHome` where
-the script's `HOME` (near its top) says, and moves the gantry and Bob to it. To move Bob's resting spot, change `HOME` and
-run the script again. To rebuild:
+The script is safe to run again: it only builds what is missing and leaves everything else as it is (if you moved
+`BobHome` or the `Chair`, they stay where you put them). The one thing a re-run moves is the `Gantry` and Bob: they
+line up under `BobHome`. To move Bob's resting spot, drag `BobHome` (keep its
+front face toward the way Bob's needle should point), then run the script again. To rebuild:
 
 - **A piece of the lab** (for example the `Chair` or the `Gantry`): delete it, then run `studio/build_lab.luau`.
 - **Bob, the tablet or the hard drive**: delete the broken one (`Workspace.Room1.BobTheInjector`, `ServerStorage.Tablet`
