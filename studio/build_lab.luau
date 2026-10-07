@@ -12,10 +12,11 @@
 --   ReplicatedStorage.LabAssets.HardDrives.Explosive  the user's Workspace.ExplosiveHardDrive part
 -- The first time, before it changes anything, it copies the user's originals (BobTheInjector, Tablet and
 -- ExplosiveHardDrive) into ServerStorage.LabBackup.
--- Safe to run again: a piece that already exists is left exactly as it is (so a marker you moved stays moved); only
--- missing pieces are built. To rebuild a piece, delete it and run this again. Bob, the Tablet tool and the hard drive are
--- made from the user's originals, so to rebuild one of those, first copy its original from ServerStorage.LabBackup into
--- Workspace.
+-- Safe to run again: only missing pieces are built, and an existing piece is left as it is (a Chair you moved stays
+-- moved), except for BobHome, the Gantry and Bob: every run puts BobHome at HOME (below) and the gantry and Bob at
+-- BobHome, so to move Bob's resting spot, change HOME and run this again. To rebuild a piece, delete it and run this
+-- again. Bob, the Tablet tool and the hard drive are made from the user's originals, so to rebuild one of those, first
+-- copy its original from ServerStorage.LabBackup into Workspace.
 -- Bob's parts are told apart only by class, material and colour, never by where they are.
 local ServerStorage = game:GetService("ServerStorage")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -26,9 +27,10 @@ local FLOOR_Y = 0.334
 local DOOR_LO = Vector3.new(32.15, FLOOR_Y, 40.702)
 local DOOR_HI = Vector3.new(32.75, 6.334, 45.032)
 
--- Where the new pieces go. Every one of them faces the window (-X).
+-- Where the new pieces go. Every one of them faces the window (-X). HOME is at z 48.5 so Bob's screen, which reaches
+-- 4.6 studs to his left, clears the back wall (its inner face is at z 54.33).
 local WEST = -Vector3.xAxis
-local HOME = CFrame.lookAt(Vector3.new(56, 20.25, 50), Vector3.new(56, 20.25, 50) + WEST)
+local HOME = CFrame.lookAt(Vector3.new(56, 20.25, 48.5), Vector3.new(56, 20.25, 48.5) + WEST)
 local CHAIR = CFrame.lookAt(Vector3.new(51.5, FLOOR_Y, 35), Vector3.new(51.5, FLOOR_Y, 35) + WEST) -- on the floor
 local CLAIM = CFrame.lookAt(Vector3.new(31.95, 3.5, 48.5), Vector3.new(31.95, 3.5, 48.5) + WEST) -- its back on the wall
 
@@ -94,13 +96,22 @@ local function flat(v)
 	return Vector3.new(v.X, 0, v.Z)
 end
 
-local built = {}
+local built, moved = {}, {}
 local function missing(parent, name)
 	if parent:FindFirstChild(name) then
 		return false
 	end
 	table.insert(built, name)
 	return true
+end
+
+-- Puts an existing part where the script says, noting it when that moves or resizes it.
+local function place(p, cframe, size)
+	if (p.Position - cframe.Position).Magnitude > 1e-3 or (p.Size - size).Magnitude > 1e-3 or p.CFrame.LookVector:Dot(cframe.LookVector) < 0.99999 then
+		table.insert(moved, p.Name)
+	end
+	p.Size = size
+	p.CFrame = cframe
 end
 
 -- A piece made from one of the user's originals in Workspace: built only while the piece is missing, from the
@@ -156,7 +167,8 @@ end
 if missing(room, "BobHome") then
 	ghost(part({ Name = "BobHome", CFrame = HOME, Size = Vector3.one, Transparency = 1 }, room))
 end
-local home = room.BobHome.CFrame
+place(room.BobHome, HOME, Vector3.one)
+local home = HOME
 
 -- The chair, built in its own frame: -Z is its front (toward the window), +Z its back.
 if missing(room, "Chair") then
@@ -220,19 +232,30 @@ if missing(room, "Shutter") then
 	shutter:SetAttribute("ClosedCFrame", closed)
 end
 
+-- The gantry, its carriage at BobHome. The sleeve is wide enough to hide the column's fins (2.95 studs from its axis).
 if missing(room, "Gantry") then
-	local gantry = make("Model", { Name = "Gantry" })
+	make("Model", { Name = "Gantry" }, room)
+end
+do
+	local gantry = room.Gantry
 	local x, z = home.X, home.Z
 	for _, def in {
 		{ "RailA", Vector3.new(33.8, 22.05, 35.7), Vector3.new(1, 1, 37.8), M.Metal },
 		{ "RailB", Vector3.new(57.7, 22.05, 35.7), Vector3.new(1, 1, 37.8), M.Metal },
 		{ "Crossbeam", Vector3.new(45.75, 21.15, z), Vector3.new(57.7 - 33.8, 0.8, 1.2), M.Metal },
 		{ "Carriage", Vector3.new(x, 20.25, z), Vector3.new(3, 1, 3), M.DiamondPlate },
-		{ "Sleeve", Vector3.new(x, 16.75, z), Vector3.new(4, 6, 4), M.DiamondPlate },
+		{ "Sleeve", Vector3.new(x, 16.75, z), Vector3.new(6.4, 6, 6.4), M.DiamondPlate },
 	} do
-		ghost(part({ Name = def[1], CFrame = CFrame.new(def[2]), Size = def[3], Material = def[4] }, gantry))
+		local cframe, size = CFrame.new(def[2]), def[3]
+		place(gantry:FindFirstChild(def[1]) or ghost(part({ Name = def[1], CFrame = cframe, Size = size, Material = def[4] }, gantry)), cframe, size)
 	end
-	gantry.Parent = room
+end
+
+-- One pivot change for the whole of Bob: turn him about his column axis until the needle (look) points along BobHome's
+-- look, and carry the axis to BobHome's X/Z (heights unchanged).
+local function moveBob(bob, axis, look)
+	local turn = CFrame.lookAt(Vector3.zero, flat(home.LookVector)) * CFrame.lookAt(Vector3.zero, flat(look)):Inverse()
+	bob:PivotTo(CFrame.new(home.X, 0, home.Z) * turn * CFrame.new(-flat(axis)) * bob:GetPivot())
 end
 
 -- Bob's screen: two lines of amber Oswald on black, on the screen's large face that points away from the column.
@@ -319,11 +342,7 @@ local function rewireBob(bob)
 		tip, base = b, a
 	end
 
-	-- One pivot change for the whole of Bob: turn about the column axis until the needle points along BobHome's
-	-- look, and carry the axis to BobHome's X/Z (heights unchanged).
-	local turn = CFrame.lookAt(Vector3.zero, flat(home.LookVector)) * CFrame.lookAt(Vector3.zero, flat(tip - base)):Inverse()
-	local move = CFrame.new(home.X, 0, home.Z) * turn * CFrame.new(-axis)
-	bob:PivotTo(move * bob:GetPivot())
+	moveBob(bob, axis, tip - base)
 
 	a, b = ends()
 	tip, base = if tipSign > 0 then a else b, if tipSign > 0 then b else a
@@ -401,6 +420,16 @@ local function rewireBob(bob)
 end
 adopt(room, "BobTheInjector", "BobTheInjector", rewireBob)
 
+-- A Bob rewired on an earlier run follows BobHome too.
+local columnPivot = room:FindFirstChild("BobTheInjector") and room.BobTheInjector:FindFirstChild("ColumnPivot", true)
+if columnPivot then
+	local at = columnPivot.WorldCFrame
+	if (flat(at.Position) - flat(home.Position)).Magnitude > 1e-3 or flat(at.LookVector).Unit:Dot(flat(home.LookVector).Unit) < 0.99999 then
+		moveBob(room.BobTheInjector, at.Position, at.LookVector)
+		table.insert(moved, "BobTheInjector")
+	end
+end
+
 -- The tablet becomes a Tool: Handle = its PrimaryPart, every other part welded to it.
 adopt(ServerStorage, "Tablet", "Tablet", function(model)
 	local handle = model.PrimaryPart
@@ -434,4 +463,4 @@ adopt(drives, "Explosive", "ExplosiveHardDrive", function(drive)
 	drive.Parent = drives
 end)
 
-return if #built > 0 then "build_lab: built " .. table.concat(built, ", ") else "build_lab: nothing to build"
+return ("build_lab: built [%s], moved [%s]"):format(table.concat(built, ", "), table.concat(moved, ", "))

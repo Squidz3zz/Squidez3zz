@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local STEEL = Color3.fromRGB(58, 55, 52)
 local COUNT_ATTRIBUTE = "LabBuildTestCount" -- on ServerStorage, between case A and case B
+local BACK_WALL_Z = 54.33 -- the inner face of Room 1's back wall (measured)
 
 local function near(a: Vector3, b: Vector3, tolerance: number): boolean
 	return (a - b).Magnitude <= tolerance
@@ -71,7 +72,7 @@ local function check(): Model
 	ghost(home)
 	assert(home.Transparency == 1, "BobHome must be invisible")
 	assert(near(home.Size, Vector3.one, 0.001), "BobHome must be 1x1x1")
-	assert(near(home.Position, Vector3.new(56, 20.25, 50), 0.01), "BobHome position is " .. tostring(home.Position))
+	assert(near(home.Position, Vector3.new(56, 20.25, 48.5), 0.01), "BobHome position is " .. tostring(home.Position))
 	assert(near(home.CFrame.LookVector, -Vector3.xAxis, 0.001), "BobHome must look along -X")
 
 	-- Chair: seat centre at x 51.5, z 35, facing -X, the back on the +X side.
@@ -138,7 +139,7 @@ local function check(): Model
 		RailB = { Vector3.new(57.7, 22.05, 35.7), Vector3.new(1, 1, 37.8) },
 		Crossbeam = { Vector3.new(45.75, 21.15, z), Vector3.new(23.9, 0.8, 1.2) },
 		Carriage = { Vector3.new(x, 20.25, z), Vector3.new(3, 1, 3) },
-		Sleeve = { Vector3.new(x, 16.75, z), Vector3.new(4, 6, 4) },
+		Sleeve = { Vector3.new(x, 16.75, z), Vector3.new(6.4, 6, 6.4) },
 	} do
 		local part = get(gantry, name, "BasePart")
 		assert(near(part.Position, spec[1], 0.01), "Gantry." .. name .. " is at " .. tostring(part.Position))
@@ -170,17 +171,31 @@ local function check(): Model
 		end
 	end
 
+	-- The corners of a part's box, in world space.
+	local function corners(p: BasePart): { Vector3 }
+		local list, half = {}, p.Size / 2
+		for _, corner in { Vector3.new(1, 1, 1), Vector3.new(1, 1, -1), Vector3.new(1, -1, 1), Vector3.new(1, -1, -1) } do
+			for _, sign in { 1, -1 } do
+				table.insert(list, p.CFrame:PointToWorldSpace(half * corner * sign))
+			end
+		end
+		return list
+	end
+
 	-- Column: the 16 CorrodedMetal parts; Core holds ColumnPivot at the axis and bottom, upright, looking along the needle.
+	-- The sleeve's sides cover the column all round (its fins reach 2.95 studs from the axis).
+	local sleeve = gantry.Sleeve
 	local columnParts, lowest = 0, math.huge
 	for _, p in column:GetChildren() do
 		if p:IsA("BasePart") then
 			columnParts += 1
 			assert(p.Material == Enum.Material.CorrodedMetal, p:GetFullName() .. " must be CorrodedMetal")
-			local half = p.Size / 2
-			for _, corner in { Vector3.new(1, 1, 1), Vector3.new(1, 1, -1), Vector3.new(1, -1, 1), Vector3.new(1, -1, -1) } do
-				for _, sign in { 1, -1 } do
-					lowest = math.min(lowest, p.CFrame:PointToWorldSpace(half * corner * sign).Y)
-				end
+			for _, c in corners(p) do
+				lowest = math.min(lowest, c.Y)
+				assert(
+					math.abs(c.X - sleeve.Position.X) <= sleeve.Size.X / 2 and math.abs(c.Z - sleeve.Position.Z) <= sleeve.Size.Z / 2,
+					p:GetFullName() .. " sticks out of the Sleeve's sides"
+				)
 			end
 		end
 	end
@@ -224,6 +239,10 @@ local function check(): Model
 	assert(math.abs((size * faceAxis.Unit:Abs()).Magnitude - thinnest) < 0.001, "Display must be on the screen's large face")
 	local faceNormal = screen.CFrame:VectorToWorldSpace(faceAxis)
 	assert(faceNormal:Dot(flat(screen.Position - pivotCF.Position)) > 0, "Display must face away from the column")
+	-- At home the screen clears the back wall, whose inner face is at z 54.33.
+	for _, c in corners(screen) do
+		assert(c.Z < BACK_WALL_Z, ("Bob's Screen reaches z %.2f, into the back wall (inner face z %.2f)"):format(c.Z, BACK_WALL_Z))
+	end
 
 	-- Moved out of Workspace.
 	for _, name in { "BobTheInjector", "Tablet", "ExplosiveHardDrive" } do
