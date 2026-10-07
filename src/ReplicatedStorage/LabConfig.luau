@@ -31,16 +31,13 @@
 -- a function of the same name in ServerScriptService.HardDriveEffects and a picture under ReplicatedStorage.LabAssets.HardDrives,
 -- so a new Harddrive needs both of those too, not only a line here.
 --
--- The limb table (LIMB_KEYS and Limbs): you should not need to edit this. The six limb keys are the R6 names. A body may be R6
--- or R15, so Limbs says, per rig, which parts make up each limb (parts, by name in the body) and which joint holds it on (joint
--- = the part the joint sits in, then the joint's name; none for the torso). A limb is "lost" when its joint no longer exists, or
--- when none of its parts are left in the body. These helpers read the table; everything else asks them instead of looking at
--- the body itself:
---   LabConfig.rigOf(body)           "R6" or "R15", from the body's Humanoid
---   LabConfig.limbParts(body, key)  the limb's parts that are still in the body ({} for an unknown key or a missing limb)
---   LabConfig.limbJoint(body, key)  the joint holding the limb on, or nil (the torso has none, and a lost limb's is gone). It is a
---                                   Motor6D, or an AnimationConstraint: the R15 bodies Roblox builds from a HumanoidDescription use
---                                   those instead (same names)
+-- The limb table (LIMB_KEYS and Limbs): you should not need to edit this. The game is R6 only: every character and every copy is
+-- an R6 body, so each of the six limb keys is one R6 part (by its name in the body) and the Motor6D in the Torso that holds it on
+-- (joint = that Motor6D's name; the torso has none). A limb is "lost" when its joint no longer exists, or when its part is no
+-- longer in the body. These helpers read the table; everything else asks them instead of looking at the body itself:
+--   LabConfig.limbParts(body, key)  the limb's parts that are still in the body (a list of one part, or {} for an unknown key or a
+--                                   missing limb)
+--   LabConfig.limbJoint(body, key)  the Motor6D holding the limb on, or nil (the torso has none, and a lost limb's is gone)
 --   LabConfig.isLost(body, key)     true when the limb is lost (an unknown key counts as lost). The torso is never lost while it is
 --                                   in the body
 --   LabConfig.limbCentre(body, key) the middle of the box around the limb's parts (a Vector3), or nil when it is lost
@@ -67,73 +64,30 @@ local LabConfig = {
 	LIMB_KEYS = { "Head", "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg" },
 
 	Limbs = {
-		R6 = {
-			Head = { parts = { "Head" }, joint = { "Torso", "Neck" } },
-			Torso = { parts = { "Torso" } },
-			LeftArm = { parts = { "Left Arm" }, joint = { "Torso", "Left Shoulder" } },
-			RightArm = { parts = { "Right Arm" }, joint = { "Torso", "Right Shoulder" } },
-			LeftLeg = { parts = { "Left Leg" }, joint = { "Torso", "Left Hip" } },
-			RightLeg = { parts = { "Right Leg" }, joint = { "Torso", "Right Hip" } },
-		},
-		R15 = {
-			Head = { parts = { "Head" }, joint = { "Head", "Neck" } },
-			Torso = { parts = { "UpperTorso", "LowerTorso" } },
-			LeftArm = {
-				parts = { "LeftUpperArm", "LeftLowerArm", "LeftHand" },
-				joint = { "LeftUpperArm", "LeftShoulder" },
-			},
-			RightArm = {
-				parts = { "RightUpperArm", "RightLowerArm", "RightHand" },
-				joint = { "RightUpperArm", "RightShoulder" },
-			},
-			LeftLeg = {
-				parts = { "LeftUpperLeg", "LeftLowerLeg", "LeftFoot" },
-				joint = { "LeftUpperLeg", "LeftHip" },
-			},
-			RightLeg = {
-				parts = { "RightUpperLeg", "RightLowerLeg", "RightFoot" },
-				joint = { "RightUpperLeg", "RightHip" },
-			},
-		},
+		Head = { part = "Head", joint = "Neck" },
+		Torso = { part = "Torso" },
+		LeftArm = { part = "Left Arm", joint = "Left Shoulder" },
+		RightArm = { part = "Right Arm", joint = "Right Shoulder" },
+		LeftLeg = { part = "Left Leg", joint = "Left Hip" },
+		RightLeg = { part = "Right Leg", joint = "Right Hip" },
 	},
 }
 
-function LabConfig.rigOf(body)
-	local humanoid = body:FindFirstChildOfClass("Humanoid")
-	return if humanoid and humanoid.RigType == Enum.HumanoidRigType.R15 then "R15" else "R6"
-end
-
--- The table's entry for this body's rig and this key, or nil for an unknown key.
-local function specOf(body, key)
-	return LabConfig.Limbs[LabConfig.rigOf(body)][key]
-end
-
 function LabConfig.limbParts(body, key)
-	local parts = {}
-	local spec = specOf(body, key)
-	if spec then
-		for _, name in spec.parts do
-			local part = body:FindFirstChild(name)
-			if part and part:IsA("BasePart") then
-				table.insert(parts, part)
-			end
-		end
-	end
-	return parts
+	local spec = LabConfig.Limbs[key]
+	local part = spec and body:FindFirstChild(spec.part)
+	return if part and part:IsA("BasePart") then { part } else {}
 end
 
 function LabConfig.limbJoint(body, key)
-	local spec = specOf(body, key)
-	if not (spec and spec.joint) then
-		return nil
-	end
-	local holder = body:FindFirstChild(spec.joint[1])
-	local joint = holder and holder:FindFirstChild(spec.joint[2])
-	return if joint and (joint:IsA("JointInstance") or joint:IsA("AnimationConstraint")) then joint else nil
+	local spec = LabConfig.Limbs[key]
+	local torso = body:FindFirstChild("Torso")
+	local joint = spec and spec.joint and torso and torso:FindFirstChild(spec.joint)
+	return if joint and joint:IsA("JointInstance") then joint else nil
 end
 
 function LabConfig.isLost(body, key)
-	local spec = specOf(body, key)
+	local spec = LabConfig.Limbs[key]
 	if not spec or #LabConfig.limbParts(body, key) == 0 then
 		return true
 	end

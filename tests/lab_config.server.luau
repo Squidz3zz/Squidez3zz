@@ -1,5 +1,5 @@
 -- Run in the Server datamodel of a running playtest (no character needed): start the playtest, then run this.
--- Checks ReplicatedStorage.LabConfig: its values, and the limb table on a real R6 body and a real R15 body.
+-- Checks ReplicatedStorage.LabConfig: its values, and the limb table on a real R6 body.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -18,63 +18,55 @@ for name, id in LabConfig.Sounds do
 end
 assert(#LabConfig.LIMB_KEYS == 6, "LIMB_KEYS should list six limbs")
 
--- The limb table, on real bodies of both rigs.
-for _, rig in { Enum.HumanoidRigType.R6, Enum.HumanoidRigType.R15 } do
-	local body = Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), rig)
-	body.Parent = workspace
-	local label = rig.Name
-	local strays = {}
-	assert(LabConfig.rigOf(body) == label, label .. ": rigOf gave " .. tostring(LabConfig.rigOf(body)))
+-- The limb table, on a real R6 body.
+local body = Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R6)
+body.Parent = workspace
+local strays = {}
 
-	local function expectOnly(lostKey)
-		for _, key in LabConfig.LIMB_KEYS do
-			assert(
-				LabConfig.isLost(body, key) == (key == lostKey),
-				label .. ": isLost(" .. key .. ") should be " .. tostring(key == lostKey)
-			)
-			assert(
-				(LabConfig.limbCentre(body, key) == nil) == (key == lostKey),
-				label .. ": limbCentre(" .. key .. ") should be " .. (if key == lostKey then "nil" else "a point")
-			)
-		end
-	end
-
-	-- A whole body: every limb has parts, is not lost and has a centre; every limb except the torso has a joint.
+local function expectOnly(lostKey)
 	for _, key in LabConfig.LIMB_KEYS do
-		assert(#LabConfig.limbParts(body, key) >= 1, label .. ": limbParts(" .. key .. ") is empty")
+		assert(LabConfig.isLost(body, key) == (key == lostKey), "isLost(" .. key .. ") should be " .. tostring(key == lostKey))
 		assert(
-			(LabConfig.limbJoint(body, key) ~= nil) == (key ~= "Torso"),
-			label .. ": limbJoint(" .. key .. ") should " .. (if key == "Torso" then "be nil" else "exist")
+			(LabConfig.limbCentre(body, key) == nil) == (key == lostKey),
+			"limbCentre(" .. key .. ") should be " .. (if key == lostKey then "nil" else "a point")
 		)
 	end
-	expectOnly(nil)
+end
 
-	-- Destroy the left arm's joint (found by its real name, not through LabConfig): the arm is lost at once.
-	local leftShoulder = if label == "R6" then body.Torso["Left Shoulder"] else body.LeftUpperArm.LeftShoulder
-	leftShoulder:Destroy()
-	assert(LabConfig.limbJoint(body, "LeftArm") == nil, label .. ": limbJoint(LeftArm) should be nil once its joint is gone")
-	expectOnly("LeftArm")
+-- A whole body: every limb has a part, is not lost and has a centre; every limb except the torso has a joint.
+for _, key in LabConfig.LIMB_KEYS do
+	assert(#LabConfig.limbParts(body, key) >= 1, "limbParts(" .. key .. ") is empty")
+	assert(
+		(LabConfig.limbJoint(body, key) ~= nil) == (key ~= "Torso"),
+		"limbJoint(" .. key .. ") should " .. (if key == "Torso" then "be nil" else "exist")
+	)
+end
+expectOnly(nil)
 
-	-- Its parts leave the body: still lost, and no parts left.
-	for _, part in LabConfig.limbParts(body, "LeftArm") do
-		part.Parent = workspace
-		table.insert(strays, part)
-	end
-	assert(#LabConfig.limbParts(body, "LeftArm") == 0, label .. ": limbParts(LeftArm) should be empty after the parts left")
-	expectOnly("LeftArm")
+-- Destroy the left arm's joint (found by its real name, not through LabConfig): the arm is lost at once.
+body.Torso["Left Shoulder"]:Destroy()
+assert(LabConfig.limbJoint(body, "LeftArm") == nil, "limbJoint(LeftArm) should be nil once its joint is gone")
+expectOnly("LeftArm")
 
-	-- A limb whose joint is intact but whose parts are gone is lost too.
-	for _, part in LabConfig.limbParts(body, "RightLeg") do
-		part.Parent = workspace
-		table.insert(strays, part)
-	end
-	assert(LabConfig.isLost(body, "RightLeg"), label .. ": RightLeg with no parts should be lost")
-	assert(LabConfig.limbCentre(body, "RightLeg") == nil, label .. ": limbCentre(RightLeg) should be nil with no parts")
+-- Its part leaves the body: still lost, and no parts left.
+for _, part in LabConfig.limbParts(body, "LeftArm") do
+	part.Parent = workspace
+	table.insert(strays, part)
+end
+assert(#LabConfig.limbParts(body, "LeftArm") == 0, "limbParts(LeftArm) should be empty after the part left")
+expectOnly("LeftArm")
 
-	body:Destroy()
-	for _, part in strays do
-		part:Destroy()
-	end
+-- A limb whose joint is intact but whose part is gone is lost too.
+for _, part in LabConfig.limbParts(body, "RightLeg") do
+	part.Parent = workspace
+	table.insert(strays, part)
+end
+assert(LabConfig.isLost(body, "RightLeg"), "RightLeg with no part should be lost")
+assert(LabConfig.limbCentre(body, "RightLeg") == nil, "limbCentre(RightLeg) should be nil with no part")
+
+body:Destroy()
+for _, part in strays do
+	part:Destroy()
 end
 
 return "PASS lab_config"
