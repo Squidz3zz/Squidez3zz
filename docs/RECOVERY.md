@@ -123,6 +123,7 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 | `LabClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/LabClient/init.client.luau` |
 | `TabletMenu` | ModuleScript | `LabClient` | `.../LabClient/TabletMenu.luau` |
+| `GooglyEyes` | ModuleScript | `LabClient` | `.../LabClient/GooglyEyes.luau` |
 | `DeathScreen` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/DeathScreen.client.luau` |
 
 `DeathScreen` is the death screen for every death in the game, not only Room 1's: the moment your character dies the screen
