@@ -9,8 +9,9 @@
 --   C  (B-C) home: run straight after B: 0.2 s into Standby, ColumnPivot's X/Z is within 0.2 of BobHome's and the screen reads
 --      STANDBY
 --   D  (B-D) follow: needs only a spawned character outside the room (no claim) and Bob at home on Standby. The character is put
---      in the room at (40, 3.5, 25); for FOLLOW_WINDOW s, every frame, the carriage's horizontal distance to it never drops below
---      FOLLOW_DISTANCE - 1, and at the end it is between FOLLOW_DISTANCE - 1 and FOLLOW_DISTANCE + 1.5
+--      in the room at (40, 3.5, 25); for FOLLOW_WINDOW s, every frame, the horizontal distance from Bob's eyes (the midpoint of
+--      the two EyeCenters) to it never drops below FOLLOW_DISTANCE - 1, and at the end it is between FOLLOW_DISTANCE - 1 and
+--      FOLLOW_DISTANCE + 1.5
 --   E  (B-E) outside: run straight after D. The character is put outside at (25, 3.5, 30); within HOME_WINDOW s ColumnPivot's X/Z
 --      is within 0.5 of BobHome's
 --   F  (B-F) eyes: checked on every frame of D and E (more than 5 s in all): each pupil is at most its travel radius + 0.01 from its
@@ -20,9 +21,6 @@
 --      RequestInjection remote, as the tablet does. At the end of Moving the copy's Neck C0 is turned more than 5 degrees from
 --      its built C0 (read on Standby before the request); 1 s into Standby it is back within 1 degree. Run "claim" again after G.
 -- B blows the copy's left leg off, so run the server step "claim" again before another A or B.
--- The brief's window for D was 4 s, but Bob's Standby speed is capped at 4 studs/s and BobHome is 28.4 studs from (40, 25): the
--- 20.9 studs to within FOLLOW_DISTANCE + 1.5 of the player take 5.2 s at full speed (about 5.4 s with the easing), so D waits 8 s.
--- E's trip home is as long (22.4 studs) and takes about 5.8 s, inside the brief's 6 s.
 local CASE = "A"
 local FOLLOW_WINDOW = 8
 local HOME_WINDOW = 6
@@ -163,23 +161,27 @@ elseif CASE == "D" then
 	local root = rootPart()
 	assert(state() == "Standby", "Bob is not on Standby")
 	assert(flatDistance(pivot.WorldPosition, room.BobHome.Position) <= 0.5, "Bob is not at home: put the character outside the room (case E) first")
-	local carriage = room.Gantry.Carriage
+	local eyeL, eyeR = bob.Body.EyeWhiteL.EyeCenter, bob.Body.EyeWhiteR.EyeCenter
+	local function eyes()
+		return (eyeL.WorldPosition + eyeR.WorldPosition) / 2
+	end
 	local check, eyeReport = eyeChecker()
 	root.CFrame = CFrame.new(40, 3.5, 25)
 	local began = os.clock()
 	local closest, distance, reached = math.huge, math.huge, nil
 	while os.clock() - began < FOLLOW_WINDOW do
 		task.wait()
-		distance = flatDistance(carriage.Position, root.Position)
+		distance = flatDistance(eyes(), root.Position)
 		closest = math.min(closest, distance)
 		if not reached and distance <= FOLLOW_DISTANCE + 1.5 then
 			reached = os.clock() - began
 		end
 		check()
-		assert(closest >= FOLLOW_DISTANCE - 1, ("B-D: the carriage came %.2f studs from the player"):format(closest))
+		assert(closest >= FOLLOW_DISTANCE - 1, ("B-D: Bob's eyes came %.2f studs from the player"):format(closest))
 	end
-	assert(distance >= FOLLOW_DISTANCE - 1 and distance <= FOLLOW_DISTANCE + 1.5, ("B-D: after %d s the carriage is %.2f studs from the player (at %s)"):format(FOLLOW_WINDOW, distance, tostring(carriage.Position)))
-	return ("PASS bob_animator B-D (in range after %.2f s, %.2f studs at the end, closest %.2f); %s"):format(reached, distance, closest, eyeReport())
+	assert(distance >= FOLLOW_DISTANCE - 1 and distance <= FOLLOW_DISTANCE + 1.5, ("B-D: after %d s Bob's eyes are %.2f studs from the player (at %s)"):format(FOLLOW_WINDOW, distance, tostring(eyes())))
+	local carriage = room.Gantry.Carriage.Position
+	return ("PASS bob_animator B-D (eyes in range after %.2f s, %.2f studs at the end, closest %.2f; carriage %.2f studs away); %s"):format(reached, distance, closest, flatDistance(carriage, root.Position), eyeReport())
 elseif CASE == "E" then
 	local root = rootPart()
 	local home = room.BobHome.Position

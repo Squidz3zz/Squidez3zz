@@ -173,10 +173,11 @@ the needle slides out into it and back, then he goes home to `BobHome`. Each pha
 joins mid-injection sees Bob in the right place. His screen reads the phase ("TARGET: LEFT ARM" over "EXPLOSIVE",
 "INJECTING", "RETURNING", a slowly pulsing "STANDBY"). It adds two sounds of its own on each player's side, in the SFX group:
 `BobMotor` in the carriage (louder the faster Bob moves) and `NeedleHiss` in the needle (while the needle is in). On Standby,
-when a player walks into the room (the invisible `Zone`), Bob slides over to `LabConfig.FOLLOW_DISTANCE` studs from the nearest
-one (slowly, at most 4 studs a second), turns to face them and lowers his needle to their head's height; when nobody is in the
-room he drifts back to `BobHome`. His body swings a little when he starts and stops. His googly eyes roll inside their whites
-(they use `GooglyEyes`, another ModuleScript inside `LabClient`) and spin when something blows up in the room. While he moves
+when a player walks into the room (the invisible `Zone`), Bob slides over until his eyes are `LabConfig.FOLLOW_DISTANCE` studs
+from the nearest one (slowly, at most 4 studs a second), turns to face them and lowers his needle to their head's height; when
+nobody is in the room he drifts back to `BobHome`. His body swings a little when he starts and stops. His googly eyes roll
+inside their whites (they use `GooglyEyes`, another ModuleScript inside `LabClient`), look toward the player he is watching, and
+spin when something blows up in the room. While he moves
 in and injects, the copy's head turns to watch the needle and the injected limb twitches; that happens on each player's screen
 only, and the copy faces forward again when Bob is back on Standby. It reads Bob as built when the game starts, so it needs the
 names `studio/build_lab.luau` gives (`Column.Core.ColumnPivot`, `Needle.NeedleTip` and `NeedleBase`, `Body.Screen.Display`,

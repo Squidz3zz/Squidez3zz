@@ -8,6 +8,8 @@
 --        On a 0.2 rim a sub-step sweeps 0.4 radians and the rim bounces cost 28% in one frame (speed 14.4), so a spin that fast is
 --        meant for a bigger eye.
 --   G-E  a new eye rests at the bottom, and a zero, negative or NaN dt changes nothing
+--   G-F  watching beats gravity: with gravity and a pull toward +x, after 3 s the pupil is more than half its radius toward +x,
+--        for Bob's radius (0.1925) and 0.5
 local GooglyEyes = require(game.StarterPlayer.StarterPlayerScripts.LabClient.GooglyEyes:Clone())
 local GRAVITY = Vector2.new(0, -196.2)
 local ZERO = Vector2.zero
@@ -64,4 +66,15 @@ for _, dt in { 0, -1, 0 / 0 } do
 	assert(eye.offset == Vector2.new(0, -0.5) and eye.velocity == ZERO, "G-E: dt " .. dt .. " moved the eye")
 end
 
-return "PASS googly_eyes (G-A..G-E)"
+-- G-F
+local watched = {}
+for _, radius in { 0.1925, 0.5 } do
+	local watcher = GooglyEyes.new(radius)
+	for _ = 1, 180 do
+		GooglyEyes.step(watcher, GRAVITY, Vector2.new(1, 0), ZERO, 1 / 60)
+	end
+	assert(watcher.offset.X > 0.5 * radius, ("G-F: radius %g ended at x %.4f, not past half the radius (%.4f)"):format(radius, watcher.offset.X, 0.5 * radius))
+	table.insert(watched, ("%.2f of r %g"):format(watcher.offset.X / radius, radius))
+end
+
+return "PASS googly_eyes (G-A..G-F; G-F x/radius " .. table.concat(watched, ", ") .. ")"

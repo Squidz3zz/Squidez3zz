@@ -11,9 +11,11 @@
 --     the rim goes back onto it and its outward velocity is reflected, times RESTITUTION. So the pupil stays inside its circle whatever
 --     dt or forces it is given (as long as they are finite numbers).
 --   spin(eye, speed)                 adds speed (studs/s) along the rim's tangent at the current offset, counter-clockwise
--- The settings below are the feel: PULL is how hard a watched target tugs, DAMPING how fast the pupil loses speed (per second) and
--- RESTITUTION how much of its speed a pupil keeps when it bounces off the rim.
-local PULL = 60
+-- The settings below are the feel: PULL is how hard a watched target tugs (studs/s^2 for a full pull of 1), DAMPING how fast the
+-- pupil loses speed (per second) and RESTITUTION how much of its speed a pupil keeps when it bounces off the rim. PULL is set
+-- above Roblox's gravity (196.2), so watching beats gravity: a pupil watching something level with it rests about 57 degrees up
+-- from the bottom, toward it, instead of drooping at the bottom.
+local PULL = 300
 local DAMPING = 4
 local RESTITUTION = 0.55
 

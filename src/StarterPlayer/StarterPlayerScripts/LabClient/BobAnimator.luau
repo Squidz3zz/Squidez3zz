@@ -18,9 +18,10 @@
 --              NeedleOut, stays in for Hold (NeedleHiss plays), slides back over NeedleIn
 --   Returning  home over Return
 --   Standby    following: he watches the player closest to him whose HumanoidRootPart is inside Room1.Zone (the copy is not a
---              player). The carriage heads for the spot FOLLOW_DISTANCE from them on his side (inside the travel) at most
---              FOLLOW_SPEED, starting gently and slowing as he arrives; he turns to face them at most TURN_SPEED and lowers the
---              needle tip to their head's height. With nobody to watch he goes home the same way.
+--              player). The carriage heads for the spot that leaves his eyes (between the two EyeCenters) FOLLOW_DISTANCE from
+--              them, on his side and facing them (inside the travel), at most FOLLOW_SPEED, starting gently and slowing as he
+--              arrives; he turns to face them at most TURN_SPEED and lowers the needle tip to their head's height. With nobody
+--              to watch he goes home the same way.
 -- Swing: the body (and the needle) hangs from ColumnPivot like a pendulum on a damped spring, leaning away from the carriage's
 -- acceleration in Bob's frame, at most SWING_MAX each way. It dies away while the needle goes in, so the needle lands.
 -- Eyes: each pupil is a GooglyEyes simulation in its white's plane. A white and a pupil are Cylinder discs: the normal is the
@@ -85,12 +86,14 @@ function BobAnimator.readRig(room: Model)
 	local needle = bob.Needle
 	local tip, base = needle.NeedleTip.WorldPosition, needle.NeedleBase.WorldPosition
 	local look = homePivot.LookVector
+	local eyes = homePivot:PointToObjectSpace((bob.Body.EyeWhiteL.EyeCenter.WorldPosition + bob.Body.EyeWhiteR.EyeCenter.WorldPosition) / 2)
 	local rig = {
 		homePivot = homePivot,
 		home = { x = homePivot.X, z = homePivot.Z, extension = 0, yaw = math.atan2(-look.X, -look.Z) },
 		offsets = {},
 		tipLocal = homePivot:PointToObjectSpace(tip),
 		needleDirLocal = homePivot:VectorToObjectSpace(tip - base).Unit,
+		eyeReach = Vector2.new(eyes.X, eyes.Z).Magnitude, -- how far out from the column axis his eyes are (between the EyeCenters)
 		travel = TRAVEL,
 		MAX_EXTENSION = MAX_EXTENSION,
 		NEEDLE_OUT = NEEDLE_OUT,
@@ -214,8 +217,9 @@ local function headOf(root: BasePart): Vector3
 	return (head or root).Position
 end
 
--- One Standby frame: toward the spot `distance` from the watched player on Bob's side (or home with nobody), the carriage at most
--- FOLLOW_SPEED, the yaw at most TURN_SPEED. velocity is the carriage's (x, z) velocity, carried from frame to frame.
+-- One Standby frame: toward the spot that leaves Bob's eyes `distance` from the watched player, on Bob's side and facing them (the
+-- carriage rig.eyeReach + distance away), or home with nobody; the carriage at most FOLLOW_SPEED, the yaw at most TURN_SPEED.
+-- velocity is the carriage's (x, z) velocity, carried from frame to frame.
 local function follow(rig, pose: Pose, velocity: Vector2, root: BasePart?, distance: number, dt: number): (Pose, Vector2)
 	local home, travel = rig.home, rig.travel
 	local spot, yaw, extension = Vector2.new(home.x, home.z), home.yaw, home.extension
@@ -223,7 +227,7 @@ local function follow(rig, pose: Pose, velocity: Vector2, root: BasePart?, dista
 		local at = root.Position
 		local away = Vector2.new(pose.x - at.X, pose.z - at.Z) -- from the player to Bob
 		away = if away.Magnitude > 1e-3 then away.Unit else Vector2.xAxis -- right overhead: back off along +X
-		spot = Vector2.new(at.X, at.Z) + away * distance
+		spot = Vector2.new(at.X, at.Z) + away * (rig.eyeReach + distance)
 		spot = Vector2.new(math.clamp(spot.X, travel.minX, travel.maxX), math.clamp(spot.Y, travel.minZ, travel.maxZ))
 		yaw = math.atan2(away.X, away.Y) -- the needle pointing along -away, at the player
 		extension = math.clamp(rig.homePivot.Y + rig.tipLocal.Y - headOf(root).Y, 0, MAX_EXTENSION)
