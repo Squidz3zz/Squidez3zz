@@ -124,17 +124,17 @@ everything else is silenced.
 
 ### Limbs
 
-The six limb keys are R6 names: Head, Torso, LeftArm, RightArm, LeftLeg, RightLeg. Bodies may be R6 or R15 (the copy is
-built on the same rig as the player's character), so each key maps per rig to its parts and the joint that holds it on:
+The game is R6 only (the user's decision, 2026-10-06): every character and every copy is R6. The six limb keys map to
+their part and the joint that holds it on:
 
-| Key | R6 parts / joint | R15 parts / joint |
+| Key | Part | Joint |
 |---|---|---|
-| Head | Head / Torso.Neck | Head / Head.Neck |
-| Torso | Torso / none (always fatal) | UpperTorso, LowerTorso / none |
-| LeftArm | Left Arm / Torso."Left Shoulder" | LeftUpperArm, LeftLowerArm, LeftHand / LeftUpperArm.LeftShoulder |
-| RightArm | Right Arm / Torso."Right Shoulder" | RightUpperArm, RightLowerArm, RightHand / RightUpperArm.RightShoulder |
-| LeftLeg | Left Leg / Torso."Left Hip" | LeftUpperLeg, LeftLowerLeg, LeftFoot / LeftUpperLeg.LeftHip |
-| RightLeg | Right Leg / Torso."Right Hip" | RightUpperLeg, RightLowerLeg, RightFoot / RightUpperLeg.RightHip |
+| Head | Head | Torso.Neck |
+| Torso | Torso | none (always fatal) |
+| LeftArm | Left Arm | Torso."Left Shoulder" |
+| RightArm | Right Arm | Torso."Right Shoulder" |
+| LeftLeg | Left Leg | Torso."Left Hip" |
+| RightLeg | Right Leg | Torso."Right Hip" |
 
 A limb is "lost" when its joint no longer exists. This table lives in LabConfig (both sides need it: the server to break
 joints and validate, the client to aim the needle and grey out lost limbs).
@@ -143,9 +143,9 @@ joints and validate, the client to aim the needle and grey out lost limbs).
 
 - **Claim:** the ClaimButton prompt is triggered by a player with a character while the room is free. The player becomes
   the owner. LabServer builds the copy with
-  `Players:CreateHumanoidModelFromDescription(humanoid:GetAppliedDescription(), humanoid.RigType)` (no web calls, an exact
-  match of the character), names it `Subject`, hides its name tag, anchors its HumanoidRootPart at the chair's SubjectSpot,
-  plays the sit animation through its Animator (R6 rbxassetid://178130996, R15 rbxassetid://2506281703), sets its Health
+  `Players:CreateHumanoidModelFromDescription(humanoid:GetAppliedDescription(), Enum.HumanoidRigType.R6)` (no web calls,
+  an exact match of the character), names it `Subject`, hides its name tag, anchors its HumanoidRootPart at the chair's
+  SubjectSpot, plays the R6 sit animation (rbxassetid://178130996) through its Animator, sets its Health
   and MaxHealth to the player's, parents it to Room1 and sets `Room1.Owner`. A clone of ServerStorage.Tablet goes into the
   player's Backpack.
 - **Release:** the owner triggers the prompt again, or leaves the game. The copy and the owner's tablet are destroyed, any
@@ -271,7 +271,7 @@ printing PASS or stopping with what went wrong. Scripts get Studio-only TestHook
 
 | Test | Checks |
 |---|---|
-| `lab_config` (Edit) | LabConfig loads; timings positive; every Harddrive id has an effect; the limb table covers both rigs. |
+| `lab_config` (server) | LabConfig loads; timings positive; the limb helpers work on an R6 body. |
 | `lab_claim` (server) | Claim seats a copy on the player's rig at SubjectSpot and gives one tablet; a second claim by another player is refused; respawn gives a fresh copy and tablet; release and leaving clean up. |
 | `lab_inject` (server) | The phase sequence and its timings; Explosive into LeftArm removes the left arm from both bodies and takes 20 from both; Head kills both; each refusal reason; a release mid-sequence cancels it. |
 | `tablet_menu` (client) | Opens on activate; CONFIRM inactive until both picks; lost limbs greyed and unpickable; read-only while Bob is busy; closes on Confirm. |

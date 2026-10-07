@@ -44,7 +44,7 @@
 - `RESPAWN_TIME = 5`, `LIMB_DAMAGE = 20`, `FUSE_SECONDS = 3`, `LOST_LIMB_SECONDS = 10`, `FOLLOW_DISTANCE = 6`.
 - `Timings = { Move = 2, NeedleOut = 0.4, Hold = 1, NeedleIn = 0.4, Return = 1.5 }`.
 - Sounds: `DeathRing = "rbxassetid://9069161602"`, `FuseBeep = "rbxassetid://118464872816736"`, `NeedleHiss = "rbxassetid://8375254457"`, `BobMotor = "rbxassetid://18627683806"`. All in `SoundService.SFX` except DeathRing (no group).
-- Sit animations: R6 `rbxassetid://178130996`, R15 `rbxassetid://2506281703`.
+- The game is R6 only (user decision): every character and copy is R6; no R15 code paths. Copy rig: `Enum.HumanoidRigType.R6`. Sit animation: `rbxassetid://178130996`.
 - Room 1 interior: x 32.3–59.2, z 16.8–54.6, floor top y 0.35, ceiling underside y 22.55. Observation side is x < 32.3.
 - Chair: seat centre (51.5, –, 35), facing -X (toward the window). This leaves Bob's 12-stud reach room on the front and both sides.
 - Gantry travel (carriage centre): x 35.5–56, z 19.2–52.2. BobHome marker at (56, 20.25, 50), LookVector -X.
@@ -79,8 +79,7 @@
 - **Produces `LabConfig`** (ModuleScript `ReplicatedStorage.LabConfig`):
   - The values under Global Constraints: `RESPAWN_TIME`, `LIMB_DAMAGE`, `FUSE_SECONDS`, `LOST_LIMB_SECONDS`, `FOLLOW_DISTANCE`, `Timings`, `Sounds`, and `HardDrives = { { id = "Explosive", name = "EXPLOSIVE" } }`.
   - `LIMB_KEYS = { "Head", "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg" }`.
-  - `rigOf(body: Model): "R6" | "R15"` from `body.Humanoid.RigType`.
-  - `limbParts(body: Model, key: string): { BasePart }`: the limb's parts that are still in the body, per the spec's Limbs table.
+  - `limbParts(body: Model, key: string): { BasePart }`: the limb's parts that are still in the body, per the spec's Limbs table (R6 only).
   - `limbJoint(body: Model, key: string): JointInstance?`: the joint that holds the limb on (nil for Torso, or when it is gone).
   - `isLost(body: Model, key: string): boolean`: true when the limb's joint is gone (Head and the four limbs) or when none of its parts remain in the body. Torso is never "lost" while the body is alive.
   - `limbCentre(body: Model, key: string): Vector3?`: the centre of the limb's parts' combined bounding box, nil if lost.
@@ -88,9 +87,9 @@
 
 - [ ] **Step 1: Write the failing test `tests/lab_config.server.luau`.** In a running playtest's Server datamodel (no character needed), require `ReplicatedStorage.LabConfig` and:
   - assert every `Timings` value and `FUSE_SECONDS` > 0; `#HardDrives >= 1`; each Sounds value matches `^rbxassetid://%d+$`.
-  - build an R6 and an R15 model with `Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), rig)`, parent each to workspace; for both, for every key in `LIMB_KEYS`: `#limbParts >= 1`, `isLost == false`, `limbCentre ~= nil`; `limbJoint` non-nil for every key except Torso.
-  - destroy each body's LeftArm joint: `isLost(body, "LeftArm") == true`, `limbCentre(body, "LeftArm") == nil` once its parts are reparented out of the body (reparent them to workspace in the test); the other keys stay `false`.
-  - destroy both models; `return "PASS lab_config"`.
+  - build an R6 model with `Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R6)`, parent it to workspace; for every key in `LIMB_KEYS`: `#limbParts >= 1`, `isLost == false`, `limbCentre ~= nil`; `limbJoint` non-nil for every key except Torso.
+  - destroy the body's LeftArm joint: `isLost(body, "LeftArm") == true`, `limbCentre(body, "LeftArm") == nil` once its part is reparented out of the body (reparent it to workspace in the test); the other keys stay `false`.
+  - destroy the model; `return "PASS lab_config"`.
 - [ ] **Step 2: Run it.** Expected: FAIL (LabConfig missing).
 - [ ] **Step 3: Implement LabConfig**, add the Rojo mapping and the RECOVERY line, push.
 - [ ] **Step 4: Run it.** Expected: `PASS lab_config`.
@@ -147,12 +146,12 @@
   - `Players.RespawnTime = LabConfig.RESPAWN_TIME` at startup.
   - Internal (Task 4 uses them in the same script): `claim(player): (boolean, string?)` (toggles: the owner calling it releases and returns `true`), `release(player): ()`, `ownerPlayer(): Player?`, `copy(): Model?`, and a local callback slot `onLinkBroken: (() -> ())?` that Task 4 fills; Task 3 calls it on release, the owner leaving, the owner dying and the copy being replaced.
   - `TestHook` (Studio only): `Invoke("claim", player) -> (ok, reason)`, `Invoke("release", player)`, `Invoke("state") -> { owner: number, hasCopy: boolean }`.
-- **Behaviour:** as the spec's "Claiming and the copy". The copy: `CreateHumanoidModelFromDescription(humanoid:GetAppliedDescription(), humanoid.RigType)`, named `Subject`, `DisplayDistanceType = None`, HumanoidRootPart anchored with CFrame = SubjectSpot.WorldCFrame offset upward so the seated copy sits on the seat, the sit animation playing (looped) through its Animator, Health/MaxHealth copied. Tablet: one clone in the Backpack (never two). Death link both ways (`Health = 0`). Respawn while owning: fresh copy and tablet on CharacterAdded. Release and PlayerRemoving: destroy the copy and the owner's tablets (Backpack and character), `Owner = 0`.
+- **Behaviour:** as the spec's "Claiming and the copy". The copy: `CreateHumanoidModelFromDescription(humanoid:GetAppliedDescription(), Enum.HumanoidRigType.R6)`, named `Subject`, `DisplayDistanceType = None`, HumanoidRootPart anchored with CFrame = SubjectSpot.WorldCFrame offset upward so the seated copy sits on the seat, the sit animation playing (looped) through its Animator, Health/MaxHealth copied. Tablet: one clone in the Backpack (never two). Death link both ways (`Health = 0`). Respawn while owning: fresh copy and tablet on CharacterAdded. Release and PlayerRemoving: destroy the copy and the owner's tablets (Backpack and character), `Owner = 0`.
 - **LabClient (client):** on start and whenever `Room1.Owner` changes, set `ClaimPrompt.Enabled` and `ActionText` locally: free → enabled "Claim Room 1"; owner is you → enabled "Release Room 1"; otherwise disabled.
 
 - [ ] **Step 1: Write the failing tests.**
   - `tests/lab_claim.server.luau` (player spawned): 
-    - **C-A:** `claim` → true; `Owner == player.UserId`; `Room1.Subject` exists with `Humanoid.RigType` equal to the player's; its HumanoidRootPart is Anchored and within 3 studs of SubjectSpot; after 1 s the lowest point of its leg parts is between seat top − 0.2 and seat top + 0.6 and above the floor; exactly one Tablet in Backpack + character; `Sign.Text == "ROOM 1 / " .. player.DisplayName`.
+    - **C-A:** `claim` → true; `Owner == player.UserId`; `Room1.Subject` exists with `Humanoid.RigType == Enum.HumanoidRigType.R6`; its HumanoidRootPart is Anchored and within 3 studs of SubjectSpot; after 1 s the lowest point of its leg parts is between seat top − 0.2 and seat top + 0.6 and above the floor; exactly one Tablet in Backpack + character; `Sign.Text == "ROOM 1 / " .. player.DisplayName`.
     - **C-B (toggle):** with the room claimed, `TestHook:Invoke("claim", player)` again returns `true` and the room is free: `Owner == 0`, no Subject, no Tablet in Backpack or character, `Sign.Text == "ROOM 1 / FREE"`. ("ROOM 1 IS TAKEN" needs a second player; it is a one-line check, reviewed by reading.)
     - **C-C:** claim, then `player.Character.Humanoid.Health = 0`; within 1 s the copy's Humanoid.Health == 0; after `RESPAWN_TIME + 3` s a new character exists, a new Subject (a different instance) is seated, and exactly one Tablet exists.
     - **C-D:** claim, then the copy's `Humanoid.Health = 0`; within 1 s the player's Humanoid.Health == 0. Wait for respawn (as C-C), then `release`: room free.
