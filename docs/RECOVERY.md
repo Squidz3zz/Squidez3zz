@@ -51,7 +51,7 @@ It builds the three ScreenGuis again and adds `SoundService.Music` and `SoundSer
 
 ### c) Put the scripts back
 
-There are sixteen scripts. The file names are in `src/`.
+There are seventeen scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -60,7 +60,8 @@ There are sixteen scripts. The file names are in `src/`.
 3. In Studio, open the Rojo plugin and press **Connect**.
 
 The file `default.project.json` already says where everything goes. It only touches `ReplicatedFirst`,
-`ServerScriptService` and `StarterPlayerScripts`, and it leaves your other scripts alone.
+`ReplicatedStorage`, `ServerScriptService` and `StarterPlayerScripts`, and it leaves your other scripts (and the menu's
+ScreenGuis in `ReplicatedStorage`) alone.
 
 **By hand:** create each script with the right kind and parent, then paste the file's text into it.
 
@@ -68,6 +69,7 @@ The file `default.project.json` already says where everything goes. It only touc
 |---|---|---|---|
 | `MenuAssets` | ModuleScript | `ReplicatedFirst` | `src/ReplicatedFirst/MenuAssets.luau` |
 | `LoadingScreen` | LocalScript | `ReplicatedFirst` | `src/ReplicatedFirst/LoadingScreen.client.luau` |
+| `LabConfig` | ModuleScript | `ReplicatedStorage` | `src/ReplicatedStorage/LabConfig.luau` |
 | `MenuServer` | Script | `ServerScriptService` | `src/ServerScriptService/MenuServer.server.luau` |
 | `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
 | `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
@@ -84,7 +86,7 @@ The file `default.project.json` already says where everything goes. It only touc
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
-`LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
+`LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
 menu's look (`THEME`, see below), its sound ids (a plain number works too), the loading screen's title (`GAME_TITLE`) and tips, and its timings. The main
 menu's own title is a different thing: it is the `Title` label inside `ReplicatedStorage.MainMenu`, which you edit in Studio. The names must match exactly.
 `MenuTheme` paints the theme on the menu when it opens (see "Themes").
