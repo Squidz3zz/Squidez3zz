@@ -20,10 +20,15 @@
 --   G  (B-G) flinch: needs the server step "claim" (a whole copy). Asks for Explosive into the copy's left arm through the real
 --      RequestInjection remote, as the tablet does. At the end of Moving the copy's Neck C0 is turned more than 5 degrees from
 --      its built C0 (read on Standby before the request); 1 s into Standby it is back within 1 degree. Run "claim" again after G.
+--   H  (B-H) cornered: needs Bob at home on Standby and the character outside (as for D). The character is put at
+--      (50, 3.5, 48.5), next to BobHome on the gantry's edge, where Bob cannot back off; for CORNER_WINDOW s, on every frame his eyes
+--      are closer than FOLLOW_DISTANCE - 1, the NeedleTip must be above the top of the player's Head. It fails if that close state
+--      never happens. It puts the character back outside at the end, so D can follow.
 -- B blows the copy's left leg off, so run the server step "claim" again before another A or B.
 local CASE = "A"
 local FOLLOW_WINDOW = 8
 local HOME_WINDOW = 6
+local CORNER_WINDOW = 6
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -81,6 +86,11 @@ end
 
 local function flatDistance(a: Vector3, b: Vector3)
 	return Vector2.new(a.X - b.X, a.Z - b.Z).Magnitude
+end
+
+-- Bob's eyes: the midpoint of the two EyeCenters.
+local function eyes()
+	return (bob.Body.EyeWhiteL.EyeCenter.WorldPosition + bob.Body.EyeWhiteR.EyeCenter.WorldPosition) / 2
 end
 
 -- B-F: returns a check to call every frame, and a function giving the largest overshoot past a radius seen so far.
@@ -161,10 +171,6 @@ elseif CASE == "D" then
 	local root = rootPart()
 	assert(state() == "Standby", "Bob is not on Standby")
 	assert(flatDistance(pivot.WorldPosition, room.BobHome.Position) <= 0.5, "Bob is not at home: put the character outside the room (case E) first")
-	local eyeL, eyeR = bob.Body.EyeWhiteL.EyeCenter, bob.Body.EyeWhiteR.EyeCenter
-	local function eyes()
-		return (eyeL.WorldPosition + eyeR.WorldPosition) / 2
-	end
 	local check, eyeReport = eyeChecker()
 	root.CFrame = CFrame.new(40, 3.5, 25)
 	local began = os.clock()
@@ -228,5 +234,32 @@ elseif CASE == "G" then
 	local atRest = turned()
 	assert(atRest <= 1, ("B-G: 1 s into Standby the Neck C0 is still %.2f degrees from its built C0"):format(atRest))
 	return ("PASS bob_animator B-G (Neck %.1f degrees at the end of Moving, %.3f 1 s into Standby)"):format(atMove, atRest)
+elseif CASE == "H" then
+	local root = rootPart()
+	local head = player.Character:FindFirstChild("Head")
+	assert(head, "the character has no Head")
+	assert(state() == "Standby", "Bob is not on Standby")
+	assert(flatDistance(pivot.WorldPosition, room.BobHome.Position) <= 0.5, "Bob is not at home: put the character outside the room (case E) first")
+	local tip = bob.Needle.NeedleTip
+	root.CFrame = CFrame.new(50, 3.5, 48.5)
+	local began = os.clock()
+	local closeFrames, nearest, clearance = 0, math.huge, math.huge
+	while os.clock() - began < CORNER_WINDOW do
+		task.wait()
+		local gap = flatDistance(eyes(), root.Position)
+		nearest = math.min(nearest, gap)
+		if gap < FOLLOW_DISTANCE - 1 then
+			closeFrames += 1
+			local tipY, top = tip.WorldPosition.Y, head.Position.Y + head.Size.Y / 2
+			clearance = math.min(clearance, tipY - top)
+			if tipY <= top then
+				root.CFrame = CFrame.new(25, 3.5, 30)
+				error(("B-H: with Bob's eyes %.2f studs from the player, the NeedleTip is at y %.2f, not above the top of their head (y %.2f)"):format(gap, tipY, top))
+			end
+		end
+	end
+	root.CFrame = CFrame.new(25, 3.5, 30)
+	assert(closeFrames > 0, ("B-H: Bob's eyes never came closer than FOLLOW_DISTANCE - 1 (nearest %.2f), so nothing was checked"):format(nearest))
+	return ("PASS bob_animator B-H (%d frames with the eyes closer than %d studs, nearest %.2f; the tip at least %.2f above the head's top)"):format(closeFrames, FOLLOW_DISTANCE - 1, nearest, clearance)
 end
 error("unknown CASE " .. tostring(CASE))

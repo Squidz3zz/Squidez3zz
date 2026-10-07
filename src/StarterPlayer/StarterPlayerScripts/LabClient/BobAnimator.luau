@@ -20,8 +20,9 @@
 --   Standby    following: he watches the player closest to him whose HumanoidRootPart is inside Room1.Zone (the copy is not a
 --              player). The carriage heads for the spot that leaves his eyes (between the two EyeCenters) FOLLOW_DISTANCE from
 --              them, on his side and facing them (inside the travel), at most FOLLOW_SPEED, starting gently and slowing as he
---              arrives; he turns to face them at most TURN_SPEED and lowers the needle tip to their head's height. With nobody
---              to watch he goes home the same way.
+--              arrives; he turns to face them at most TURN_SPEED and lowers the needle tip to their head's height, unless his eyes
+--              would be closer than FOLLOW_DISTANCE - 1 (cornered by the travel, or they came in faster than he backs off): then
+--              he keeps his column up, the needle over their head. With nobody to watch he goes home the same way.
 -- Swing: the body (and the needle) hangs from ColumnPivot like a pendulum on a damped spring, leaning away from the carriage's
 -- acceleration in Bob's frame, at most SWING_MAX each way. It dies away while the needle goes in, so the needle lands.
 -- Eyes: each pupil is a GooglyEyes simulation in its white's plane. A white and a pupil are Cylinder discs: the normal is the
@@ -224,13 +225,20 @@ local function follow(rig, pose: Pose, velocity: Vector2, root: BasePart?, dista
 	local home, travel = rig.home, rig.travel
 	local spot, yaw, extension = Vector2.new(home.x, home.z), home.yaw, home.extension
 	if root then
-		local at = root.Position
-		local away = Vector2.new(pose.x - at.X, pose.z - at.Z) -- from the player to Bob
-		away = if away.Magnitude > 1e-3 then away.Unit else Vector2.xAxis -- right overhead: back off along +X
-		spot = Vector2.new(at.X, at.Z) + away * (rig.eyeReach + distance)
+		local at = Vector2.new(root.Position.X, root.Position.Z)
+		local away = Vector2.new(pose.x, pose.z) - at -- from the player to Bob
+		local apart = away.Magnitude
+		away = if apart > 1e-3 then away.Unit else Vector2.xAxis -- right overhead: back off along +X
+		spot = at + away * (rig.eyeReach + distance)
 		spot = Vector2.new(math.clamp(spot.X, travel.minX, travel.maxX), math.clamp(spot.Y, travel.minZ, travel.maxZ))
 		yaw = math.atan2(away.X, away.Y) -- the needle pointing along -away, at the player
-		extension = math.clamp(rig.homePivot.Y + rig.tipLocal.Y - headOf(root).Y, 0, MAX_EXTENSION)
+		-- Facing them, his eyes are |carriage distance - eyeReach| from them. If that is under distance - 1 at the spot (cornered:
+		-- the travel clamped it) or right now (they came in faster than he backs off), the column stays up (extension 0) and the
+		-- needle hovers over their head instead of going through it.
+		local eyesThere, eyesNow = math.abs((spot - at).Magnitude - rig.eyeReach), math.abs(apart - rig.eyeReach)
+		if math.min(eyesThere, eyesNow) >= distance - 1 then
+			extension = math.clamp(rig.homePivot.Y + rig.tipLocal.Y - headOf(root).Y, 0, MAX_EXTENSION)
+		end
 	end
 	local gap = spot - Vector2.new(pose.x, pose.z)
 	local want = if gap.Magnitude > 1e-4 then gap.Unit * math.min(FOLLOW_SPEED, gap.Magnitude * ARRIVE) else Vector2.zero

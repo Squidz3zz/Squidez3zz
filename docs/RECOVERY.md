@@ -174,7 +174,8 @@ joins mid-injection sees Bob in the right place. His screen reads the phase ("TA
 "INJECTING", "RETURNING", a slowly pulsing "STANDBY"). It adds two sounds of its own on each player's side, in the SFX group:
 `BobMotor` in the carriage (louder the faster Bob moves) and `NeedleHiss` in the needle (while the needle is in). On Standby,
 when a player walks into the room (the invisible `Zone`), Bob slides over until his eyes are `LabConfig.FOLLOW_DISTANCE` studs
-from the nearest one (slowly, at most 4 studs a second), turns to face them and lowers his needle to their head's height; when
+from the nearest one (slowly, at most 4 studs a second), turns to face them and lowers his needle to their head's height (but
+keeps it above their head when they get closer than he can back away, for example right next to `BobHome`); when
 nobody is in the room he drifts back to `BobHome`. His body swings a little when he starts and stops. His googly eyes roll
 inside their whites (they use `GooglyEyes`, another ModuleScript inside `LabClient`), look toward the player he is watching, and
 spin when something blows up in the room. While he moves
