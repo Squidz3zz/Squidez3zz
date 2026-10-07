@@ -8,14 +8,31 @@
 --      screen reads INJECTING
 --   C  (B-C) home: run straight after B: 0.2 s into Standby, ColumnPivot's X/Z is within 0.2 of BobHome's and the screen reads
 --      STANDBY
+--   D  (B-D) follow: needs only a spawned character outside the room (no claim) and Bob at home on Standby. The character is put
+--      in the room at (40, 3.5, 25); for FOLLOW_WINDOW s, every frame, the carriage's horizontal distance to it never drops below
+--      FOLLOW_DISTANCE - 1, and at the end it is between FOLLOW_DISTANCE - 1 and FOLLOW_DISTANCE + 1.5
+--   E  (B-E) outside: run straight after D. The character is put outside at (25, 3.5, 30); within HOME_WINDOW s ColumnPivot's X/Z
+--      is within 0.5 of BobHome's
+--   F  (B-F) eyes: checked on every frame of D and E (more than 5 s in all): each pupil is at most its travel radius + 0.01 from its
+--      EyeCenter, measured in the eye's plane (the white is a cylinder disc: its RightVector is the normal, its diameter
+--      min(Size.Y, Size.Z), and the radius is (white diameter - pupil diameter) / 2)
+--   G  (B-G) flinch: needs the server step "claim" (a whole copy). Asks for Explosive into the copy's left arm through the real
+--      RequestInjection remote, as the tablet does. At the end of Moving the copy's Neck C0 is turned more than 5 degrees from
+--      its built C0 (read on Standby before the request); 1 s into Standby it is back within 1 degree. Run "claim" again after G.
 -- B blows the copy's left leg off, so run the server step "claim" again before another A or B.
+-- The brief's window for D was 4 s, but Bob's Standby speed is capped at 4 studs/s and BobHome is 28.4 studs from (40, 25): the
+-- 20.9 studs to within FOLLOW_DISTANCE + 1.5 of the player take 5.2 s at full speed (about 5.4 s with the easing), so D waits 8 s.
+-- E's trip home is as long (22.4 studs) and takes about 5.8 s, inside the brief's 6 s.
 local CASE = "A"
+local FOLLOW_WINDOW = 8
+local HOME_WINDOW = 6
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig"))
 local Timings = LabConfig.Timings
+local FOLLOW_DISTANCE = LabConfig.FOLLOW_DISTANCE
 
 local player = Players.LocalPlayer
 local room = workspace:WaitForChild("Room1", 10)
@@ -56,6 +73,42 @@ local function animatorModule()
 	local source = labClient:FindFirstChild("BobAnimator")
 	assert(source and source:IsA("ModuleScript"), "LabClient.BobAnimator (ModuleScript) missing")
 	return require(source:Clone())
+end
+
+local function rootPart()
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	assert(root, "no character: run tests/fire_play.client.luau first")
+	return root
+end
+
+local function flatDistance(a: Vector3, b: Vector3)
+	return Vector2.new(a.X - b.X, a.Z - b.Z).Magnitude
+end
+
+-- B-F: returns a check to call every frame, and a function giving the largest overshoot past a radius seen so far.
+local function eyeChecker()
+	local eyes = {}
+	for _, side in { "L", "R" } do
+		local white, pupil = bob.Body["EyeWhite" .. side], bob.Pupils["Pupil" .. side]
+		local function diameter(part)
+			return math.min(part.Size.Y, part.Size.Z)
+		end
+		table.insert(eyes, { side = side, white = white, pupil = pupil, radius = (diameter(white) - diameter(pupil)) / 2 })
+	end
+	local worst, frames = -math.huge, 0
+	local function check()
+		frames += 1
+		for _, eye in eyes do
+			local d = eye.pupil.Position - eye.white.EyeCenter.WorldPosition
+			local n = eye.white.CFrame.RightVector
+			local inPlane = (d - n * d:Dot(n)).Magnitude
+			worst = math.max(worst, inPlane - eye.radius)
+			assert(inPlane <= eye.radius + 0.01, ("B-F: Pupil%s is %.3f studs from its EyeCenter in the eye's plane (radius %.3f)"):format(eye.side, inPlane, eye.radius))
+		end
+	end
+	return check, function()
+		return ("B-F %d frames, worst %.4f past the radius"):format(frames, worst)
+	end
 end
 
 if CASE == "A" then
@@ -106,5 +159,72 @@ elseif CASE == "C" then
 	assert(off <= 0.2, ("ColumnPivot is %.2f studs from BobHome (at %s)"):format(off, tostring(at)))
 	assert(headline.Text == "STANDBY", "Headline reads " .. headline.Text)
 	return ("PASS bob_animator B-C (%.3f studs from BobHome)"):format(off)
+elseif CASE == "D" then
+	local root = rootPart()
+	assert(state() == "Standby", "Bob is not on Standby")
+	assert(flatDistance(pivot.WorldPosition, room.BobHome.Position) <= 0.5, "Bob is not at home: put the character outside the room (case E) first")
+	local carriage = room.Gantry.Carriage
+	local check, eyeReport = eyeChecker()
+	root.CFrame = CFrame.new(40, 3.5, 25)
+	local began = os.clock()
+	local closest, distance, reached = math.huge, math.huge, nil
+	while os.clock() - began < FOLLOW_WINDOW do
+		task.wait()
+		distance = flatDistance(carriage.Position, root.Position)
+		closest = math.min(closest, distance)
+		if not reached and distance <= FOLLOW_DISTANCE + 1.5 then
+			reached = os.clock() - began
+		end
+		check()
+		assert(closest >= FOLLOW_DISTANCE - 1, ("B-D: the carriage came %.2f studs from the player"):format(closest))
+	end
+	assert(distance >= FOLLOW_DISTANCE - 1 and distance <= FOLLOW_DISTANCE + 1.5, ("B-D: after %d s the carriage is %.2f studs from the player (at %s)"):format(FOLLOW_WINDOW, distance, tostring(carriage.Position)))
+	return ("PASS bob_animator B-D (in range after %.2f s, %.2f studs at the end, closest %.2f); %s"):format(reached, distance, closest, eyeReport())
+elseif CASE == "E" then
+	local root = rootPart()
+	local home = room.BobHome.Position
+	local away = flatDistance(pivot.WorldPosition, home)
+	assert(away > 1, "Bob is already at home: run case D first")
+	local check, eyeReport = eyeChecker()
+	root.CFrame = CFrame.new(25, 3.5, 30)
+	local began = os.clock()
+	local off = away
+	while off > 0.5 and os.clock() - began < HOME_WINDOW do
+		task.wait()
+		off = flatDistance(pivot.WorldPosition, home)
+		check()
+	end
+	assert(off <= 0.5, ("B-E: after %d s ColumnPivot is %.2f studs from BobHome (at %s)"):format(HOME_WINDOW, off, tostring(pivot.WorldPosition)))
+	return ("PASS bob_animator B-E (home from %.2f studs away in %.2f s); %s"):format(away, os.clock() - began, eyeReport())
+elseif CASE == "G" then
+	assert(waitFor(function()
+		return state() == "Standby"
+	end, 10), "Bob is not on Standby")
+	local subject = room:WaitForChild("Subject", 5)
+	assert(subject and not LabConfig.isLost(subject, "LeftArm"), "no whole copy: run the server step 'claim' of tests/tablet_menu.server.luau first")
+	local neck = LabConfig.limbJoint(subject, "Head")
+	assert(neck, "the copy has no Neck")
+	local built = neck.C0
+	local function turned()
+		local _, angle = (built:Inverse() * neck.C0):ToAxisAngle()
+		return math.deg(angle)
+	end
+	local remote = ReplicatedStorage:WaitForChild("LabRemotes"):WaitForChild("RequestInjection")
+	local ok, reason = remote:InvokeServer("Explosive", "LeftArm")
+	assert(ok == true, "the injection was refused: " .. tostring(reason))
+	assert(waitFor(function()
+		return state() == "Moving"
+	end, 2), "Bob never started Moving")
+	waitUntil(bob:GetAttribute("PhaseStart") + Timings.Move - 0.05)
+	assert(state() == "Moving", "Moving ended early")
+	local atMove = turned()
+	assert(atMove > 5, ("B-G: at the end of Moving the Neck C0 is only %.2f degrees from its built C0"):format(atMove))
+	assert(waitFor(function()
+		return state() == "Standby"
+	end, Timings.NeedleOut + Timings.Hold + Timings.NeedleIn + Timings.Return + 3), "Bob never got back to Standby")
+	waitUntil(bob:GetAttribute("PhaseStart") + 1)
+	local atRest = turned()
+	assert(atRest <= 1, ("B-G: 1 s into Standby the Neck C0 is still %.2f degrees from its built C0"):format(atRest))
+	return ("PASS bob_animator B-G (Neck %.1f degrees at the end of Moving, %.3f 1 s into Standby)"):format(atMove, atRest)
 end
 error("unknown CASE " .. tostring(CASE))
