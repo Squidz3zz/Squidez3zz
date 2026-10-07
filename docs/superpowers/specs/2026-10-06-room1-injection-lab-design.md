@@ -106,7 +106,7 @@ return {
 	FUSE_SECONDS = 3,          -- Explosive's fuse, from the needle leaving the limb to the blast
 	LOST_LIMB_SECONDS = 10,    -- how long a blown-off limb lies on the floor
 	Timings = { Move = 2, NeedleOut = 0.4, Hold = 1, NeedleIn = 0.4, Return = 1.5 },
-	FOLLOW_DISTANCE = 6,       -- how far Bob keeps from a player he follows (studs)
+	FOLLOW_DISTANCE = 8,       -- how far Bob keeps his eyes from a player he follows (studs)
 	Sounds = {
 		DeathRing = "rbxassetid://9069161602",
 		FuseBeep = "rbxassetid://118464872816736",

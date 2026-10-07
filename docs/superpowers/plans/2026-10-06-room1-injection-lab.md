@@ -41,7 +41,7 @@
 - The server trusts nothing from clients: every prompt trigger and `RequestInjection` is re-checked.
 
 ### Values (verbatim from the spec, plus positions pinned here)
-- `RESPAWN_TIME = 5`, `LIMB_DAMAGE = 20`, `FUSE_SECONDS = 3`, `LOST_LIMB_SECONDS = 10`, `FOLLOW_DISTANCE = 6`.
+- `RESPAWN_TIME = 5`, `LIMB_DAMAGE = 20`, `FUSE_SECONDS = 3`, `LOST_LIMB_SECONDS = 10`, `FOLLOW_DISTANCE = 8` (from Bob's eyes; at 6 his needle tip reaches the player's head).
 - `Timings = { Move = 2, NeedleOut = 0.4, Hold = 1, NeedleIn = 0.4, Return = 1.5 }`.
 - Sounds: `DeathRing = "rbxassetid://9069161602"`, `FuseBeep = "rbxassetid://118464872816736"`, `NeedleHiss = "rbxassetid://8375254457"`, `BobMotor = "rbxassetid://18627683806"`. All in `SoundService.SFX` except DeathRing (no group).
 - The game is R6 only (user decision): every character and copy is R6; no R15 code paths. Copy rig: `Enum.HumanoidRigType.R6`. Sit animation: `rbxassetid://178130996`.
