@@ -225,9 +225,11 @@ them, so the clients' changes stand.
   front; LeftArm from the copy's left; RightArm from its right. The needle tip stops 0.5 studs short of the limb's
   surface, at the limb's centre height; the carriage, extension and yaw follow from that and from the NeedleTip offset.
   The needle then extends 1.5 studs into the limb.
-- **Following (State = Standby):** if a player's HumanoidRootPart is inside Room1.Zone, Bob targets a carriage spot
-  FOLLOW_DISTANCE from the closest such player, on his current side of them, and eases toward it (speed-limited, so he
-  lags and never goes straight onto them). His body yaws and his pupils are pulled toward that player's head. With nobody
+- **Following (State = Standby):** if a player's HumanoidRootPart is inside Room1.Zone, Bob moves so that his eyes are
+  FOLLOW_DISTANCE (horizontally) from the closest such player, on his current side of them, and eases toward that spot
+  (speed-limited, so he lags and never goes straight onto them). The distance is measured from his eyes, not his
+  carriage: his body reaches about 10 studs out from the column, so a carriage-based distance would put his head on the
+  player's. His body yaws and his pupils are pulled toward that player's head. With nobody
   in the zone he eases back to BobHome and the pupils are left to gravity. The copy never counts.
 - **Phases:** on a State change the animator eases from wherever Bob is to the phase's end pose over the phase's time
   (using PhaseStart, so a client that joins late lands in the right place).
