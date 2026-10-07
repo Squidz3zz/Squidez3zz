@@ -46,7 +46,7 @@ them, never from numbers in code.
 | Piece | What it is |
 |---|---|
 | `Room1.Zone` | Invisible box filling the room interior. CanCollide, CanQuery, CanTouch false. "Is a player in the room" = the player's HumanoidRootPart is inside this box. |
-| `Room1.Chair` | Factory-style patient chair (dark steel), in the middle of the room, facing the window (-X), with at least 12 studs of floor in front and to both sides (Bob's reach). Holds an Attachment `SubjectSpot` where the copy's HumanoidRootPart goes. |
+| `Room1.Chair` | Factory-style patient chair (dark steel), at x 51.5, z 35 (toward the back of the room, in view of the window), facing the window (-X). Bob's needle tip is 12 studs from his column, so this leaves him room to reach the front and both sides from inside the gantry's travel. Holds an Attachment `SubjectSpot` where the copy's HumanoidRootPart goes. |
 | `Room1.ClaimButton` | A panel outside the window next to the doorway with a ProximityPrompt (`ObjectText` "Room 1") and a SurfaceGui sign: "ROOM 1 / FREE" or "ROOM 1 / <display name>". |
 | `Room1.Shutter` | A steel shutter in the doorway. Open: transparent and not collidable. Closed: solid. |
 | `Room1.Gantry` | Two ceiling rails along Z near the long walls, a `Crossbeam` spanning X, a `Carriage` on the crossbeam, and a `Sleeve` (a short open tube hanging from the carriage that hides the column's top as it extends). |
