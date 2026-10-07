@@ -47,7 +47,7 @@
 - The game is R6 only (user decision): every character and copy is R6; no R15 code paths. Copy rig: `Enum.HumanoidRigType.R6`. Sit animation: `rbxassetid://178130996`.
 - Room 1 interior: x 32.3–59.2, z 16.8–54.6, floor top y 0.35, ceiling underside y 22.55. Observation side is x < 32.3.
 - Chair: seat centre (51.5, –, 35), facing -X (toward the window). This leaves Bob's 12-stud reach room on the front and both sides.
-- Gantry travel (carriage centre): x 35.5–56, z 19.2–52.2. BobHome marker at (56, 20.25, 50), LookVector -X.
+- Gantry travel (carriage centre): x 35.5–56, z 19.2–52.2. BobHome marker at (56, 20.25, 48.5), LookVector -X.
 - Bob as built: column top y 23.01, column bottom y 10.30, needle tip y 6.64 and 12.02 studs (horizontally) from the column axis, needle horizontal and radial. `MAX_EXTENSION = 6`, `NEEDLE_OUT = 1.5`.
 - Bob's states: `"Standby"`, `"Moving"`, `"Injecting"`, `"Returning"`.
 - Refusal strings (shown on the tablet): `"NOT YOUR ROOM"`, `"NO SUBJECT"`, `"BOB IS BUSY"`, `"UNKNOWN HARDDRIVE"`, `"UNKNOWN LIMB"`, `"LIMB ALREADY LOST"`. Claim refusals: `"ROOM 1 IS TAKEN"`, `"NO CHARACTER"`.
@@ -112,8 +112,8 @@
   - `Room1.Chair` (Model): factory chair (seat, back on the +X side, legs), seat centre at x 51.5, z 35, facing -X; part `Seat` (the seat block) holds Attachment `SubjectSpot` (at the seat's top centre, its CFrame facing -X).
   - `Room1.ClaimButton` (Model): a panel on the outside face of the window wall next to the doorway, about (31.8, 3.5, 48.5), facing -X, with part `Button` holding `ProximityPrompt` named `ClaimPrompt` (`ObjectText` "Room 1", `ActionText` "Claim Room 1", `HoldDuration` 0, `MaxActivationDistance` 8, `RequiresLineOfSight` false), and a SurfaceGui `Sign` on the panel with TextLabel `Text` ("ROOM 1 / FREE"), Factory style.
   - `Room1.Shutter`: Part filling the doorway (measure it: the opening at x ≈ 32.3, z ≈ 40.7–45.0, y 0.35–≈6.4), Material Metal, Color RGB(58,55,52), open state: Transparency 1, CanCollide false. Attribute `ClosedCFrame` (CFrame) = its in-the-doorway CFrame.
-  - `Room1.Gantry` (Model): `RailA` and `RailB` (along Z at x 33.8 and 57.7, y 22.05, size (1, 1, 37.8)), `Crossbeam` (spans x 33.8–57.7, y 21.15, 0.8 tall, 1.2 deep), `Carriage` (3 × 1 × 3, y 20.25), `Sleeve` (4 × 6 × 4, y 16.75). At BobHome's X/Z.
-  - `Room1.BobHome`: invisible Part (1,1,1) at (56, 20.25, 50), LookVector -X.
+  - `Room1.Gantry` (Model): `RailA` and `RailB` (along Z at x 33.8 and 57.7, y 22.05, size (1, 1, 37.8)), `Crossbeam` (spans x 33.8–57.7, y 21.15, 0.8 tall, 1.2 deep), `Carriage` (3 × 1 × 3, y 20.25), `Sleeve` (6.4 × 6 × 6.4, y 16.75; wide enough to hide the column's fins, which reach 2.95 studs from its axis). At BobHome's X/Z.
+  - `Room1.BobHome`: invisible Part (1,1,1) at (56, 20.25, 48.5), LookVector -X.
   - `Room1.BobTheInjector` (Model), moved so the column axis is at BobHome's X/Z (Y unchanged), turned so the needle points along BobHome's LookVector, attributes `State = "Standby"`, `Target = ""`, `HardDrive = ""`, `PhaseStart = 0`. Children:
     - `Column` (Model): every direct CorrodedMetal part; the largest renamed `Core`, holding Attachment `ColumnPivot` at the column axis, at the column's lowest Y, with an upright orientation (UpVector +Y, LookVector = the needle's horizontal direction).
     - `Body` (Model): the Foil hose segments, the Metal head and nozzle, `DisplayPanel`'s parts, and the two eye whites renamed `EyeWhiteL` / `EyeWhiteR` (L/R from Bob's own view looking along the needle) each holding Attachment `EyeCenter`. DisplayPanel's black Metal part renamed `Screen`, holding SurfaceGui `Display` on its large face that points away from the column, with TextLabels `Headline` ("STANDBY") and `Detail` (""), amber Oswald on black.
