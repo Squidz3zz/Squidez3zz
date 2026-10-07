@@ -1,7 +1,8 @@
 -- Run in the Client datamodel during a playtest, one case at a time (set CASE below). Needs a spawned, claimed player with a whole
 -- copy: start a fresh playtest, run tests/fire_play.client.luau (it presses Play), then the server step "claim" of
 -- tests/tablet_menu.server.luau, then:
---   A  (B-A) reach: readRig, and every limb's injectionPose is non-nil, inside the gantry's travel and 0 <= extension <= 6
+--   A  (B-A) reach: readRig, and every limb's injectionPose is non-nil and inside the gantry's travel, and the extension it
+--      needs before clamping (the needle tip's home height minus the limb centre's height) is strictly between 0 and 6
 --   B  (B-B) the needle in the limb: run tests/bob_animator.server.luau (Explosive into the left leg), then this case straight away:
 --      at the end of NeedleOut (+ 0.05 s) the NeedleTip is inside the copy's left leg's box or within 0.75 studs of it, and the
 --      screen reads INJECTING
@@ -70,9 +71,11 @@ if CASE == "A" then
 	for _, key in LabConfig.LIMB_KEYS do
 		local pose = BobAnimator.injectionPose(rig, subject, key)
 		assert(pose, "no injection pose for " .. key)
-		local where = ("%s x %.2f z %.2f ext %.2f yaw %.0f"):format(key, pose.x, pose.z, pose.extension, math.deg(pose.yaw))
+		-- injectionPose clamps the extension, so check the one the limb needs before clamping.
+		local needed = rig.homePivot.Y + rig.tipLocal.Y - LabConfig.limbCentre(subject, key).Y
+		local where = ("%s x %.2f z %.2f ext %.2f (unclamped %.2f) yaw %.0f"):format(key, pose.x, pose.z, pose.extension, needed, math.deg(pose.yaw))
 		assert(pose.x >= travel.minX and pose.x <= travel.maxX and pose.z >= travel.minZ and pose.z <= travel.maxZ, where .. " is outside the travel")
-		assert(pose.extension >= 0 and pose.extension <= rig.MAX_EXTENSION, where .. ": extension out of range")
+		assert(needed > 0 and needed < rig.MAX_EXTENSION, where .. ": the limb is out of the column's reach")
 		table.insert(report, where)
 	end
 	return "PASS bob_animator B-A (" .. table.concat(report, "; ") .. ")"
