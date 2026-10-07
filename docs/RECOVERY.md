@@ -81,7 +81,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are nineteen scripts. The file names are in `src/`.
+There are twenty scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -102,6 +102,7 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `LabConfig` | ModuleScript | `ReplicatedStorage` | `src/ReplicatedStorage/LabConfig.luau` |
 | `MenuServer` | Script | `ServerScriptService` | `src/ServerScriptService/MenuServer.server.luau` |
 | `LabServer` | Script | `ServerScriptService` | `src/ServerScriptService/LabServer.server.luau` |
+| `HardDriveEffects` | ModuleScript | `ServerScriptService` | `src/ServerScriptService/HardDriveEffects.luau` |
 | `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
 | `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
 | `ButtonSounds` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonSounds.luau` |
@@ -117,14 +118,27 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 | `LabClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/LabClient/init.client.luau` |
 
-`LabServer` is Room 1's server side and needs the pieces that `studio/build_lab.luau` builds (see c). So far it handles
-claiming: a player who triggers the claim prompt becomes the owner (`Workspace.Room1`'s `Owner` attribute holds their UserId,
+`LabServer` is Room 1's server side and needs the pieces that `studio/build_lab.luau` builds (see c). It handles
+claiming and the injections. Claiming: a player who triggers the claim prompt becomes the owner (`Workspace.Room1`'s `Owner` attribute holds their UserId,
 0 when free, and the sign reads "ROOM 1 / FREE" or "ROOM 1 / <their name>"), a copy of their avatar sits in the chair as
 `Room1.Subject`, and a `Tablet` goes into their Backpack. If the copy dies the owner dies, and the other way round. The
 owner triggering the prompt again, or leaving the game, frees the room; when the owner respawns, a fresh copy and tablet are
 made. It reads where to seat the copy from `Chair.Seat.SubjectSpot`, so a moved chair works without a code change. It also
 sets `Players.RespawnTime` from `LabConfig.RESPAWN_TIME` at startup. `LabClient` sets the claim prompt's text on each player's
 own screen ("Claim Room 1" when free, "Release Room 1" for the owner, switched off for everyone else).
+
+Injections: when the game starts, `LabServer` makes `ReplicatedStorage.LabRemotes` with the `RequestInjection` remote in it (do
+not build these by hand). The owner's tablet asks it for a Harddrive and a limb; `LabServer` checks the request and either
+refuses it (with a reason the tablet shows, such as "BOB IS BUSY" or "LIMB ALREADY LOST") or runs Bob's injection: the doorway
+`Shutter` slides shut, Bob moves, injects and goes home, and the shutter opens again. It never moves Bob itself: it writes
+what he is doing on `Room1.BobTheInjector` as attributes (`State`, `Target`, `HardDrive`, `PhaseStart`) and each player's
+game animates him from those, so do not delete those attributes. As the needle comes out, `HardDriveEffects` (which goes
+straight into `ServerScriptService`, next to `LabServer`, not inside it) does what the Harddrive does, to the copy and the
+owner at once. Explosive: the limb glows red and beeps faster and faster for `LabConfig.FUSE_SECONDS`, then blows: an arm or
+a leg falls off both bodies (and lies on the floor for `LabConfig.LOST_LIMB_SECONDS`) and both lose `LabConfig.LIMB_DAMAGE`
+health; the head or the torso kills both. Losing the right arm also takes the tablet away until the owner respawns. If the
+room is freed or the owner dies before the blast, Bob goes home and the fuse goes out with nothing blown off. Without
+`HardDriveEffects` the room can still be claimed, but every injection is refused (the Output window says why).
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
