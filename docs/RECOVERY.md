@@ -49,7 +49,35 @@ It builds the three ScreenGuis again and adds `SoundService.Music` and `SoundSer
 - `MainMenuVignette` holds the dark border, and `MainMenuFader` holds the black fade. Both are full-screen overlays
   (ScreenInsets `None`), so they reach the notch strips and rounded edges of a phone.
 
-### c) Put the scripts back
+### c) Rebuild Room 1's injection lab
+
+Room 1 itself (its walls, floor, window and doorway), Bob the Injector, the tablet and the Explosive hard drive were built
+by hand in Studio. They exist **only in the place file**: no script can make them again, so save and publish after you
+change them.
+
+`studio/build_lab.luau` builds the lab's pieces around them and rewires Bob and the tablet:
+
+- `Workspace.Room1`: `Zone` (the invisible box that tells whether a player is in the room), `Chair` (its `Seat` holds
+  `SubjectSpot`, where the test subject sits), `ClaimButton` (the panel outside the window with the claim prompt and the
+  "ROOM 1 / FREE" sign), `Shutter` (the doorway's shutter, built open), `Gantry` (the ceiling rails, crossbeam and
+  carriage Bob travels on), `BobHome` (an invisible marker where Bob rests) and `BobTheInjector` (Bob, moved under the
+  carriage and regrouped into `Column`, `Body`, `Needle` and `Pupils`).
+- `ServerStorage.Tablet`: the tablet, made into a Tool.
+- `ReplicatedStorage.LabAssets.HardDrives.Explosive`: the hard drive, the picture in the tablet's list.
+- `ServerStorage.LabBackup`: untouched copies of Bob, the tablet and the hard drive as you built them, made the first time
+  the script ran.
+
+The script is safe to run again: it only builds what is missing and leaves everything else as it is (if you moved
+`BobHome` or the `Chair`, they stay where you put them). To rebuild:
+
+- **A piece of the lab** (for example the `Chair` or the `Gantry`): delete it, then run `studio/build_lab.luau`.
+- **Bob, the tablet or the hard drive**: delete the broken one (`Workspace.Room1.BobTheInjector`, `ServerStorage.Tablet`
+  or `ReplicatedStorage.LabAssets.HardDrives.Explosive`), copy (do not move) its original from `ServerStorage.LabBackup`
+  into `Workspace`, then run the script. It rebuilds the piece from the original and uses that copy up.
+- If `ServerStorage.LabBackup` is gone too, Bob, the tablet and the hard drive cannot be rebuilt: open an older saved or
+  published version of the place.
+
+### d) Put the scripts back
 
 There are seventeen scripts. The file names are in `src/`.
 
@@ -117,12 +145,12 @@ has no effect while a theme is active; change the theme instead. Positions, size
 "A Regular Experiment") are still edited in Studio. `studio/build_main_menu_ui.luau` always builds the Factory baseline; the
 theme is what turns it into another look.
 
-### d) Turn off automatic spawning
+### e) Turn off automatic spawning
 
 In the Explorer, click **Players**. In Properties, untick **CharacterAutoLoads**. The menu holds each player until they
 press Play, so nobody should spawn on their own.
 
-### e) Optional: the menu's map camera
+### f) Optional: the menu's map camera
 
 The menu looks at your map from a spot you choose. Fly the editor camera to the view you want, then run this in the
 Command Bar. It makes a part called `MenuCameraShot` there. The camera looks out of the part's **Front** face, which
@@ -135,7 +163,7 @@ local p = workspace:FindFirstChild("MenuCameraShot") or Instance.new("Part"); p.
 When the game starts it anchors the part, hides it and turns off its collisions, so you do not have to. Without this
 part, the menu uses a default angle.
 
-### f) Playtest checklist
+### g) Playtest checklist
 
 Press **Play** in Studio (the Test tab) and check each of these:
 
@@ -161,3 +189,6 @@ for example moved a button, changed a colour, or added a lamp, those changes wer
 publish again straight away. The menu's colours and fonts are the exception: they live in `MenuAssets` (the theme), not in
 Studio, so they come back with the scripts. The menu Title's words are built as "A Regular Experiment"; if you changed them in
 Studio since, redo that.
+
+Room 1's walls, Bob, the tablet and the hard drive are not in any script at all (see c). If the place file itself is lost,
+so are they, and so is their backup in `ServerStorage.LabBackup`, which lives in the same place file.
