@@ -64,6 +64,11 @@ change them.
   carriage and regrouped into `Column`, `Body`, `Needle` and `Pupils`).
 - `ServerStorage.Tablet`: the tablet, made into a Tool.
 - `ReplicatedStorage.LabAssets.HardDrives.Explosive`: the hard drive, the picture in the tablet's list.
+- `ReplicatedStorage.TabletMenu`: the tablet's menu, a `ScreenGui` that is switched off (the game copies it into each
+  player's screen). It is in the factory look and made of fractions of the screen, so it fits a phone. You can restyle it
+  in Studio, as long as the names inside it stay (`Header` with `Title`, `Status` and `Close`; `Injections` with `List`
+  and its `EntryTemplate`; `Target` with `Head`, `Torso`, `LeftArm`, `RightArm`, `LeftLeg` and `RightLeg`; `Confirm`).
+  The colours of a picked, a lost and a greyed-out button are set by `TabletMenu.luau`, not by the template.
 - `ServerStorage.LabBackup`: untouched copies of Bob, the tablet and the hard drive as you built them, made the first time
   the script ran.
 
@@ -72,7 +77,7 @@ The script is safe to run again: it only builds what is missing and leaves every
 line up under `BobHome`. To move Bob's resting spot, drag `BobHome` (keep its
 front face toward the way Bob's needle should point), then run the script again. To rebuild:
 
-- **A piece of the lab** (for example the `Chair` or the `Gantry`): delete it, then run `studio/build_lab.luau`.
+- **A piece of the lab** (for example the `Chair`, the `Gantry` or the `TabletMenu`): delete it, then run `studio/build_lab.luau`.
 - **Bob, the tablet or the hard drive**: delete the broken one (`Workspace.Room1.BobTheInjector`, `ServerStorage.Tablet`
   or `ReplicatedStorage.LabAssets.HardDrives.Explosive`), copy (do not move) its original from `ServerStorage.LabBackup`
   into `Workspace`, then run the script. It rebuilds the piece from the original and uses that copy up.
@@ -81,7 +86,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are twenty-one scripts. The file names are in `src/`.
+There are twenty-two scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -117,6 +122,7 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `SettingsBoard` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/SettingsBoard.luau` |
 | `VolumeSlider` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/VolumeSlider.luau` |
 | `LabClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/LabClient/init.client.luau` |
+| `TabletMenu` | ModuleScript | `LabClient` | `.../LabClient/TabletMenu.luau` |
 | `DeathScreen` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/DeathScreen.client.luau` |
 
 `DeathScreen` is the death screen for every death in the game, not only Room 1's: the moment your character dies the screen
@@ -147,6 +153,17 @@ a leg falls off both bodies (and lies on the floor for `LabConfig.LOST_LIMB_SECO
 health; the head or the torso kills both. Losing the right arm also takes the tablet away until the owner respawns. If the
 room is freed or the owner dies before the blast, Bob goes home and the fuse goes out with nothing blown off. Without
 `HardDriveEffects` the room can still be claimed, but every injection is refused (the Output window says why).
+
+`TabletMenu` is the tablet's menu (it sits **inside** `LabClient`, like the ModuleScripts under `MainMenuClient`) and needs the
+`ReplicatedStorage.TabletMenu` template that `studio/build_lab.luau` builds (see c). `LabClient` opens it when the owner
+clicks, taps or presses the trigger with the Tablet in hand, and closes it when the tablet is put away or taken (a lost right
+arm, a release), when the owner's character dies, and on the X or a controller's B. The owner picks a Harddrive (the list is
+`LabConfig.HardDrives`) and a limb (drawn as a body seen from the front, so the owner's right limbs are on the screen's
+left), and CONFIRM then asks the server (`RequestInjection`). A limb already blown off reads LOST and cannot be picked. While
+Bob is busy the menu opens read-only and shows what he is doing, and a refusal from the server (such as "BOB IS BUSY") shows
+in the top bar for three seconds. It plays the main menu's hover and click sounds (`SoundService.MenuSfxHover` and
+`MenuSfxConfirm`) and is silent without them. If `TabletMenu` or its template is broken, the Output window says so once and
+claiming still works, but there is no tablet menu.
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
@@ -220,7 +237,15 @@ Press **Play** in Studio (the Test tab) and check each of these:
    your avatar sits in the chair facing the window, and a Tablet is in your toolbar. Press the prompt again ("Release
    Room 1"): the copy and the Tablet go and the sign says FREE. Claim again and reset your character: after it respawns
    there is a fresh copy and one Tablet.
-8. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`, `ButtonSounds: ...` or `MenuAudio: ...`) means
+8. While you own Room 1, hold the Tablet (press its number key, or tap it in the toolbar) and click, tap or press the trigger.
+   The tablet menu opens in dark steel and amber: "BOB-LINK / ROOM 1" at the top with "STANDBY" and a dot, a list with
+   EXPLOSIVE and its picture, and a body drawn from the front with HEAD, TORSO, R ARM, L ARM, R LEG and L LEG (R ARM is on the
+   left of the screen). CONFIRM stays grey ("PICK A HARDDRIVE AND A LIMB") until you pick EXPLOSIVE and a limb, then reads
+   e.g. "CONFIRM: EXPLOSIVE INTO LEFT ARM". Press it: the menu closes and Bob goes to work. Open the tablet again while he
+   moves: it is read-only and the top bar shows MOVING, INJECTING or RETURNING. After the blast the limb reads LOST and
+   cannot be picked. The X, putting the tablet away, and (on a controller) B all close the menu, and so does dying. On a
+   phone every button is easy to tap and the menu stays clear of the notch and the top bar.
+9. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`, `ButtonSounds: ...` or `MenuAudio: ...`) means
    Roblox refused that sound's asset id: fix the id in `MenuAssets`, or its permissions.
 
 ## What these steps cannot bring back

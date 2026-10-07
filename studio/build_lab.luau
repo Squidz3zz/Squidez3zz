@@ -10,6 +10,7 @@
 --     BobTheInjector  the user's Bob, moved under the carriage and rewired into Column, Body, Needle and Pupils
 --   ServerStorage.Tablet                            a Tool made from the user's Workspace.Tablet model
 --   ReplicatedStorage.LabAssets.HardDrives.Explosive  the user's Workspace.ExplosiveHardDrive part
+--   ReplicatedStorage.TabletMenu                    the tablet menu's ScreenGui template (see its comment, near the end)
 -- The first time, before it changes anything, it copies the user's originals (BobTheInjector, Tablet and
 -- ExplosiveHardDrive) into ServerStorage.LabBackup.
 -- Safe to run again: only missing pieces are built, and an existing piece is left as it is (a marker or Chair you moved
@@ -462,5 +463,217 @@ adopt(drives, "Explosive", "ExplosiveHardDrive", function(drive)
 	drive.Name = "Explosive"
 	drive.Parent = drives
 end)
+
+-- The tablet menu's template: a ScreenGui (off, ResetOnSpawn false) that LabClient/TabletMenu.luau clones into each player's PlayerGui
+-- and fills in. Factory look, scale-only, inside the screen's core-UI safe area (below the top bar, clear of a notch), never wider than
+-- 760 px. Everything is fractions of Root's size (width 0.94 of the screen, at most 760 px; the aspect ratio keeps its shape):
+--   Header      Title, Dot + Status (Bob's state, or the reason for a refusal), Close; HeaderLine is the amber rule under it
+--   Injections  Label, List (a ScrollingFrame; EntryTemplate is the hidden button each Harddrive's entry is copied from: Icon, a
+--               ViewportFrame the brick is put in, and Label)
+--   Target      Label and six body-part buttons laid out like an R6 body seen from the front: the body's right limbs are on the
+--               screen's left (RightArm, RightLeg), the left ones on the right
+--   Confirm     the wide amber button under both
+-- Restyle it in Studio if you like, as long as these names stay (the colours of a picked, lost or inactive button are set by
+-- TabletMenu.luau, not here). Built only while ReplicatedStorage.TabletMenu is missing; to rebuild it, delete it and run this again.
+local BACKDROP = Color3.fromRGB(16, 14, 12)
+local MUTED = Color3.fromRGB(220, 208, 190)
+local WHITE = Color3.new(1, 1, 1)
+
+-- Room for text inside a button or label.
+local function pad(inst)
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0.06, 0),
+		PaddingRight = UDim.new(0.06, 0),
+		PaddingTop = UDim.new(0.08, 0),
+		PaddingBottom = UDim.new(0.08, 0),
+	}, inst)
+end
+
+-- A dark steel button; its amber outline (Stroke) is off until TabletMenu shows it picked.
+local function tabButton(props, parent)
+	local inst = make("TextButton", {
+		AutoButtonColor = false,
+		BackgroundColor3 = STEEL,
+		BorderSizePixel = 0,
+		FontFace = FONT,
+		TextColor3 = WHITE,
+		TextScaled = true,
+	})
+	apply(inst, props, parent)
+	make("UIStroke", { Name = "Stroke", Color = AMBER, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Enabled = false }, inst)
+	return inst
+end
+
+local function buildTabletMenu()
+	local gui = make("ScreenGui", {
+		Name = "TabletMenu",
+		ResetOnSpawn = false,
+		Enabled = false,
+		DisplayOrder = 30, -- below DeathScreen (100), above the main menu (10 to 11)
+		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+		ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets,
+	})
+	local root = make("Frame", {
+		Name = "Root",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.94, 0.94),
+		BackgroundColor3 = BACKDROP,
+		BorderSizePixel = 0,
+	}, gui)
+	make("UIStroke", { Color = AMBER, Thickness = 2, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, root)
+	make("UISizeConstraint", { MaxSize = Vector2.new(760, 100000) }, root)
+	make("UIAspectRatioConstraint", { AspectRatio = 1.85 }, root)
+
+	local header = make("Frame", { Name = "Header", Size = UDim2.fromScale(1, 0.15), BackgroundTransparency = 1, BorderSizePixel = 0 }, root)
+	label({
+		Name = "Title",
+		Text = "BOB-LINK / ROOM 1",
+		FontFace = FONT_BOLD,
+		BackgroundTransparency = 1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromScale(0.02, 0),
+		Size = UDim2.fromScale(0.42, 1),
+	}, header)
+	local dot = make("Frame", {
+		Name = "Dot",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.5),
+		Size = UDim2.fromScale(0.03, 0.3),
+		BackgroundColor3 = AMBER,
+		BorderSizePixel = 0,
+	}, header)
+	make("UICorner", { CornerRadius = UDim.new(0.5, 0) }, dot)
+	make("UIAspectRatioConstraint", {}, dot)
+	label({
+		Name = "Status",
+		Text = "STANDBY",
+		TextColor3 = MUTED,
+		BackgroundTransparency = 1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromScale(0.53, 0),
+		Size = UDim2.fromScale(0.36, 1),
+	}, header)
+	pad(tabButton({
+		Name = "Close",
+		Text = "X",
+		FontFace = FONT_BOLD,
+		TextColor3 = AMBER,
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.fromScale(0.99, 0.5),
+		Size = UDim2.fromScale(0.07, 0.95),
+	}, header))
+	make("Frame", {
+		Name = "HeaderLine",
+		Position = UDim2.fromScale(0, 0.15),
+		Size = UDim2.fromScale(1, 0.008),
+		BackgroundColor3 = AMBER,
+		BorderSizePixel = 0,
+	}, root)
+
+	-- The injections: each entry is copied from EntryTemplate (hidden) and named after its Harddrive's id.
+	local injections = make("Frame", {
+		Name = "Injections",
+		Position = UDim2.fromScale(0.02, 0.19),
+		Size = UDim2.fromScale(0.34, 0.6),
+		BackgroundColor3 = PANEL_COLOR,
+		BorderSizePixel = 0,
+	}, root)
+	label({
+		Name = "Label",
+		Text = "INJECTIONS",
+		FontFace = FONT_BOLD,
+		BackgroundTransparency = 1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.fromScale(1, 0.12),
+	}, injections)
+	local list = make("ScrollingFrame", {
+		Name = "List",
+		Position = UDim2.fromScale(0.04, 0.14),
+		Size = UDim2.fromScale(0.92, 0.84),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+		ScrollBarThickness = 4,
+		ScrollBarImageColor3 = AMBER,
+	}, injections)
+	-- Room around the entries for the picked one's outline, which is drawn outside it and would be cut off by the list.
+	make("UIPadding", {
+		PaddingLeft = UDim.new(0.02, 0),
+		PaddingRight = UDim.new(0.02, 0),
+		PaddingTop = UDim.new(0.02, 0),
+		PaddingBottom = UDim.new(0.02, 0),
+	}, list)
+	make("UIListLayout", { SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0.04, 0) }, list)
+	local entry = tabButton({ Name = "EntryTemplate", Text = "", Visible = false, Size = UDim2.fromScale(1, 0.3) }, list)
+	local icon = make("ViewportFrame", {
+		Name = "Icon",
+		Position = UDim2.fromScale(0.04, 0.1),
+		Size = UDim2.fromScale(0.34, 0.8),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+	}, entry)
+	make("UIAspectRatioConstraint", {}, icon)
+	label({
+		Name = "Label",
+		Text = "",
+		FontFace = FONT_BOLD,
+		TextColor3 = WHITE,
+		BackgroundTransparency = 1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Position = UDim2.fromScale(0.42, 0),
+		Size = UDim2.fromScale(0.56, 1),
+	}, entry)
+
+	-- The target: an R6 body seen from the front (the copy faces the window, so its left arm is on the screen's right).
+	local target = make("Frame", {
+		Name = "Target",
+		Position = UDim2.fromScale(0.38, 0.19),
+		Size = UDim2.fromScale(0.6, 0.6),
+		BackgroundColor3 = PANEL_COLOR,
+		BorderSizePixel = 0,
+	}, root)
+	label({
+		Name = "Label",
+		Text = "TARGET (FACING YOU)",
+		FontFace = FONT_BOLD,
+		BackgroundTransparency = 1,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		Size = UDim2.fromScale(1, 0.11),
+	}, target)
+	for _, def in {
+		{ "Head", "HEAD", 0.3, 0.12, 0.4 },
+		{ "RightArm", "R ARM", 0.04, 0.39, 0.24 },
+		{ "Torso", "TORSO", 0.3, 0.39, 0.4 },
+		{ "LeftArm", "L ARM", 0.72, 0.39, 0.24 },
+		{ "RightLeg", "R LEG", 0.3, 0.66, 0.195 },
+		{ "LeftLeg", "L LEG", 0.505, 0.66, 0.195 },
+	} do
+		pad(tabButton({
+			Name = def[1],
+			Text = def[2],
+			Position = UDim2.fromScale(def[3], def[4]),
+			Size = UDim2.fromScale(def[5], 0.26),
+		}, target))
+	end
+
+	pad(tabButton({
+		Name = "Confirm",
+		Text = "PICK A HARDDRIVE AND A LIMB",
+		FontFace = FONT_BOLD,
+		BackgroundColor3 = AMBER,
+		TextColor3 = BACKDROP,
+		Position = UDim2.fromScale(0.02, 0.83),
+		Size = UDim2.fromScale(0.96, 0.14),
+	}, root))
+
+	gui.Parent = ReplicatedStorage
+end
+if not ReplicatedStorage:FindFirstChild("TabletMenu") then
+	buildTabletMenu()
+	table.insert(built, "TabletMenu")
+end
 
 return ("build_lab: built [%s], moved [%s]"):format(table.concat(built, ", "), table.concat(moved, ", "))
