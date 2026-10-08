@@ -4,7 +4,8 @@
 --   A  claim seats a linked R6 copy on the chair, facing the window, with the sit animation, and gives one tablet; the sign names
 --      the owner. LEAVES THE ROOM CLAIMED, because tests/lab_claim.client.luau checks the "Release Room 1" state after it.
 --   B  claiming again (as the owner) releases: no copy, no tablet (even one held in the hand), free sign, Owner 0
---   C  the owner dying kills the copy; after the respawn a new copy sits and there is one tablet again
+--   C  the owner dying kills the copy; after the respawn a new copy sits, wearing the owner's look (not black), and there is
+--      one tablet again
 --   D  the copy dying kills the owner; after the respawn, releasing frees the room
 --   E  a lost limb stays lost: claim, blow the owner's left arm off (Explosive through the TestHook, the fuse waited out), release,
 --      claim again: the new copy has no left arm either (as the tablet menu sees Room1.Subject), its other limbs are whole and its
@@ -94,6 +95,19 @@ local function assertSeated(subject, what)
 	assert((root.Position - spot.WorldPosition).Magnitude <= 3, what .. ": the copy is not at SubjectSpot")
 end
 
+-- The copy wears the owner's look: the same body colours and the same shirt and pants (a copy built before a respawned
+-- character's appearance arrives is black and bare).
+local function assertLooksLike(subject, character, what)
+	local mine, theirs = subject:FindFirstChildOfClass("BodyColors"), character:FindFirstChildOfClass("BodyColors")
+	assert(mine and theirs, what .. ": BodyColors missing on the copy or the character")
+	assert(mine.TorsoColor3 == theirs.TorsoColor3 and mine.HeadColor3 == theirs.HeadColor3, what .. ": the copy's body colours " .. tostring(mine.TorsoColor3) .. " are not the owner's " .. tostring(theirs.TorsoColor3))
+	for _, class in { "Shirt", "Pants" } do
+		local a, b = subject:FindFirstChildOfClass(class), character:FindFirstChildOfClass(class)
+		local template = if class == "Shirt" then "ShirtTemplate" else "PantsTemplate"
+		assert((a and a[template]) == (b and b[template]), what .. ": the copy's " .. class .. " is not the owner's")
+	end
+end
+
 local function assertFree(what)
 	assert(room:GetAttribute("Owner") == 0, what .. ": Owner should be 0, is " .. tostring(room:GetAttribute("Owner")))
 	assert(subjectOf() == nil, what .. ": Room1.Subject should be gone")
@@ -113,6 +127,7 @@ if CASE == "A" then
 	assert(room:GetAttribute("Owner") == player.UserId, "Owner should be the player's UserId")
 	local subject = subjectOf()
 	assertSeated(subject, "A")
+	assertLooksLike(subject, player.Character, "A")
 	local humanoid = subject.Humanoid
 	assert(humanoid.DisplayDistanceType == Enum.HumanoidDisplayDistanceType.None, "the copy's name tag should be hidden")
 	local mine = aliveHumanoid()
@@ -164,6 +179,7 @@ elseif CASE == "C" then
 	local second = subjectOf()
 	assert(second and second ~= first, "there should be a new Subject, a different instance")
 	assertSeated(second, "C after")
+	assertLooksLike(second, newCharacter, "C after the respawn")
 	assert(first.Parent == nil, "the dead copy should have been destroyed")
 	assert(tabletCount() == 1, "there should be exactly one tablet after the respawn, found " .. tabletCount())
 	assert(hook:Invoke("linkCalls") >= 2, "onLinkBroken should be called again when the copy is replaced")

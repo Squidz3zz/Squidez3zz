@@ -32,6 +32,9 @@ local SEAT_LIFT = 1.5
 -- When open, the shutter waits this far above the doorway (inside the wall); closing slides it down over SHUTTER_TIME seconds.
 local SHUTTER_RISE = 6.5
 local SHUTTER_TIME = 0.4
+-- A respawned character gets its look (colours, clothes) a moment after it appears (about 0.2 s in Studio); the copy waits at most this
+-- long for it.
+local LOOK_WAIT = 10
 local Timings = LabConfig.Timings
 
 local room = workspace:WaitForChild("Room1")
@@ -208,8 +211,28 @@ local function release(player: Player)
 	linkBroken()
 end
 
+-- Starts listening for `character`'s look to arrive and returns a function that waits for it (at most `timeout` seconds; true when
+-- it came). Call it the moment the character appears: CharacterAppearanceLoaded may fire before the first yield, and
+-- player:HasAppearanceLoaded() still says true from the previous character, so it cannot be asked instead.
+local function lookArrival(player: Player, character: Model): (number) -> boolean
+	local arrived = false
+	local connection = player.CharacterAppearanceLoaded:Connect(function(loaded)
+		arrived = arrived or loaded == character
+	end)
+	return function(timeout)
+		local deadline = os.clock() + timeout
+		while not arrived and os.clock() < deadline and character.Parent do
+			task.wait()
+		end
+		connection:Disconnect()
+		return arrived
+	end
+end
+
 -- For the owner's current character, on the claim and after every respawn: the tablet, the death link and a fresh copy. Yields.
-local function setUpCharacter(player: Player, character: Model): string
+-- After a respawn, `waitForLook` (from lookArrival) holds the copy back until the character wears its look: built any earlier, the
+-- copy comes out black and bare.
+local function setUpCharacter(player: Player, character: Model, waitForLook: ((number) -> boolean)?): string
 	local humanoid = character:WaitForChild("Humanoid", 5)
 	if not humanoid then
 		return "failed"
@@ -236,6 +259,13 @@ local function setUpCharacter(player: Player, character: Model): string
 	end
 	giveTablet(player)
 	dropTabletsIfNoRightArm()
+	if waitForLook and not waitForLook(LOOK_WAIT) then
+		warn("LabServer: " .. player.Name .. "'s look did not arrive within " .. LOOK_WAIT .. " s, so the copy may not match")
+	end
+	-- The room may have been released, or the character replaced, while the look loaded.
+	if owner ~= player or player.Character ~= character then
+		return "stale"
+	end
 	return seatCopy(player, humanoid)
 end
 
@@ -270,7 +300,7 @@ local function claim(player: Player): (boolean, string?)
 	table.insert(
 		ownerConnections,
 		player.CharacterAdded:Connect(function(newCharacter)
-			local status = setUpCharacter(player, newCharacter)
+			local status = setUpCharacter(player, newCharacter, lookArrival(player, newCharacter))
 			if status == "failed" then
 				warn("LabServer: no copy for " .. player.Name .. " after the respawn, so the room is released")
 				release(player)
