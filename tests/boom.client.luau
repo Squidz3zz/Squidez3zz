@@ -9,10 +9,20 @@
 --   A-2  Client, CASE = "A-2": the first boom's attachment came within 0.5 s with 7 ParticleEmitters and 9 Sounds, all playing in
 --        SFX, and turned the camera more than 0.5 degrees; the second (Screen Effects off) has its attachment too but did not move
 --        the camera; 13 s after each boom its attachment is gone. Puts the camera and the setting back.
+-- The blood check, three more calls in this order (in the same playtest or a fresh one):
+--   C-1  Client, CASE = "C-1": arms it. For each of the next two booms it records the names of the ParticleEmitters in its "Boom"
+--        attachment (found within 0.5 s), the BloodSplat Parts added to Workspace within 0.5 s, whether each lies flat on a floor
+--        (a ray straight down through it from 1 stud above, past every character, the copy and Bob, hits a surface whose normal is within 10 degrees of
+--        the splat's axis, and the splat's centre is within 0.2 studs of it), and how many are left SplatLife + 1 s after the boom.
+--   C    Server: tests/boom.server.luau, CASE = "C" (a blood boom near the character, then 1 s later a plain one)
+--   C-2  Client, CASE = "C-2": the blood boom's attachment has the Blood emitters (Spray, Mist) and made at least one splat, every
+--        one flat on the floor and all gone after SplatLife + 1 s; the plain boom has no Blood emitter and made no splat.
 local CASE = "A-1"
 local FIND_WINDOW = 0.5
 local SHAKE_WINDOW = 0.6
 local GONE_AFTER = 13
+local FLAT_DEGREES = 10
+local SPLAT = "BloodSplat"
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -176,5 +186,124 @@ elseif CASE == "A-2" then
 	clear()
 	assert(ok, result)
 	return "PASS boom A-2 (" .. result .. "; both attachments gone after " .. GONE_AFTER .. " s)"
+elseif CASE == "C-1" then
+	clear()
+	local boomEvent = ReplicatedStorage:WaitForChild("BoomEvent", 10)
+	assert(boomEvent and boomEvent:IsA("RemoteEvent"), "ReplicatedStorage.BoomEvent (RemoteEvent) missing")
+	local assets = ReplicatedStorage:FindFirstChild("LabAssets")
+	local blood = assets and assets:FindFirstChild("Blood")
+	assert(blood and blood:IsA("Folder"), "ReplicatedStorage.LabAssets.Blood (Folder) missing")
+	assert(blood:FindFirstChild("Spray") and blood:FindFirstChild("Mist"), "LabAssets.Blood needs the ParticleEmitters Spray and Mist")
+	local life = blood:GetAttribute("SplatLife")
+	assert(type(life) == "number", "LabAssets.Blood has no SplatLife attribute")
+
+	-- Every splat added from now on, with when it came (BoomClient may add them before this script hears the boom).
+	local added = {}
+	local splatWatch = workspace.ChildAdded:Connect(function(child)
+		if child.Name == SPLAT and child:IsA("BasePart") then
+			table.insert(added, { part = child, at = os.clock() })
+		end
+	end)
+
+	-- A ray straight down through the splat from 1 stud above, past every character, the copy and Bob: the surface it lies on.
+	local function flatOnFloor(splat: BasePart): string?
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		local skip = {}
+		for _, other in Players:GetPlayers() do
+			table.insert(skip, other.Character)
+		end
+		local room = workspace:FindFirstChild("Room1")
+		table.insert(skip, room and room:FindFirstChild("Subject"))
+		table.insert(skip, room and room:FindFirstChild("BobTheInjector"))
+		params.FilterDescendantsInstances = skip
+		local hit = workspace:Raycast(splat.Position + Vector3.yAxis, Vector3.yAxis * -2, params)
+		if not hit then
+			return ("a splat at %s has no floor under it"):format(tostring(splat.Position))
+		end
+		local angle = math.deg(math.acos(math.clamp(math.abs(splat.CFrame.RightVector:Dot(hit.Normal)), 0, 1)))
+		if angle > FLAT_DEGREES then
+			return ("a splat's axis is %.1f degrees off the floor normal"):format(angle)
+		end
+		local off = math.abs((splat.Position - hit.Position):Dot(hit.Normal))
+		if off > 0.2 then
+			return ("a splat's centre is %.2f studs off the floor (%s)"):format(off, hit.Instance:GetFullName())
+		end
+		return nil
+	end
+
+	local count = 0
+	local connection
+	connection = boomEvent.OnClientEvent:Connect(function(position)
+		count += 1
+		local n = count
+		if n >= 2 then
+			connection:Disconnect()
+		end
+		local arrived = os.clock()
+		local key = "BT_" .. n .. "_"
+		local boom = boomAt(position)
+		while not boom and os.clock() - arrived <= FIND_WINDOW do
+			RunService.RenderStepped:Wait()
+			boom = boomAt(position)
+		end
+		local names = {}
+		for _, thing in (if boom then boom:GetChildren() else {}) do
+			if thing:IsA("ParticleEmitter") then
+				table.insert(names, thing.Name)
+			end
+		end
+		table.sort(names)
+		playerGui:SetAttribute(key .. "Found", if boom then os.clock() - arrived else -1)
+		playerGui:SetAttribute(key .. "Emitters", table.concat(names, ","))
+		task.wait(math.max(0, arrived + FIND_WINDOW - os.clock()))
+		local splats, bad = {}, nil
+		for _, entry in added do
+			if entry.at >= arrived - 0.1 and entry.at <= arrived + FIND_WINDOW then
+				table.insert(splats, entry.part)
+				bad = bad or flatOnFloor(entry.part)
+			end
+		end
+		playerGui:SetAttribute(key .. "Splats", #splats)
+		playerGui:SetAttribute(key .. "BadSplat", bad)
+		task.wait(math.max(0, arrived + life + 1 - os.clock()))
+		local left = 0
+		for _, splat in splats do
+			if splat.Parent then
+				left += 1
+			end
+		end
+		playerGui:SetAttribute(key .. "Left", left)
+		if n >= 2 then
+			splatWatch:Disconnect()
+		end
+	end)
+	return "PASS boom C-1 (armed: now run CASE C of tests/boom.server.luau on the Server, then C-2)"
+elseif CASE == "C-2" then
+	local blood = ReplicatedStorage.LabAssets.Blood
+	local life = blood:GetAttribute("SplatLife")
+	local ok, result = pcall(function()
+		assert(waitFor(function()
+			return playerGui:GetAttribute("BT_2_Left") ~= nil
+		end, life + 15), "C-1 did not record two booms: was it run, then CASE C on the Server?")
+		local function has(n: number, name: string): boolean
+			return table.find(string.split(playerGui:GetAttribute("BT_" .. n .. "_Emitters"), ","), name) ~= nil
+		end
+		assert(playerGui:GetAttribute("BT_1_Found") >= 0, ("blood boom: no Boom attachment within %.1f s"):format(FIND_WINDOW))
+		assert(has(1, "Spray") and has(1, "Mist"), "blood boom: its attachment has no Spray and Mist (" .. playerGui:GetAttribute("BT_1_Emitters") .. ")")
+		local splats = playerGui:GetAttribute("BT_1_Splats")
+		assert(splats >= 1, ("blood boom: no BloodSplat within %.1f s"):format(FIND_WINDOW))
+		assert(playerGui:GetAttribute("BT_1_BadSplat") == nil, "blood boom: " .. tostring(playerGui:GetAttribute("BT_1_BadSplat")))
+		assert(playerGui:GetAttribute("BT_1_Left") == 0, ("blood boom: %d splat(s) still there %g s after the boom"):format(playerGui:GetAttribute("BT_1_Left"), life + 1))
+		assert(playerGui:GetAttribute("BT_2_Found") >= 0, ("plain boom: no Boom attachment within %.1f s"):format(FIND_WINDOW))
+		for _, asset in blood:GetChildren() do
+			assert(not has(2, asset.Name), "plain boom: its attachment has the Blood emitter " .. asset.Name)
+		end
+		assert(playerGui:GetAttribute("BT_2_Splats") == 0, ("plain boom: %d splat(s)"):format(playerGui:GetAttribute("BT_2_Splats")))
+		return ("blood boom: %d splats, all flat on the floor and gone after %g s; plain boom: no blood"):format(splats, life + 1)
+	end)
+	clear()
+	assert(ok, result)
+	return "PASS boom C-2 (" .. result .. ")"
 end
 error("unknown CASE " .. tostring(CASE))

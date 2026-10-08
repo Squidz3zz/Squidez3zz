@@ -10,6 +10,7 @@
 --     BobTheInjector  the user's Bob, moved under the carriage and rewired into Column, Body, Needle and Pupils
 --   ServerStorage.Tablet                            a Tool made from the user's Workspace.Tablet model
 --   ReplicatedStorage.LabAssets.HardDrives.Explosive  the user's Workspace.ExplosiveHardDrive part
+--   ReplicatedStorage.LabAssets.Blood               the blood burst of a limb blast (see its comment, after the hard drive)
 --   ReplicatedStorage.TabletMenu                    the tablet menu's ScreenGui template (see its comment, near the end)
 -- The first time, before it changes anything, it copies the user's originals (BobTheInjector, Tablet and
 -- ExplosiveHardDrive) into ServerStorage.LabBackup.
@@ -485,6 +486,58 @@ adopt(drives, "Explosive", "ExplosiveHardDrive", function(drive)
 	drive.Name = "Explosive"
 	drive.Parent = drives
 end)
+
+-- The blood of a limb blast, which BoomClient fires once with every blood boom (see Booms): two switched-off ParticleEmitters,
+-- each fired with :Emit(its EmitCount attribute), Spray (dark red droplets thrown out and falling) and Mist (a short dark-red
+-- haze), and the folder's attributes for the splats left on the floor: SplatCount, SplatLife (seconds) and SplatColor. Any Sound
+-- in the folder plays with the burst. An emitter or attribute is only made while it is missing, so restyle them in Studio freely;
+-- to rebuild an emitter, delete it and run this again.
+local function defaults(inst, attributes)
+	for name, value in attributes do
+		if inst:GetAttribute(name) == nil then
+			inst:SetAttribute(name, value)
+		end
+	end
+end
+local blood = assets:FindFirstChild("Blood")
+if missing(assets, "Blood") then
+	blood = make("Folder", { Name = "Blood" }, assets)
+end
+defaults(blood, { SplatCount = 4, SplatLife = 20, SplatColor = Color3.fromRGB(80, 0, 0) })
+if missing(blood, "Spray") then
+	make("ParticleEmitter", {
+		Name = "Spray",
+		Enabled = false,
+		Texture = "rbxasset://textures/smallWhiteCircle.png",
+		Color = ColorSequence.new(Color3.fromRGB(120, 0, 0), Color3.fromRGB(60, 0, 0)),
+		Size = NumberSequence.new(0.12, 0.04),
+		Lifetime = NumberRange.new(0.6, 1.2),
+		Speed = NumberRange.new(15, 35),
+		SpreadAngle = Vector2.new(100, 100),
+		Acceleration = Vector3.new(0, -60, 0),
+		Drag = 3,
+		LightEmission = 0,
+		LightInfluence = 1,
+	}, blood)
+end
+defaults(blood.Spray, { EmitCount = 60 })
+if missing(blood, "Mist") then
+	make("ParticleEmitter", {
+		Name = "Mist",
+		Enabled = false,
+		Texture = "rbxasset://textures/particles/smoke_main.dds",
+		Color = ColorSequence.new(Color3.fromRGB(110, 0, 0), Color3.fromRGB(60, 0, 0)),
+		Size = NumberSequence.new(1, 3),
+		Transparency = NumberSequence.new(0.4, 1),
+		Lifetime = NumberRange.new(1, 1.5),
+		Speed = NumberRange.new(2, 5),
+		SpreadAngle = Vector2.new(180, 180),
+		Rotation = NumberRange.new(0, 360),
+		LightEmission = 0,
+		LightInfluence = 1,
+	}, blood)
+end
+defaults(blood.Mist, { EmitCount = 8 })
 
 -- The tablet menu's template: a ScreenGui (off, ResetOnSpawn false) that LabClient/TabletMenu.luau clones into each player's PlayerGui
 -- and fills in. Factory look, scale-only, inside the screen's core-UI safe area (below the top bar, clear of a notch), never wider than
