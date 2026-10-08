@@ -135,11 +135,13 @@ a blast and the copy would not, and the two must stay exactly the same. Delete i
 copy then drift apart after a blast).
 
 `DeathScreen` is the death screen for every death in the game, not only Room 1's: the moment your character dies the screen
-cuts to black, every sound goes silent and a ringing in the ears plays (`LabConfig.Sounds.DeathRing`, fading to nothing over
-`LabConfig.RESPAWN_TIME`). When you respawn the black fades out over 1.5 seconds and the sounds come back at the volumes they
-had. It makes `PlayerGui.DeathScreen` (with a full-screen `Black` Frame) and `SoundService.DeathRing` by itself, and writes each
-SoundGroup's volume to its `DeathSavedVolume` attribute while it is silenced, so do not delete those. Without `LabConfig` it still
-cuts to black, with no ringing, and fades over 5 seconds. If the script breaks, Roblox's normal death shows instead.
+cuts to black, every sound that plays through a SoundGroup in `SoundService` (the music and the sound effects) goes silent, so
+does the "Died" sound Roblox puts in characters, and a ringing in the ears plays (`LabConfig.Sounds.DeathRing`, fading to nothing
+over `LabConfig.RESPAWN_TIME`). A sound in no SoundGroup keeps playing. When you respawn the black fades out over 1.5 seconds and
+the SoundGroups come back at the volumes they had. It makes `PlayerGui.DeathScreen` (with a full-screen `Black` Frame) and
+`SoundService.DeathRing` by itself, and writes each SoundGroup's volume to its `DeathSavedVolume` attribute while it is silenced,
+so do not delete those. Without `LabConfig` it still cuts to black, with no ringing. If the script breaks, Roblox's normal death
+shows instead.
 
 `LabServer` is Room 1's server side and needs the pieces that `studio/build_lab.luau` builds (see c). It handles
 claiming and the injections. Claiming: a player who triggers the claim prompt becomes the owner (`Workspace.Room1`'s `Owner` attribute holds their UserId,
