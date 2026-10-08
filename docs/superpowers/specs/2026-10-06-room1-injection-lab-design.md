@@ -154,6 +154,8 @@ joints and validate, the client to aim the needle and grey out lost limbs).
 - **Death link:** the copy's Humanoid.Died sets the owner's Health to 0; the owner's Humanoid.Died sets the copy's Health
   to 0. Effects are applied to both bodies by HardDriveEffects directly (not by watching one and copying to the other).
   Damage is `Health -= n` on both, not TakeDamage, so a spawn ForceField cannot make the two drift apart.
+- **No regeneration:** health does not regenerate (an empty Script `StarterCharacterScripts.Health` replaces Roblox's default
+  healing script, game-wide), so the owner cannot heal while the copy, which has no such script, does not.
 - **The prompt per player:** LabClient sets the prompt's ActionText locally ("Claim Room 1" when free, "Release Room 1"
   for the owner) and disables it locally for everyone else while the room is owned. The server still checks every trigger.
 - `Players.RespawnTime` is set from LabConfig.RESPAWN_TIME at startup (MenuServer's respawn already waits for it).

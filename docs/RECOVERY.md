@@ -86,7 +86,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are twenty-four scripts. The file names are in `src/`.
+There are twenty-five scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -95,8 +95,8 @@ There are twenty-four scripts. The file names are in `src/`.
 3. In Studio, open the Rojo plugin and press **Connect**.
 
 The file `default.project.json` already says where everything goes. It only touches `ReplicatedFirst`,
-`ReplicatedStorage`, `ServerScriptService` and `StarterPlayerScripts`, and it leaves your other scripts (and the menu's
-ScreenGuis in `ReplicatedStorage`) alone.
+`ReplicatedStorage`, `ServerScriptService`, `StarterPlayerScripts` and `StarterCharacterScripts`, and it leaves your other
+scripts (and the menu's ScreenGuis in `ReplicatedStorage`) alone.
 
 **By hand:** create each script with the right kind and parent, then paste the file's text into it.
 
@@ -126,6 +126,13 @@ ScreenGuis in `ReplicatedStorage`) alone.
 | `GooglyEyes` | ModuleScript | `LabClient` | `.../LabClient/GooglyEyes.luau` |
 | `BobAnimator` | ModuleScript | `LabClient` | `.../LabClient/BobAnimator.luau` |
 | `DeathScreen` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/DeathScreen.client.luau` |
+| `Health` | Script | `StarterPlayer` -> `StarterCharacterScripts` | `src/StarterPlayer/StarterCharacterScripts/Health.server.luau` |
+
+`Health` is empty on purpose (only a comment). A Script with that name in `StarterCharacterScripts` replaces the one Roblox
+puts in every character, which heals it a little every second. This is game-wide: **nobody heals over time, anywhere in the
+game**, not only in Room 1. It is there because Room 1's copy has no such script: with healing on, the owner would heal after
+a blast and the copy would not, and the two must stay exactly the same. Delete it to bring healing back (the owner and their
+copy then drift apart after a blast).
 
 `DeathScreen` is the death screen for every death in the game, not only Room 1's: the moment your character dies the screen
 cuts to black, every sound goes silent and a ringing in the ears plays (`LabConfig.Sounds.DeathRing`, fading to nothing over

@@ -1,0 +1,4 @@
+-- Health: empty on purpose. Roblox puts a Script named "Health" in every character that heals it a little every second; a script
+-- of that name here replaces it, so nobody heals over time. Room 1's copy of a player has no such script, so with healing on the
+-- owner would heal after a blast and the copy would not, and the two must stay exactly the same. This is game-wide: no character
+-- anywhere in the game regenerates health. Deleting this script brings healing back (and lets the owner and the copy drift apart).

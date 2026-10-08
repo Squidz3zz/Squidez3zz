@@ -4,8 +4,8 @@
 -- at full health, Bob on Standby with the shutter open, and the room claimed afresh, so the copy is new and whole. So the cases can
 -- also run one after another in the same playtest.
 --   A  (I-A, I-B, I-C) Explosive into the left arm: the phases, their timings and the shutter; 1 s into the fuse both left arms
---      glow; after it both are lost, both bodies have lost 20 health, no glow is left and two Explosions were made; a second
---      injection into the same arm is refused "LIMB ALREADY LOST"
+--      glow; after it both are lost, both bodies have lost 20 health, no glow is left and two Explosions were made; 2 s later both
+--      are still at that health (nobody heals over time); a second injection into the same arm is refused "LIMB ALREADY LOST"
 --   D  (I-D) Explosive into the head kills both; an injection while the copy is dead is refused "NO SUBJECT"
 --   E  (I-E) two requests back to back: the first starts, the second is refused "BOB IS BUSY" and changes nothing
 --   F  (I-F) releasing the room 1 s into the fuse stops it: no glow left, no Explosion, the player's leg and health untouched
@@ -217,6 +217,10 @@ if CASE == "A" then
 
 	-- I-C
 	refused("LIMB ALREADY LOST", inject("Explosive", "LeftArm"))
+	-- Nobody heals over time, so the two stay the same.
+	task.wait(2)
+	local later, copyLater = humanoid.Health, subject.Humanoid.Health
+	assert(later == copyLater and math.abs(later - expectedHealth) < 0.01, ("2 s after the blast the player has %s health and the copy %s, both should still have %d"):format(later, copyLater, expectedHealth))
 	return ("PASS lab_inject I-A I-B I-C (%s; health %d)"):format(table.concat(report, ", "), expectedHealth)
 elseif CASE == "D" then
 	local subject, character = prepare()
