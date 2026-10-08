@@ -86,7 +86,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are twenty-five scripts. The file names are in `src/`.
+There are twenty-eight scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -108,6 +108,9 @@ scripts (and the menu's ScreenGuis in `ReplicatedStorage`) alone.
 | `MenuServer` | Script | `ServerScriptService` | `src/ServerScriptService/MenuServer.server.luau` |
 | `LabServer` | Script | `ServerScriptService` | `src/ServerScriptService/LabServer.server.luau` |
 | `HardDriveEffects` | ModuleScript | `ServerScriptService` | `src/ServerScriptService/HardDriveEffects.luau` |
+| `Booms` | ModuleScript | `ServerScriptService` | `src/ServerScriptService/Booms.luau` |
+| `ExplosionReplacer` | Script | `ServerScriptService` | `src/ServerScriptService/ExplosionReplacer.server.luau` |
+| `BoomClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/BoomClient.client.luau` |
 | `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
 | `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
 | `ButtonSounds` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonSounds.luau` |
@@ -135,13 +138,36 @@ a blast and the copy would not, and the two must stay exactly the same. Delete i
 copy then drift apart after a blast).
 
 `DeathScreen` is the death screen for every death in the game, not only Room 1's: the moment your character dies the screen
-cuts to black, every sound that plays through a SoundGroup in `SoundService` (the music and the sound effects) goes silent, so
-does the "Died" sound Roblox puts in characters, and a ringing in the ears plays (`LabConfig.Sounds.DeathRing`, fading to nothing
-over `LabConfig.RESPAWN_TIME`). A sound in no SoundGroup keeps playing. When you respawn the black fades out over 1.5 seconds and
-the SoundGroups come back at the volumes they had. It makes `PlayerGui.DeathScreen` (with a full-screen `Black` Frame) and
-`SoundService.DeathRing` by itself, and writes each SoundGroup's volume to its `DeathSavedVolume` attribute while it is silenced,
-so do not delete those. Without `LabConfig` it still cuts to black, with no ringing. If the script breaks, Roblox's normal death
-shows instead.
+cuts to black, every sound that plays through a SoundGroup in `SoundService` (the music and the sound effects) turns muffled,
+as if heard through the ringing (half as loud, with its highs cut: an `EqualizerSoundEffect` named `DeathMuffle` goes into each
+SoundGroup), the "Died" sound Roblox puts in characters goes silent, and a ringing in the ears plays (`LabConfig.Sounds.DeathRing`,
+in no SoundGroup so it stays clear, fading to nothing over `LabConfig.RESPAWN_TIME`). A sound in no SoundGroup keeps playing as it
+was. When you respawn the black fades out over 1.5 seconds, the `DeathMuffle`s go and the SoundGroups come back at the volumes
+they had; dying again before the black has faded out works the same way. It makes `PlayerGui.DeathScreen` (with a full-screen
+`Black` Frame) and `SoundService.DeathRing` by itself, and writes each SoundGroup's volume to its `DeathSavedVolume` attribute
+while it is muffled, so do not delete those. Without `LabConfig` it still cuts to black, with no ringing. If the script breaks,
+Roblox's normal death shows instead.
+
+`Booms`, `ExplosionReplacer` and `BoomClient` make every explosion in the game the same one: your explosion in
+`ReplicatedStorage.LabAssets.Explosion` (a Folder with nine Sounds, `ExplosionMain` and `Effect1` to `Effect8`, played all
+together, and seven ParticleEmitters, `Flash`, `Fire`, `Dust`, `OneDirt`, `TwoDirt`, `StaticSmoke` and `MovingSmoke`, each fired
+once). That folder was made by hand in Studio and is **only in the place file**, like Room 1's walls (see c), so save and publish
+after you change it. `Booms` (a ModuleScript in `ServerScriptService`) is the one way to make a boom: `Booms.at(position)` tells
+every player's game to show it there; it makes `ReplicatedStorage.BoomEvent` itself (do not build it by hand). `ExplosionReplacer`
+(a Script next to it) catches every Roblox `Explosion` anywhere in Workspace, from any script, tool or free model: it hides Roblox's
+own blast at once and plays your boom in its place, while the explosion still pushes and breaks things as its maker set it up.
+(Hiding it may or may not also silence Roblox's own explosion sound; that was not checked by ear.) Room 1's Explosive hard drive
+makes no Roblox explosion at all: it calls `Booms.at` at the limb. `BoomClient` (a LocalScript in `StarterPlayerScripts`) shows a
+boom on each player's screen: it copies the seven emitters and nine sounds into an Attachment named `Boom` in `Workspace.Terrain`,
+plays the sounds in the `SFX` SoundGroup (so the Sound Effects slider sets their volume), and removes the attachment once the
+longest particle and the longest sound are over (about 12.5 seconds, because `MovingSmoke` lives 12). It also shakes the camera
+for 0.6 seconds: hardest within 10 studs of your character, less and less up to 80 studs, not at all farther away, and never
+when the Settings board's **Screen Effects** switch is off. The shake's numbers are at the top of `BoomClient`.
+
+How many particles each emitter fires is its `EmitCount` attribute (select the emitter, then Properties -> Attributes; an emitter
+without one fires 20). An emitter with an `EmitDelay` attribute fires that many seconds after the boom. They are set to:
+`Flash` 2, `Fire` 15, `Dust` 40, `OneDirt` 25, `TwoDirt` 25, `StaticSmoke` 15, `MovingSmoke` 10. Keep each emitter's `Enabled`
+off: the boom fires them itself. Without `LabAssets.Explosion` the Output window says so once, and booms only shake the camera.
 
 `LabServer` is Room 1's server side and needs the pieces that `studio/build_lab.luau` builds (see c). It handles
 claiming and the injections. Claiming: a player who triggers the claim prompt becomes the owner (`Workspace.Room1`'s `Owner` attribute holds their UserId,
@@ -162,8 +188,8 @@ refuses it (with a reason the tablet shows, such as "BOB IS BUSY" or "LIMB ALREA
 what he is doing on `Room1.BobTheInjector` as attributes (`State`, `Target`, `HardDrive`, `PhaseStart`) and each player's
 game animates him from those, so do not delete those attributes. As the needle comes out, `HardDriveEffects` (which goes
 straight into `ServerScriptService`, next to `LabServer`, not inside it) does what the Harddrive does, to the copy and the
-owner at once. Explosive: the limb glows red and beeps faster and faster for `LabConfig.FUSE_SECONDS`, then blows: an arm or
-a leg falls off both bodies (and lies on the floor for `LabConfig.LOST_LIMB_SECONDS`) and both lose `LabConfig.LIMB_DAMAGE`
+owner at once. Explosive: the limb glows red and beeps faster and faster for `LabConfig.FUSE_SECONDS`, then blows with your
+boom (see `Booms` above): an arm or a leg falls off both bodies (and lies on the floor for `LabConfig.LOST_LIMB_SECONDS`) and both lose `LabConfig.LIMB_DAMAGE`
 health; the head or the torso kills both. Losing the right arm also takes the tablet away until the owner respawns. If the
 room is freed or the owner dies before the blast, Bob goes home and the fuse goes out with nothing blown off. Without
 `HardDriveEffects` the room can still be claimed, but every injection is refused (the Output window says why).
@@ -272,8 +298,9 @@ Press **Play** in Studio (the Test tab) and check each of these:
 4. **Credits** fades to a room with the developer's avatar on a stand, and the player's own avatar in the foreground,
    seen from behind, looking at it. Hovering one shows a name (the player's says `YOU`). **BACK** returns.
 5. **Play** spawns your character and the menu goes away.
-6. Reset your character. The screen cuts to black at once with a ringing in your ears and no other sound, and after about 5
-   seconds you respawn, the black fades out and the music and sound effects come back. The menu does not come back.
+6. Reset your character. The screen cuts to black at once with a ringing in your ears, the music and sound effects turn quiet
+   and muffled, and after about 5 seconds you respawn, the black fades out and the music and sound effects come back clear.
+   The menu does not come back.
 7. Walk to the panel outside Room 1's window and press its prompt ("Claim Room 1"). The sign changes to your name, a copy of
    your avatar sits in the chair facing the window, and a Tablet is in your toolbar. Hold the prompt for a second
    ("Release Room 1"): the copy and the Tablet go and the sign says FREE. Claim again and reset your character: after it respawns
@@ -298,4 +325,6 @@ Studio, so they come back with the scripts. The menu Title's words are built as 
 Studio since, redo that.
 
 Room 1's walls, Bob, the tablet and the hard drive are not in any script at all (see c). If the place file itself is lost,
-so are they, and so is their backup in `ServerStorage.LabBackup`, which lives in the same place file.
+so are they, and so is their backup in `ServerStorage.LabBackup`, which lives in the same place file. The same goes for your
+explosion, `ReplicatedStorage.LabAssets.Explosion`, and the `EmitCount` attributes on its emitters (the counts are listed under
+`Booms` in d, so you can type them in again).
