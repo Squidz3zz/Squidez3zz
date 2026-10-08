@@ -1,10 +1,12 @@
 -- Run in a playtest, after tests/fire_play.client.luau (so the player has a character). Three calls, in this order:
 --   D-1  Client, CASE = "D-1": arms the check. When the local Humanoid dies it records, one frame later (RenderStepped), the
---        black frame's transparency, whether DeathRing is playing and every SoundGroup's volume, as PlayerGui attributes.
+--        black frame's transparency, whether DeathRing is playing and, for every SoundGroup, its volume, its DeathSavedVolume and
+--        how many DeathMuffle EqualizerSoundEffects (HighGain -40, MidGain -15, LowGain 0) it holds, as PlayerGui attributes.
 --   D-2  Server, one line:  game:GetService("Players"):GetPlayers()[1].Character.Humanoid.Health = 0
---   D-3  Client, CASE = "D-3": the recorded frame was fully black, the ring was playing and every SoundGroup was silent; then,
---        once the new character has been there for 2 s, the black is gone and every SoundGroup is back at the volume the death
---        screen saved (the attribute DeathSavedVolume). If the character has a "Died" Sound, it must be silent.
+--   D-3  Client, CASE = "D-3": the recorded frame was fully black, the ring was playing and every SoundGroup was at half its
+--        DeathSavedVolume with exactly one DeathMuffle (and no other child of that name); then, once the new character has been
+--        there for 2 s, the black is gone, every SoundGroup is back at its DeathSavedVolume and no DeathMuffle is left anywhere in
+--        SoundService. If the character has a "Died" Sound, it must be silent.
 local CASE = "D-1"
 
 local Players = game:GetService("Players")
@@ -61,7 +63,19 @@ if CASE == "D-1" then
 			playerGui:SetAttribute("D1_Black", if black then black.BackgroundTransparency else -1)
 			playerGui:SetAttribute("D1_Ring", ring ~= nil and ring.IsPlaying)
 			for _, group in groups() do
+				local named, muffles = 0, 0
+				for _, child in group:GetChildren() do
+					if child.Name == "DeathMuffle" then
+						named += 1
+						if child:IsA("EqualizerSoundEffect") and child.HighGain == -40 and child.MidGain == -15 and child.LowGain == 0 then
+							muffles += 1
+						end
+					end
+				end
 				playerGui:SetAttribute("D1_Group_" .. group.Name, group.Volume)
+				playerGui:SetAttribute("D1_Saved_" .. group.Name, group:GetAttribute("DeathSavedVolume") or -1)
+				playerGui:SetAttribute("D1_Named_" .. group.Name, named)
+				playerGui:SetAttribute("D1_Muffle_" .. group.Name, muffles)
 			end
 			playerGui:SetAttribute("D1_Recorded", true)
 		end)
@@ -81,8 +95,14 @@ elseif CASE == "D-3" then
 	local names = {}
 	for name, value in playerGui:GetAttributes() do
 		if string.sub(name, 1, 9) == "D1_Group_" then
-			table.insert(names, name)
-			assert(value == 0, name .. " was not silent one frame after the death (volume " .. tostring(value) .. ")")
+			local group = string.sub(name, 10)
+			table.insert(names, group)
+			local saved = playerGui:GetAttribute("D1_Saved_" .. group)
+			assert(saved > 0, group .. " had no DeathSavedVolume (or a silent one) one frame after the death")
+			assert(math.abs(value - saved / 2) < 1e-4, ("%s was at %s one frame after the death, not half its saved %s"):format(group, tostring(value), tostring(saved)))
+			assert(playerGui:GetAttribute("D1_Named_" .. group) == 1 and playerGui:GetAttribute("D1_Muffle_" .. group) == 1,
+				("%s held %d DeathMuffle(s), %d of them EqualizerSoundEffects with gains -40/-15/0; expected exactly one"):format(
+					group, playerGui:GetAttribute("D1_Named_" .. group), playerGui:GetAttribute("D1_Muffle_" .. group)))
 		end
 	end
 	assert(#names >= 2, "D-1 recorded no SoundGroups")
@@ -103,6 +123,9 @@ elseif CASE == "D-3" then
 		assert(group.Volume == saved, ("%s is at %s, not back at its saved %s"):format(group.Name, tostring(group.Volume), tostring(saved)))
 		checked += 1
 	end
+	for _, thing in SoundService:GetDescendants() do
+		assert(thing.Name ~= "DeathMuffle", thing:GetFullName() .. " is still there after the respawn")
+	end
 	local note = ""
 	local died = player.Character and player.Character:FindFirstChild("Died", true)
 	if died and died:IsA("Sound") then
@@ -110,6 +133,6 @@ elseif CASE == "D-3" then
 		note = ", the character's Died sound is silent"
 	end
 	clear()
-	return ("PASS death_screen D-3 (%d SoundGroups saved, silenced and restored%s)"):format(checked, note)
+	return ("PASS death_screen D-3 (%d SoundGroups halved and muffled at death, restored and unmuffled after the respawn%s)"):format(checked, note)
 end
 error("unknown CASE " .. tostring(CASE))

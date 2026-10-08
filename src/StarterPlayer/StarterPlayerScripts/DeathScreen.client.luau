@@ -1,10 +1,12 @@
 -- DeathScreen: every death in the game cuts to black and rings in the ears. On the local character's Humanoid.Died, in the same frame:
 --   * PlayerGui.DeathScreen.Black (a full-screen black Frame, always there, transparent when idle) goes fully opaque;
---   * every SoundGroup under SoundService is silenced (its volume is kept in its DeathSavedVolume attribute);
---   * SoundService.DeathRing (in no group, so it stays audible) plays at full volume and fades to nothing over RESPAWN_TIME;
+--   * every SoundGroup under SoundService is muffled, as if heard through the ringing: its volume is kept in its DeathSavedVolume
+--     attribute and halved, and it gets an EqualizerSoundEffect named DeathMuffle (highs -40 dB, mids -15 dB, lows untouched);
+--   * SoundService.DeathRing (in no group, so it stays clear) plays at full volume and fades to nothing over RESPAWN_TIME;
 --   * the "Died" Sound Roblox puts in every character gets Volume 0 as soon as it appears.
--- On the next CharacterAdded the black fades out over FADE_IN seconds and every SoundGroup goes back to its saved volume. The script
--- works with no character (before Play) and across any number of deaths: it wires each character once, through Humanoid.Died:Once.
+-- On the next CharacterAdded the black fades out over FADE_IN seconds, every DeathMuffle goes and every SoundGroup goes back to its
+-- saved volume. The script works with no character (before Play) and across any number of deaths: it wires each character once,
+-- through Humanoid.Died:Once, and a death while already muffled neither saves the halved volume nor adds a second DeathMuffle.
 -- LabConfig (RESPAWN_TIME and Sounds.DeathRing) is optional: without it the ring fades over 5 s, and there is no ring.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -56,7 +58,7 @@ if ringId then
 	task.spawn(pcall, ContentProvider.PreloadAsync, ContentProvider, { ring })
 end
 
-local silenced = false -- true from a death until the next character arrives
+local muffled = false -- true from a death until the next character arrives
 local fadeIn, ringFade
 
 local function forEachGroup(fn)
@@ -72,11 +74,17 @@ local function die()
 		fadeIn:Cancel()
 	end
 	black.BackgroundTransparency = 0
-	if not silenced then
-		silenced = true
+	if not muffled then
+		muffled = true
 		forEachGroup(function(group)
 			group:SetAttribute("DeathSavedVolume", group.Volume)
-			group.Volume = 0
+			group.Volume /= 2
+			if not group:FindFirstChild("DeathMuffle") then
+				local muffle = Instance.new("EqualizerSoundEffect")
+				muffle.Name = "DeathMuffle"
+				muffle.HighGain, muffle.MidGain, muffle.LowGain = -40, -15, 0 -- dB
+				muffle.Parent = group
+			end
 		end)
 	end
 	if ring then
@@ -92,10 +100,10 @@ local function die()
 end
 
 local function recover()
-	if not silenced then
+	if not muffled then
 		return
 	end
-	silenced = false
+	muffled = false
 	fadeIn = TweenService:Create(black, TweenInfo.new(FADE_IN), { BackgroundTransparency = 1 })
 	fadeIn:Play()
 	forEachGroup(function(group)
@@ -104,6 +112,11 @@ local function recover()
 			group.Volume = saved
 		end
 	end)
+	for _, thing in SoundService:GetDescendants() do
+		if thing.Name == "DeathMuffle" then
+			thing:Destroy()
+		end
+	end
 end
 
 local function onCharacter(character)
