@@ -28,8 +28,8 @@
 -- Eyes: each pupil is a GooglyEyes simulation in its white's plane. A white and a pupil are Cylinder discs: the normal is the
 -- part's RightVector, the plane's axes its LookVector (x) and UpVector (y), the diameter min(Size.Y, Size.Z), and the pupil's
 -- travel radius (white diameter - pupil diameter) / 2; it keeps its built depth along the normal. Each frame it gets gravity,
--- the white's own acceleration and, on Standby, a pull toward the watched player's head. An Explosion inside the zone spins
--- both (SPIN x radius, studs/s).
+-- the white's own acceleration and, on Standby, a pull toward the watched player's head. A boom (ReplicatedStorage.BoomEvent,
+-- which every explosion fires) inside the zone spins both (SPIN x radius, studs/s).
 -- The copy's flinch (on this client only, by editing the copy's joints' C0): while Moving or Injecting its head turns toward
 -- NeedleTip (Neck C0, at most FLINCH_YAW and FLINCH_PITCH, smoothed), Returning holds it, and on Standby it faces forward again
 -- over RELAX s; during Hold the target limb's joint twitches a few degrees, and goes back as built when the Hold ends. A joint's
@@ -312,17 +312,19 @@ function BobAnimator.start(room: Model, config)
 		local radius = math.max(0, math.min(white.Size.Y, white.Size.Z) - math.min(pupil.Size.Y, pupil.Size.Z)) / 2
 		table.insert(eyes, { white = white, pupil = pupil, depth = built.X, turn = built.Rotation, sim = GooglyEyes.new(radius), motion = newTracker() })
 	end
-	local blasts = workspace.DescendantAdded:Connect(function(thing)
-		if not thing:IsA("Explosion") then
-			return
-		end
+	-- Every explosion in the game is a boom (Booms.at on the server); one inside the zone spins both eyes.
+	local boomEvent = ReplicatedStorage:WaitForChild("BoomEvent", 10)
+	local blasts = boomEvent and boomEvent.OnClientEvent:Connect(function(position)
 		local zone = room:FindFirstChild("Zone")
-		if zone and inside(zone, thing.Position) then
+		if typeof(position) == "Vector3" and zone and inside(zone, position) then
 			for _, eye in eyes do
 				GooglyEyes.spin(eye.sim, SPIN * eye.sim.radius)
 			end
 		end
 	end)
+	if not blasts then
+		warn("BobAnimator: ReplicatedStorage.BoomEvent did not appear, so Bob's eyes will not spin at explosions")
+	end
 
 	-- The copy's joints as the server built them (this client is the only one that changes them, and only locally). A new copy
 	-- starts a new list. Not a weak table: one keyed by Instances can drop a joint that still exists, and then a turned C0 would
@@ -478,7 +480,9 @@ function BobAnimator.start(room: Model, config)
 		end
 	end)
 	stopping = function()
-		blasts:Disconnect()
+		if blasts then
+			blasts:Disconnect()
+		end
 		motor:Stop()
 		hiss:Stop()
 		BobAnimator.applyPose(rig, rig.home, 0, Vector2.zero)

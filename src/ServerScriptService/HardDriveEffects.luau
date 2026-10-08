@@ -5,9 +5,12 @@
 -- takes time checks it as it goes and stops, with nothing done, once it is false.
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 local SoundService = game:GetService("SoundService")
 
 local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig"))
+-- With a timeout, so a missing Booms fails this module's load (LabServer then refuses injections) instead of hanging LabServer.
+local Booms = require(ServerScriptService:WaitForChild("Booms", 5))
 
 local FUSE_RED = Color3.fromRGB(255, 30, 20)
 -- The fuse's blink (one glow and one beep) comes every BLINK_FIRST seconds at the start, speeding up to every BLINK_LAST.
@@ -28,8 +31,9 @@ local function sfxGroup(): SoundGroup
 	return group :: SoundGroup
 end
 
--- Explosive: a fuse of FUSE_SECONDS (the limb glows red and beeps, faster and faster), then a blast at the limb. An arm or a
--- leg falls off and the body loses LIMB_DAMAGE health; the head or the torso kills. The blast itself hurts nothing else.
+-- Explosive: a fuse of FUSE_SECONDS (the limb glows red and beeps, faster and faster), then a blast at the limb: Booms.at the
+-- limb's centre (taken before it comes off; no Explosion instance). An arm or a leg falls off and the body loses LIMB_DAMAGE
+-- health; the head or the torso kills. The blast itself hurts nothing else.
 function HardDriveEffects.Explosive(bodies: { Model }, limbKey: string, stillLinked: () -> boolean)
 	local fused: { Model } = {}
 	local glows: { Highlight } = {}
@@ -90,13 +94,7 @@ function HardDriveEffects.Explosive(bodies: { Model }, limbKey: string, stillLin
 		local centre = LabConfig.limbCentre(body, limbKey)
 		local humanoid = body:FindFirstChildOfClass("Humanoid")
 		if centre and humanoid then
-			local explosion = Instance.new("Explosion")
-			explosion.Position = centre
-			explosion.BlastPressure = 0
-			explosion.BlastRadius = 4
-			explosion.DestroyJointRadiusPercent = 0
-			explosion.ExplosionType = Enum.ExplosionType.NoCraters
-			explosion.Parent = workspace
+			Booms.at(centre)
 			if FATAL[limbKey] then
 				humanoid.Health = 0
 			else

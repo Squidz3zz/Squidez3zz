@@ -4,11 +4,13 @@
 -- at full health, Bob on Standby with the shutter open, and the room claimed afresh, so the copy is new and whole. So the cases can
 -- also run one after another in the same playtest.
 --   A  (I-A, I-B, I-C) Explosive into the left arm: the phases, their timings and the shutter; 1 s into the fuse both left arms
---      glow; after it both are lost, both bodies have lost 20 health, no glow is left and two Explosions were made; 2 s later both
---      are still at that health (nobody heals over time); a second injection into the same arm is refused "LIMB ALREADY LOST"
+--      glow; after it both are lost, both bodies have lost 20 health, no glow is left, no Explosion instance was made and Booms
+--      counted exactly two booms (copy + owner); 2 s later both are still at that health (nobody heals over time); a second
+--      injection into the same arm is refused "LIMB ALREADY LOST"
 --   D  (I-D) Explosive into the head kills both; an injection while the copy is dead is refused "NO SUBJECT"
 --   E  (I-E) two requests back to back: the first starts, the second is refused "BOB IS BUSY" and changes nothing
---   F  (I-F) releasing the room 1 s into the fuse stops it: no glow left, no Explosion, the player's leg and health untouched
+--   F  (I-F) releasing the room 1 s into the fuse stops it: no glow left, no Explosion and no boom, the player's leg and health
+--      untouched
 --   G  (I-G) blowing off the right arm takes the tablet away, even one held in the hand
 --   H  (I-H) releasing mid-Moving (what PlayerRemoving does): free room, Bob back on Standby within Return + 0.5 s, shutter open
 --   I  (I-I) refusals: "UNKNOWN HARDDRIVE" (checked before the limb), "UNKNOWN LIMB", and "NOT YOUR ROOM" once released
@@ -126,6 +128,13 @@ local function recordPhases()
 	return seen, connection
 end
 
+-- Booms made so far (Booms.at counts them on its ModuleScript in Studio).
+local boomsModule = ServerScriptService:FindFirstChild("Booms")
+assert(boomsModule, "ServerScriptService.Booms missing")
+local function boomCount(): number
+	return boomsModule:GetAttribute("BoomCount") or 0
+end
+
 -- Explosions made anywhere in Workspace from now on.
 local function countExplosions()
 	local blasts = { n = 0 }
@@ -173,6 +182,7 @@ if CASE == "A" then
 	local subject, character, humanoid = prepare()
 	local seen, phases = recordPhases()
 	local blasts, blastWatch = countExplosions()
+	local boomsBefore = boomCount()
 	local t0 = now()
 	local ok, reason = inject("Explosive", "LeftArm")
 	assert(ok == true and reason == nil, "the injection was refused: " .. tostring(reason))
@@ -216,7 +226,9 @@ if CASE == "A" then
 	assert(math.abs(subject.Humanoid.Health - expectedHealth) < 0.01, "the copy's health is " .. subject.Humanoid.Health)
 	assert(math.abs(humanoid.Health - expectedHealth) < 0.01, "the player's health is " .. humanoid.Health)
 	assert(glowCount() == 0, glowCount() .. " FuseGlow(s) left after the blast")
-	assert(blasts.n == 2, "expected 2 Explosions (one per body), got " .. blasts.n)
+	assert(blasts.n == 0, blasts.n .. " Explosion instance(s) were made: the blast should only call Booms.at")
+	local booms = boomCount() - boomsBefore
+	assert(booms == 2, "expected 2 booms (copy + owner), got " .. booms)
 	-- Nobody heals over time, so the two stay the same.
 	task.wait(2)
 	local later, copyLater = humanoid.Health, subject.Humanoid.Health
@@ -247,6 +259,7 @@ elseif CASE == "F" then
 	local before = humanoid.Health
 	local seen, phases = recordPhases()
 	local blasts, blastWatch = countExplosions()
+	local boomsBefore = boomCount()
 	assert(inject("Explosive", "LeftLeg") == true, "the injection was refused")
 	assert(waitFor(function()
 		return seen.Returning
@@ -261,6 +274,7 @@ elseif CASE == "F" then
 	assert(not LabConfig.isLost(character, "LeftLeg"), "the player's left leg should not be lost")
 	assert(humanoid.Health == before, ("the player's health changed: %s -> %s"):format(before, humanoid.Health))
 	assert(blasts.n == 0, blasts.n .. " Explosion(s) were made")
+	assert(boomCount() == boomsBefore, (boomCount() - boomsBefore) .. " boom(s) were made")
 	return "PASS lab_inject I-F"
 elseif CASE == "G" then
 	local subject, character, humanoid = prepare()
