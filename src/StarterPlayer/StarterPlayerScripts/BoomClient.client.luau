@@ -10,9 +10,11 @@
 --   * bleeds, for a limb blast: the same is done with LabAssets.Blood (its emitters Spray and Mist, and any Sound dropped into the
 --     folder) in the same attachment, and the blood splats the floor: SplatCount rays (an attribute of the folder, like SplatLife
 --     and SplatColor) from the blast toward a random point up to SPLAT_REACH studs to the side and SPLAT_DROP studs down, past
---     every player's character, the copy (Room1.Subject) and Bob. Each ray that hits puts a thin disc of SplatColor flat on what
---     it hit; it fades out over its last SPLAT_FADE seconds and goes after SplatLife seconds. At most MAX_SPLATS stay, the oldest
---     going first. The splats are only on this player's screen. Without LabAssets.Blood it warns once and limb blasts do not bleed.
+--     every player's character, the copy (Room1.Subject) and Bob. Each ray that hits something anchored puts a thin disc of
+--     SplatColor flat on it (none on a loose part, such as a blown-off limb, which would leave the splat hanging in the air once
+--     it is gone); it fades out over its last SPLAT_FADE seconds and goes after SplatLife seconds. At most MAX_SPLATS stay, the
+--     oldest going first. The splats are only on this player's screen. Without LabAssets.Blood it warns once and limb blasts do
+--     not bleed.
 --   * shakes the camera, unless the Settings board's Screen Effects switch is off (LocalPlayer's MenuSetting_ScreenEffects is
 --     false): strength 1 within FULL_SHAKE_DISTANCE of the character's HumanoidRootPart (of the camera with no character),
 --     falling linearly to 0 at NO_SHAKE_DISTANCE, then fading to 0 over SHAKE_SECONDS. Every frame, after the camera scripts, the
@@ -86,7 +88,7 @@ local function splatter(position: Vector3, blood: Instance, boom: Attachment)
 	for _ = 1, tonumber(blood:GetAttribute("SplatCount")) or 4 do
 		local angle, reach = random:NextNumber(0, 2 * math.pi), random:NextNumber(0, SPLAT_REACH)
 		local hit = workspace:Raycast(position, Vector3.new(math.cos(angle) * reach, -SPLAT_DROP, math.sin(angle) * reach), params)
-		if hit then
+		if hit and hit.Instance.Anchored then
 			local size = random:NextNumber(SPLAT_SIZE.Min, SPLAT_SIZE.Max)
 			local splat = Instance.new("Part")
 			splat.Name = "BloodSplat"

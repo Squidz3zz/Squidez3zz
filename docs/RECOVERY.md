@@ -182,8 +182,8 @@ A limb blast also bleeds: `Booms.at(position, true)` sends the blood along, and 
 fired once like the explosion's. Every Sound in the folder plays with the burst, in the `SFX` SoundGroup: your two blood sounds
 live there, `BloodSquirt` (rbxassetid://91834483567891) and `Blood Splatter Sound Effect ` (rbxassetid://127991013927235; the
 name ends in a space), both at volume 0.5. They were made by hand and are **only in the place file**; any Sound you drop into
-the folder plays too. The blood also leaves splats: `SplatCount` (4) flat dark-red discs on whatever is below the blast (the
-floor or the chair, never a player, the copy or Bob), up to 4 studs to the side, in `SplatColor` (80, 0, 0); each fades out
+the folder plays too. The blood also leaves splats: `SplatCount` (4) flat dark-red discs on whatever anchored part is below the
+blast (the floor or the chair; never a player, the copy, Bob or a loose part such as a blown-off limb), up to 4 studs to the side, in `SplatColor` (80, 0, 0); each fades out
 over its last 5 seconds and is gone after `SplatLife` (20) seconds, and no more than 60 stay at once. Those three are attributes
 of the `Blood` folder; the splats are only on each player's own screen. Without `LabAssets.Blood` the Output window says so
 once and limb blasts do not bleed.
