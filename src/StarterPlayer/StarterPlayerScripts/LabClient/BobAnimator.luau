@@ -313,8 +313,11 @@ function BobAnimator.start(room: Model, config)
 		table.insert(eyes, { white = white, pupil = pupil, depth = built.X, turn = built.Rotation, sim = GooglyEyes.new(radius), motion = newTracker() })
 	end
 	local blasts = workspace.DescendantAdded:Connect(function(thing)
+		if not thing:IsA("Explosion") then
+			return
+		end
 		local zone = room:FindFirstChild("Zone")
-		if thing:IsA("Explosion") and zone and inside(zone, thing.Position) then
+		if zone and inside(zone, thing.Position) then
 			for _, eye in eyes do
 				GooglyEyes.spin(eye.sim, SPIN * eye.sim.radius)
 			end

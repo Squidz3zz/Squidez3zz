@@ -430,6 +430,10 @@ end
 
 room:SetAttribute("Owner", 0)
 setSign("ROOM 1 / FREE")
+-- Bob starts on Standby, set here rather than trusted from the place file: this script owns the state it publishes.
+bob:SetAttribute("Target", "")
+bob:SetAttribute("HardDrive", "")
+setPhase("Standby")
 
 if RunService:IsStudio() then
 	-- Test hook for tests/lab_claim.server.luau and tests/lab_inject.server.luau (execute_luau cannot reach this script's locals).
