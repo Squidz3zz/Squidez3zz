@@ -109,7 +109,7 @@ return {
 	FOLLOW_DISTANCE = 8,       -- how far Bob keeps his eyes from a player he follows (studs)
 	Sounds = {
 		DeathRing = "rbxassetid://9069161602",
-		FuseBeep = "rbxassetid://118464872816736",
+		FuseBeep = "rbxassetid://110057943333877",
 		NeedleHiss = "rbxassetid://8375254457",
 		BobMotor = "rbxassetid://18627683806",   -- loops while Bob is moving
 	},

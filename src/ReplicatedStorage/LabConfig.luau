@@ -54,7 +54,7 @@ local LabConfig = {
 
 	Sounds = {
 		DeathRing = "rbxassetid://9069161602",
-		FuseBeep = "rbxassetid://118464872816736",
+		FuseBeep = "rbxassetid://110057943333877",
 		NeedleHiss = "rbxassetid://8375254457",
 		BobMotor = "rbxassetid://18627683806",
 	},

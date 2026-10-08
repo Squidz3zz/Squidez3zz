@@ -43,7 +43,7 @@
 ### Values (verbatim from the spec, plus positions pinned here)
 - `RESPAWN_TIME = 5`, `LIMB_DAMAGE = 20`, `FUSE_SECONDS = 3`, `LOST_LIMB_SECONDS = 10`, `FOLLOW_DISTANCE = 8` (from Bob's eyes; at 6 his needle tip reaches the player's head).
 - `Timings = { Move = 2, NeedleOut = 0.4, Hold = 1, NeedleIn = 0.4, Return = 1.5 }`.
-- Sounds: `DeathRing = "rbxassetid://9069161602"`, `FuseBeep = "rbxassetid://118464872816736"`, `NeedleHiss = "rbxassetid://8375254457"`, `BobMotor = "rbxassetid://18627683806"`. All in `SoundService.SFX` except DeathRing (no group).
+- Sounds: `DeathRing = "rbxassetid://9069161602"`, `FuseBeep = "rbxassetid://110057943333877"`, `NeedleHiss = "rbxassetid://8375254457"`, `BobMotor = "rbxassetid://18627683806"`. All in `SoundService.SFX` except DeathRing (no group).
 - The game is R6 only (user decision): every character and copy is R6; no R15 code paths. Copy rig: `Enum.HumanoidRigType.R6`. Sit animation: `rbxassetid://178130996`.
 - Room 1 interior: x 32.3–59.2, z 16.8–54.6, floor top y 0.35, ceiling underside y 22.55. Observation side is x < 32.3.
 - Chair: seat centre (51.5, –, 35), facing -X (toward the window). This leaves Bob's 12-stud reach room on the front and both sides.
