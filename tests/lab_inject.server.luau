@@ -12,6 +12,9 @@
 --   G  (I-G) blowing off the right arm takes the tablet away, even one held in the hand
 --   H  (I-H) releasing mid-Moving (what PlayerRemoving does): free room, Bob back on Standby within Return + 0.5 s, shutter open
 --   I  (I-I) refusals: "UNKNOWN HARDDRIVE" (checked before the limb), "UNKNOWN LIMB", and "NOT YOUR ROOM" once released
+--   J  (I-J) a limb whose fuse is burning is refused: Explosive into the left leg; back on Standby the fuse still burns on a whole
+--      leg, and a second injection into it is refused "LIMB ALREADY LOST"; a release puts the fuse out, and after a fresh claim the
+--      left leg can be injected again
 local CASE = "A"
 
 local Players = game:GetService("Players")
@@ -214,13 +217,13 @@ if CASE == "A" then
 	assert(math.abs(humanoid.Health - expectedHealth) < 0.01, "the player's health is " .. humanoid.Health)
 	assert(glowCount() == 0, glowCount() .. " FuseGlow(s) left after the blast")
 	assert(blasts.n == 2, "expected 2 Explosions (one per body), got " .. blasts.n)
-
-	-- I-C
-	refused("LIMB ALREADY LOST", inject("Explosive", "LeftArm"))
 	-- Nobody heals over time, so the two stay the same.
 	task.wait(2)
 	local later, copyLater = humanoid.Health, subject.Humanoid.Health
 	assert(later == copyLater and math.abs(later - expectedHealth) < 0.01, ("2 s after the blast the player has %s health and the copy %s, both should still have %d"):format(later, copyLater, expectedHealth))
+
+	-- I-C
+	refused("LIMB ALREADY LOST", inject("Explosive", "LeftArm"))
 	return ("PASS lab_inject I-A I-B I-C (%s; health %d)"):format(table.concat(report, ", "), expectedHealth)
 elseif CASE == "D" then
 	local subject, character = prepare()
@@ -304,5 +307,20 @@ elseif CASE == "I" then
 	hook:Invoke("release", player)
 	refused("NOT YOUR ROOM", inject("Explosive", "LeftArm"))
 	return "PASS lab_inject I-I"
+elseif CASE == "J" then
+	local subject = prepare()
+	local seen, phases = recordPhases()
+	assert(inject("Explosive", "LeftLeg") == true, "the injection was refused")
+	assert(waitFor(function()
+		return seen.Standby
+	end, MOVE + INJECT + RETURN + 1), "Bob never got back to Standby")
+	phases:Disconnect()
+	assert(subject["Left Leg"]:FindFirstChild("FuseGlow") and not LabConfig.isLost(subject, "LeftLeg"), "the fuse should still be burning on the copy's whole left leg")
+	local early = seen.Returning.start + FUSE - now()
+	refused("LIMB ALREADY LOST", inject("Explosive", "LeftLeg"))
+	prepare()
+	assert(inject("Explosive", "LeftLeg") == true, "after a release the left leg should be injectable again")
+	hook:Invoke("release", player)
+	return ("PASS lab_inject I-J (refused about %.2f s before the blast)"):format(early)
 end
 error("unknown CASE " .. tostring(CASE))

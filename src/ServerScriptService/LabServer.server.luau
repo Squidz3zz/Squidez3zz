@@ -314,6 +314,9 @@ end
 
 -- Bumped by every injection and every cancel: a sequence that wakes up to a different number was cancelled and stops there.
 local sequence = 0
+-- The limbs whose fuse is burning (limb key -> the sequence that lit it). Refused like a lost limb: the fuse outlasts Bob's trip home,
+-- so without this he could be sent to inject a limb that is about to blow off.
+local fusing: { [string]: number } = {}
 
 local function setPhase(state: string)
 	bob:SetAttribute("PhaseStart", workspace:GetServerTimeNow())
@@ -346,9 +349,13 @@ local function runSequence(mine: number, player: Player, body: Model, character:
 		return
 	end
 	task.spawn(function()
+		fusing[limbKey] = mine
 		local ok, err = pcall(HardDriveEffects[hardDriveId], { body, character }, limbKey, function()
 			return subject == body and player.Character == character and alive(body) and alive(character)
 		end)
+		if fusing[limbKey] == mine then
+			fusing[limbKey] = nil
+		end
 		if not ok then
 			warn("LabServer: the " .. hardDriveId .. " effect failed: " .. tostring(err))
 		end
@@ -357,8 +364,9 @@ local function runSequence(mine: number, player: Player, body: Model, character:
 end
 
 -- Bob drops what he is doing and goes home. Safe to call again: on Standby, or already Returning, there is nothing to stop (a
--- burning effect stops by itself, because its link is broken).
+-- burning effect stops by itself, because its link is broken, so its limb no longer counts as fusing).
 onLinkBroken = function()
+	table.clear(fusing)
 	local state = bob:GetAttribute("State")
 	if state == "Moving" or state == "Injecting" then
 		sequence += 1
@@ -389,7 +397,7 @@ local function inject(player: Player, hardDriveId: any, limbKey: any): (boolean,
 		return false, "UNKNOWN HARDDRIVE"
 	elseif not LabConfig.Limbs[limbKey] then
 		return false, "UNKNOWN LIMB"
-	elseif LabConfig.isLost(body, limbKey) then
+	elseif LabConfig.isLost(body, limbKey) or fusing[limbKey] then
 		return false, "LIMB ALREADY LOST"
 	end
 	sequence += 1
