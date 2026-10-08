@@ -18,6 +18,12 @@ local BLINK_FIRST = 0.6
 local BLINK_LAST = 0.12
 -- Losing these is always fatal; any other limb falls off.
 local FATAL = { Head = true, Torso = true }
+-- A blown-off arm or leg is flung by Roblox physics: off in a random direction, 20 to 60 degrees above level, at a random
+-- speed in FLING_SPEED (studs per second), spinning at up to FLING_SPIN radians per second.
+local FLING_SPEED = NumberRange.new(15, 30)
+local FLING_SPIN = 15
+
+local random = Random.new()
 
 local HardDriveEffects = {}
 
@@ -31,9 +37,10 @@ local function sfxGroup(): SoundGroup
 	return group :: SoundGroup
 end
 
--- Explosive: a fuse of FUSE_SECONDS (the limb glows red and beeps, faster and faster), then a blast at the limb: Booms.at the
--- limb's centre (taken before it comes off; no Explosion instance). An arm or a leg falls off and the body loses LIMB_DAMAGE
--- health; the head or the torso kills. The blast itself hurts nothing else.
+-- Explosive: a fuse of FUSE_SECONDS (the limb glows red and beeps, faster and faster), then a blast at the limb: a blood boom
+-- (Booms.at with blood) at the limb's centre (taken before it comes off; no Explosion instance). An arm or a leg is flung off
+-- (the server owns it from then on, so the owner's own limb flies the same) and the body loses LIMB_DAMAGE health; the head or
+-- the torso kills. The blast itself hurts nothing else.
 function HardDriveEffects.Explosive(bodies: { Model }, limbKey: string, stillLinked: () -> boolean)
 	local fused: { Model } = {}
 	local glows: { Highlight } = {}
@@ -94,7 +101,7 @@ function HardDriveEffects.Explosive(bodies: { Model }, limbKey: string, stillLin
 		local centre = LabConfig.limbCentre(body, limbKey)
 		local humanoid = body:FindFirstChildOfClass("Humanoid")
 		if centre and humanoid then
-			Booms.at(centre)
+			Booms.at(centre, true)
 			if FATAL[limbKey] then
 				humanoid.Health = 0
 			else
@@ -107,6 +114,11 @@ function HardDriveEffects.Explosive(bodies: { Model }, limbKey: string, stillLin
 					part.Anchored = false
 					part.CanCollide = true
 					part.Parent = workspace
+					pcall(part.SetNetworkOwner, part, nil)
+					local heading, climb = random:NextNumber(0, 2 * math.pi), math.rad(random:NextNumber(20, 60))
+					local direction = Vector3.new(math.cos(heading) * math.cos(climb), math.sin(climb), math.sin(heading) * math.cos(climb))
+					part.AssemblyLinearVelocity = direction * random:NextNumber(FLING_SPEED.Min, FLING_SPEED.Max)
+					part.AssemblyAngularVelocity = random:NextUnitVector() * random:NextNumber(0, FLING_SPIN)
 					Debris:AddItem(part, LabConfig.LOST_LIMB_SECONDS)
 				end
 				humanoid.Health -= LabConfig.LIMB_DAMAGE

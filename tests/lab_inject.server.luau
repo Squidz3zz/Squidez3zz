@@ -4,9 +4,10 @@
 -- at full health, Bob on Standby with the shutter open, and the room claimed afresh, so the copy is new and whole. So the cases can
 -- also run one after another in the same playtest.
 --   A  (I-A, I-B, I-C) Explosive into the left arm: the phases, their timings and the shutter; 1 s into the fuse both left arms
---      glow; after it both are lost, both bodies have lost 20 health, no glow is left, no Explosion instance was made and Booms
---      counted exactly two booms (copy + owner); 2 s later both are still at that health (nobody heals over time); a second
---      injection into the same arm is refused "LIMB ALREADY LOST"
+--      glow; after it both are lost and flung (each moved more than 2 studs sideways within 0.5 s of coming off into Workspace),
+--      both bodies have lost 20 health, no glow is left, no Explosion instance was made and Booms counted exactly two booms
+--      (copy + owner), both with blood (BloodCount + 2); 2 s later both are still at that health (nobody heals over time); a
+--      second injection into the same arm is refused "LIMB ALREADY LOST"
 --   D  (I-D) Explosive into the head kills both; an injection while the copy is dead is refused "NO SUBJECT"
 --   E  (I-E) two requests back to back: the first starts, the second is refused "BOB IS BUSY" and changes nothing
 --   F  (I-F) releasing the room 1 s into the fuse stops it: no glow left, no Explosion and no boom, the player's leg and health
@@ -134,6 +135,9 @@ assert(boomsModule, "ServerScriptService.Booms missing")
 local function boomCount(): number
 	return boomsModule:GetAttribute("BoomCount") or 0
 end
+local function bloodCount(): number
+	return boomsModule:GetAttribute("BloodCount") or 0
+end
 
 -- Explosions made anywhere in Workspace from now on.
 local function countExplosions()
@@ -182,7 +186,7 @@ if CASE == "A" then
 	local subject, character, humanoid = prepare()
 	local seen, phases = recordPhases()
 	local blasts, blastWatch = countExplosions()
-	local boomsBefore = boomCount()
+	local boomsBefore, bloodBefore = boomCount(), bloodCount()
 	local t0 = now()
 	local ok, reason = inject("Explosive", "LeftArm")
 	assert(ok == true and reason == nil, "the injection was refused: " .. tostring(reason))
@@ -201,6 +205,22 @@ if CASE == "A" then
 	waitUntil(seen.Returning.start + 1)
 	assert(subject["Left Arm"]:FindFirstChild("FuseGlow"), "no FuseGlow on the copy's left arm 1 s into the fuse")
 	assert(character["Left Arm"]:FindFirstChild("FuseGlow"), "no FuseGlow on the player's left arm 1 s into the fuse")
+
+	-- The fling: where each left arm is as it comes off (put into Workspace), and how far it went sideways 0.5 s later.
+	local flung = {}
+	for _, arm in { subject["Left Arm"], character["Left Arm"] } do
+		local connection
+		connection = arm:GetPropertyChangedSignal("Parent"):Connect(function()
+			if arm.Parent == workspace then
+				connection:Disconnect()
+				local from = arm.Position
+				task.delay(0.5, function()
+					local moved = arm.Position - from
+					table.insert(flung, Vector3.new(moved.X, 0, moved.Z).Magnitude)
+				end)
+			end
+		end)
+	end
 
 	assert(waitFor(function()
 		return seen.Standby
@@ -229,6 +249,14 @@ if CASE == "A" then
 	assert(blasts.n == 0, blasts.n .. " Explosion instance(s) were made: the blast should only call Booms.at")
 	local booms = boomCount() - boomsBefore
 	assert(booms == 2, "expected 2 booms (copy + owner), got " .. booms)
+	local bloods = bloodCount() - bloodBefore
+	assert(bloods == 2, "expected 2 blood booms (copy + owner), got " .. bloods)
+	assert(waitFor(function()
+		return #flung == 2
+	end, 2), "the two left arms did not both come off into Workspace")
+	for _, distance in flung do
+		assert(distance > 2, ("a left arm moved only %.2f studs sideways in the 0.5 s after it came off: not flung"):format(distance))
+	end
 	-- Nobody heals over time, so the two stay the same.
 	task.wait(2)
 	local later, copyLater = humanoid.Health, subject.Humanoid.Health
@@ -236,7 +264,7 @@ if CASE == "A" then
 
 	-- I-C
 	refused("LIMB ALREADY LOST", inject("Explosive", "LeftArm"))
-	return ("PASS lab_inject I-A I-B I-C (%s; health %d)"):format(table.concat(report, ", "), expectedHealth)
+	return ("PASS lab_inject I-A I-B I-C (%s; health %d; arms flung %.1f and %.1f studs sideways in 0.5 s)"):format(table.concat(report, ", "), expectedHealth, flung[1], flung[2])
 elseif CASE == "D" then
 	local subject, character = prepare()
 	assert(inject("Explosive", "Head") == true, "the injection was refused")
