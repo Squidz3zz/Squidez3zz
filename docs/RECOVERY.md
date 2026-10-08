@@ -64,6 +64,9 @@ change them.
   carriage and regrouped into `Column`, `Body`, `Needle` and `Pupils`).
 - `ServerStorage.Tablet`: the tablet, made into a Tool.
 - `ReplicatedStorage.LabAssets.HardDrives.Explosive`: the hard drive, the picture in the tablet's list.
+- `ReplicatedStorage.LabAssets.Blood`: the blood of a limb blast (see `Booms` in d): the emitters `Spray` and `Mist` and the
+  splat settings. A re-run only adds what is missing (an emitter, or an attribute), so your changes to them stay. Your two
+  blood sounds in it are not made by the script (see d).
 - `ReplicatedStorage.TabletMenu`: the tablet's menu, a `ScreenGui` that is switched off (the game copies it into each
   player's screen). It is in the factory look and made of fractions of the screen, so it fits a phone. You can restyle it
   in Studio, as long as the names inside it stay (`Header` with `Title`, `Status` and `Close`; `Injections` with `List`
@@ -154,10 +157,12 @@ together, and seven ParticleEmitters, `Flash`, `Fire`, `Dust`, `OneDirt`, `TwoDi
 once). That folder was made by hand in Studio and is **only in the place file**, like Room 1's walls (see c), so save and publish
 after you change it. `Booms` (a ModuleScript in `ServerScriptService`) is the one way to make a boom: `Booms.at(position)` tells
 every player's game to show it there; it makes `ReplicatedStorage.BoomEvent` itself (do not build it by hand). `ExplosionReplacer`
-(a Script next to it) catches every Roblox `Explosion` anywhere in Workspace, from any script, tool or free model: it hides Roblox's
-own blast at once and plays your boom in its place, while the explosion still pushes and breaks things as its maker set it up.
-(Hiding it may or may not also silence Roblox's own explosion sound; that was not checked by ear.) Room 1's Explosive hard drive
-makes no Roblox explosion at all: it calls `Booms.at` at the limb. `BoomClient` (a LocalScript in `StarterPlayerScripts`) shows a
+(a Script next to it) catches every Roblox `Explosion` made on the server anywhere in Workspace, from any script, tool or free
+model: it hides Roblox's own blast at once and plays your boom in its place, while the explosion still pushes and breaks things
+as its maker set it up. An `Explosion` its maker already made invisible (`Visible` off) is left alone, with no boom. One made
+by a LocalScript only exists on that one player's screen, so it is not replaced. (Hiding it may or may not also silence
+Roblox's own explosion sound; that was not checked by ear.) Room 1's Explosive hard drive
+makes no Roblox explosion at all: it calls `Booms.at` at the limb, with blood (see below). `BoomClient` (a LocalScript in `StarterPlayerScripts`) shows a
 boom on each player's screen: it copies the seven emitters and nine sounds into an Attachment named `Boom` in `Workspace.Terrain`,
 plays the sounds in the `SFX` SoundGroup (so the Sound Effects slider sets their volume), and removes the attachment once the
 longest particle and the longest sound are over (about 12.5 seconds, because `MovingSmoke` lives 12). It also shakes the camera
@@ -167,7 +172,21 @@ when the Settings board's **Screen Effects** switch is off. The shake's numbers 
 How many particles each emitter fires is its `EmitCount` attribute (select the emitter, then Properties -> Attributes; an emitter
 without one fires 20). An emitter with an `EmitDelay` attribute fires that many seconds after the boom. They are set to:
 `Flash` 2, `Fire` 15, `Dust` 40, `OneDirt` 25, `TwoDirt` 25, `StaticSmoke` 15, `MovingSmoke` 10. Keep each emitter's `Enabled`
-off: the boom fires them itself. Without `LabAssets.Explosion` the Output window says so once, and booms only shake the camera.
+off: the boom fires them itself. Without `LabAssets.Explosion` the Output window says so once, and booms show no explosion
+(they still shake the camera, and a limb blast still bleeds). An emitter or sound that cannot be copied or played is skipped
+with one warning in the Output window; the rest of the boom still shows.
+
+A limb blast also bleeds: `Booms.at(position, true)` sends the blood along, and `BoomClient` then fires
+`ReplicatedStorage.LabAssets.Blood` into the same `Boom` attachment. `studio/build_lab.luau` makes that folder (see c): `Spray`
+(dark-red droplets thrown out that fall, `EmitCount` 60) and `Mist` (a short dark-red haze, `EmitCount` 8), switched off and
+fired once like the explosion's. Every Sound in the folder plays with the burst, in the `SFX` SoundGroup: your two blood sounds
+live there, `BloodSquirt` (rbxassetid://91834483567891) and `Blood Splatter Sound Effect ` (rbxassetid://127991013927235; the
+name ends in a space), both at volume 0.5. They were made by hand and are **only in the place file**; any Sound you drop into
+the folder plays too. The blood also leaves splats: `SplatCount` (4) flat dark-red discs on whatever is below the blast (the
+floor or the chair, never a player, the copy or Bob), up to 4 studs to the side, in `SplatColor` (80, 0, 0); each fades out
+over its last 5 seconds and is gone after `SplatLife` (20) seconds, and no more than 60 stay at once. Those three are attributes
+of the `Blood` folder; the splats are only on each player's own screen. Without `LabAssets.Blood` the Output window says so
+once and limb blasts do not bleed.
 
 `LabServer` is Room 1's server side and needs the pieces that `studio/build_lab.luau` builds (see c). It handles
 claiming and the injections. Claiming: a player who triggers the claim prompt becomes the owner (`Workspace.Room1`'s `Owner` attribute holds their UserId,
@@ -189,8 +208,9 @@ what he is doing on `Room1.BobTheInjector` as attributes (`State`, `Target`, `Ha
 game animates him from those, so do not delete those attributes. As the needle comes out, `HardDriveEffects` (which goes
 straight into `ServerScriptService`, next to `LabServer`, not inside it) does what the Harddrive does, to the copy and the
 owner at once. Explosive: the limb glows red and beeps faster and faster for `LabConfig.FUSE_SECONDS`, then blows with your
-boom (see `Booms` above): an arm or a leg falls off both bodies (and lies on the floor for `LabConfig.LOST_LIMB_SECONDS`) and both lose `LabConfig.LIMB_DAMAGE`
-health; the head or the torso kills both. Losing the right arm also takes the tablet away until the owner respawns. If the
+boom and its blood (see `Booms` above): an arm or a leg is flung off both bodies, upward and to a random side at 15 to 30
+studs a second and spinning (`FLING_SPEED` and `FLING_SPIN` at the top of `HardDriveEffects`), and lies on the floor for
+`LabConfig.LOST_LIMB_SECONDS`, and both lose `LabConfig.LIMB_DAMAGE` health; the head or the torso kills both. Losing the right arm also takes the tablet away until the owner respawns. If the
 room is freed or the owner dies before the blast, Bob goes home and the fuse goes out with nothing blown off. Without
 `HardDriveEffects` the room can still be claimed, but every injection is refused (the Output window says why).
 
@@ -310,8 +330,9 @@ Press **Play** in Studio (the Test tab) and check each of these:
    EXPLOSIVE and its picture, and a body drawn from the front with HEAD, TORSO, R ARM, L ARM, R LEG and L LEG (R ARM is on the
    left of the screen). CONFIRM stays grey ("PICK A HARDDRIVE AND A LIMB") until you pick EXPLOSIVE and a limb, then reads
    e.g. "CONFIRM: EXPLOSIVE INTO LEFT ARM". Press it: the menu closes and Bob goes to work. Open the tablet again while he
-   moves: it is read-only and the top bar shows MOVING, INJECTING or RETURNING. After the blast the limb reads LOST and
-   cannot be picked. The X, putting the tablet away, and (on a controller) B all close the menu, and so does dying. On a
+   moves: it is read-only and the top bar shows MOVING, INJECTING or RETURNING. The limb blows off with your explosion, a spray
+   of blood and the two blood sounds, flies away, and leaves a few dark-red splats on the floor that fade after about 20
+   seconds. After the blast the limb reads LOST and cannot be picked. The X, putting the tablet away, and (on a controller) B all close the menu, and so does dying. On a
    phone every button is easy to tap and the menu stays clear of the notch and the top bar.
 9. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`, `ButtonSounds: ...` or `MenuAudio: ...`) means
    Roblox refused that sound's asset id: fix the id in `MenuAssets`, or its permissions.
@@ -327,4 +348,5 @@ Studio since, redo that.
 Room 1's walls, Bob, the tablet and the hard drive are not in any script at all (see c). If the place file itself is lost,
 so are they, and so is their backup in `ServerStorage.LabBackup`, which lives in the same place file. The same goes for your
 explosion, `ReplicatedStorage.LabAssets.Explosion`, and the `EmitCount` attributes on its emitters (the counts are listed under
-`Booms` in d, so you can type them in again).
+`Booms` in d, so you can type them in again), and for your two blood sounds in `ReplicatedStorage.LabAssets.Blood` (their ids
+are under `Booms` in d). The blood's emitters and splat settings come back with `studio/build_lab.luau`.
