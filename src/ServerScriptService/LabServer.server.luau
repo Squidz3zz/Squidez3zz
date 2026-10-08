@@ -152,6 +152,20 @@ local function seatCopy(player: Player, humanoid: Humanoid): string
 	copyHumanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	copyHumanoid.MaxHealth = humanoid.MaxHealth
 	copyHumanoid.Health = humanoid.Health
+	-- The copy is the owner as they are now: an arm or a leg the owner has lost (a release and a new claim keep a blown-off limb
+	-- off) is missing on the copy too.
+	local character = humanoid.Parent
+	for _, key in { "LeftArm", "RightArm", "LeftLeg", "RightLeg" } do
+		if character and LabConfig.isLost(character, key) then
+			local joint = LabConfig.limbJoint(model, key)
+			if joint then
+				joint:Destroy()
+			end
+			for _, part in LabConfig.limbParts(model, key) do
+				part:Destroy()
+			end
+		end
+	end
 	root.Anchored = true
 	model:PivotTo(spot.WorldCFrame * CFrame.new(0, SEAT_LIFT, 0))
 	model.Parent = room
@@ -226,6 +240,7 @@ local function setUpCharacter(player: Player, character: Model): string
 end
 
 -- Claiming toggles: the owner claiming again releases. Returns (true) or (false, reason).
+local warnedR6 = false
 local function claim(player: Player): (boolean, string?)
 	if owner == player then
 		release(player)
@@ -238,6 +253,15 @@ local function claim(player: Player): (boolean, string?)
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if not (character and humanoid and humanoid.Health > 0) then
 		return false, "NO CHARACTER"
+	end
+	-- The lab is R6 only (the copy, the limb table, the tablet's body). Checked before anything yields, so another rig is refused at
+	-- once instead of stalling on a Torso it does not have.
+	if humanoid.RigType ~= Enum.HumanoidRigType.R6 then
+		if not warnedR6 then
+			warnedR6 = true
+			warn("LabServer: " .. player.Name .. " is not R6, so Room 1 refuses them: set Game Settings > Avatar > Avatar Type to R6")
+		end
+		return false, "R6 ONLY"
 	end
 
 	owner = player

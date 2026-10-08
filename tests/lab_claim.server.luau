@@ -6,11 +6,17 @@
 --   B  claiming again (as the owner) releases: no copy, no tablet (even one held in the hand), free sign, Owner 0
 --   C  the owner dying kills the copy; after the respawn a new copy sits and there is one tablet again
 --   D  the copy dying kills the owner; after the respawn, releasing frees the room
+--   E  a lost limb stays lost: claim, blow the owner's left arm off (Explosive through the TestHook, the fuse waited out), release,
+--      claim again: the new copy has no left arm either (as the tablet menu sees Room1.Subject), its other limbs are whole and its
+--      health is the owner's. Leaves the room free and the player without a left arm, so run it last (or respawn before A-D).
 -- ("ROOM 1 IS TAKEN" needs a second player, and the owner leaving is PlayerRemoving: both are checked by reading LabServer.)
 local CASE = "A"
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
+
+local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig"))
 
 local FLOOR_TOP = 0.35
 local RESPAWN_WAIT = 5 + 3 -- LabConfig.RESPAWN_TIME + 3
@@ -177,5 +183,30 @@ elseif CASE == "D" then
 	hook:Invoke("release", player)
 	assertFree("D after release")
 	return "PASS lab_claim D"
+elseif CASE == "E" then
+	local character = player.Character
+	assert(not LabConfig.isLost(character, "LeftArm"), "the player has already lost the left arm: respawn first")
+	assert(hook:Invoke("claim", player) == true, "claim refused")
+	local ok, reason = hook:Invoke("inject", player, "Explosive", "LeftArm")
+	assert(ok == true, "the injection was refused: " .. tostring(reason))
+	local Timings = LabConfig.Timings
+	local fuseOut = Timings.Move + Timings.NeedleOut + Timings.Hold + Timings.NeedleIn + LabConfig.FUSE_SECONDS + 1
+	assert(waitFor(function()
+		return LabConfig.isLost(character, "LeftArm")
+	end, fuseOut), "the player's left arm was not blown off")
+	hook:Invoke("release", player)
+	assertFree("E after release")
+	assert(hook:Invoke("claim", player) == true, "the second claim was refused")
+	local subject = subjectOf()
+	assertSeated(subject, "E")
+	assert(LabConfig.isLost(subject, "LeftArm"), "the new copy has a left arm, but its owner lost theirs")
+	assert(LabConfig.isLost(room.Subject, "LeftArm"), "the tablet menu would show the left arm as whole")
+	for _, key in LabConfig.LIMB_KEYS do
+		assert(key == "LeftArm" or not LabConfig.isLost(subject, key), "the new copy has lost its " .. key .. " too")
+	end
+	local health, copyHealth = aliveHumanoid().Health, subject.Humanoid.Health
+	assert(copyHealth == health, ("the copy's health %s is not the owner's %s"):format(copyHealth, health))
+	hook:Invoke("release", player)
+	return ("PASS lab_claim E (the new copy has no left arm; health %s on both)"):format(health)
 end
 error("unknown CASE " .. tostring(CASE))

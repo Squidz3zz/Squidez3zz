@@ -139,7 +139,9 @@ claiming and the injections. Claiming: a player who triggers the claim prompt be
 0 when free, and the sign reads "ROOM 1 / FREE" or "ROOM 1 / <their name>"), a copy of their avatar sits in the chair as
 `Room1.Subject`, and a `Tablet` goes into their Backpack. If the copy dies the owner dies, and the other way round. The
 owner triggering the prompt again, or leaving the game, frees the room; when the owner respawns, a fresh copy and tablet are
-made. It reads where to seat the copy from `Chair.Seat.SubjectSpot`, so a moved chair works without a code change. It also
+made. A limb the owner has lost (blown off before a release and a new claim) is missing on the new copy too. Only an R6
+character can claim: any other rig is refused, and the Output window says to set the avatar type to R6 (see f). It reads
+where to seat the copy from `Chair.Seat.SubjectSpot`, so a moved chair works without a code change. It also
 sets `Players.RespawnTime` from `LabConfig.RESPAWN_TIME` at startup. `LabClient` sets the claim prompt's text on each player's
 own screen ("Claim Room 1" when free, "Release Room 1" for the owner, switched off for everyone else).
 
@@ -225,7 +227,14 @@ In the Explorer, click **Players**. In Properties, untick **CharacterAutoLoads**
 press Play, so nobody should spawn on their own. (How long a dead player waits before respawning is `Players.RespawnTime`,
 which `LabServer` sets from `LabConfig.RESPAWN_TIME` when the game starts.)
 
-### f) Optional: the menu's map camera
+### f) Make every avatar R6
+
+The game is R6 only: Room 1's copy, its limb table and the tablet's body are all R6. In Studio, open **Game Settings ->
+Avatar** and set **Avatar Type** to **R6**, then save and publish. This setting lives in the place file like everything
+else, so a lost place loses it too: set it again after a recovery. If it is wrong, nobody can claim Room 1, and the Output
+window says `set Game Settings > Avatar > Avatar Type to R6`.
+
+### g) Optional: the menu's map camera
 
 The menu looks at your map from a spot you choose. Fly the editor camera to the view you want, then run this in the
 Command Bar. It makes a part called `MenuCameraShot` there. The camera looks out of the part's **Front** face, which
@@ -238,7 +247,7 @@ local p = workspace:FindFirstChild("MenuCameraShot") or Instance.new("Part"); p.
 When the game starts it anchors the part, hides it and turns off its collisions, so you do not have to. Without this
 part, the menu uses a default angle.
 
-### g) Playtest checklist
+### h) Playtest checklist
 
 Press **Play** in Studio (the Test tab) and check each of these:
 
