@@ -150,7 +150,8 @@ made. A limb the owner has lost (blown off before a release and a new claim) is 
 character can claim: any other rig is refused, and the Output window says to set the avatar type to R6 (see f). It reads
 where to seat the copy from `Chair.Seat.SubjectSpot`, so a moved chair works without a code change. It also
 sets `Players.RespawnTime` from `LabConfig.RESPAWN_TIME` at startup. `LabClient` sets the claim prompt's text on each player's
-own screen ("Claim Room 1" when free, "Release Room 1" for the owner, switched off for everyone else).
+own screen ("Claim Room 1" when free, a press; "Release Room 1" for the owner, held for a second so a stray key press cannot
+throw the copy away; switched off for everyone else).
 
 Injections: when the game starts, `LabServer` makes `ReplicatedStorage.LabRemotes` with the `RequestInjection` remote in it (do
 not build these by hand). The owner's tablet asks it for a Harddrive and a limb; `LabServer` checks the request and either
@@ -272,8 +273,8 @@ Press **Play** in Studio (the Test tab) and check each of these:
 6. Reset your character. The screen cuts to black at once with a ringing in your ears and no other sound, and after about 5
    seconds you respawn, the black fades out and the music and sound effects come back. The menu does not come back.
 7. Walk to the panel outside Room 1's window and press its prompt ("Claim Room 1"). The sign changes to your name, a copy of
-   your avatar sits in the chair facing the window, and a Tablet is in your toolbar. Press the prompt again ("Release
-   Room 1"): the copy and the Tablet go and the sign says FREE. Claim again and reset your character: after it respawns
+   your avatar sits in the chair facing the window, and a Tablet is in your toolbar. Hold the prompt for a second
+   ("Release Room 1"): the copy and the Tablet go and the sign says FREE. Claim again and reset your character: after it respawns
    there is a fresh copy and one Tablet.
 8. While you own Room 1, hold the Tablet (press its number key, or tap it in the toolbar) and click, tap or press the trigger.
    The tablet menu opens in dark steel and amber: "BOB-LINK / ROOM 1" at the top with "STANDBY" and a dot, a list with

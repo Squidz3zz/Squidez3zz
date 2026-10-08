@@ -1,6 +1,7 @@
 -- LabClient: this player's side of Room 1's injection lab:
---   * the claim prompt's text, set locally. Free: "Claim Room 1". Yours: "Release Room 1". Someone else's: the prompt is switched off
---     for this player. The server checks every trigger anyway; this only keeps the prompt honest on screen.
+--   * the claim prompt's text, set locally. Free: "Claim Room 1" (a press). Yours: "Release Room 1" (held for a second, so a stray key
+--     press cannot throw the copy away mid-injection). Someone else's: the prompt is switched off for this player. The server checks
+--     every trigger anyway; this only keeps the prompt honest on screen.
 --   * the tablet menu (TabletMenu): activating the Tablet tool opens it; it closes when the tool is unequipped or goes, and when the
 --     character dies.
 --   * Bob (BobAnimator): this player's view of Bob the Injector, moved every frame from what the server says he is doing.
@@ -32,9 +33,11 @@ local function wireClaimPrompt()
 		if owner == 0 then
 			prompt.Enabled = true
 			prompt.ActionText = "Claim Room 1"
+			prompt.HoldDuration = 0
 		elseif owner == player.UserId then
 			prompt.Enabled = true
 			prompt.ActionText = "Release Room 1"
+			prompt.HoldDuration = 1
 		else
 			prompt.Enabled = false
 		end
