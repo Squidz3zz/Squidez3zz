@@ -71,7 +71,7 @@ assert(room, "Workspace.Room1 missing")
 local bob = room.BobTheInjector
 local labServer = ServerScriptService:FindFirstChild("LabServer")
 -- LabServer makes its TestHook once it has loaded; L-F needs that within 15 s of the start (time() is seconds since then).
-local hook = labServer and labServer:WaitForChild("TestHook", math.max(0, 15 - time()))
+local hook = labServer and labServer:WaitForChild("TestHook", math.max(0.1, 15 - time()))
 local hookSeenAt = time()
 assert(hook and hook:IsA("BindableFunction"), "ServerScriptService.LabServer.TestHook (BindableFunction) missing 15 s into the game")
 local function gore(fnName, ...)

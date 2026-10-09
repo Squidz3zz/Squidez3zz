@@ -4,14 +4,16 @@
 -- GoreConfig CHUNKS_MIN to CHUNKS_MAX chunks of skin burst off it: small wedges and blocks (CHUNK_SIZE studs a side) in the
 -- limb's BodyColors colour, thrown out from where the part is at that moment (a severed limb is already flying) at CHUNK_SPEED
 -- studs per second, away from the torso and a little up, tumbling. They hit the world but not bodies (a NoCollisionConstraint
--- with each part of every body within NEAR_BODIES studs, and the limb itself), lie there until CHUNK_REST seconds after the
--- burst, fade out over 1 s and are gone. At most CHUNK_CAP live at once; the oldest goes first. They are this client's own
--- parts (named GoreChunk, in Workspace.GoreChunks): nobody else sees them, and the server never knows.
+-- with the limb itself and with each part directly in a GoreBody within NEAR_BODIES studs: its R6 parts and root, not the
+-- flesh or accessories, which never collide), lie there until CHUNK_REST seconds after the burst, fade out over 1 s and are
+-- gone. At most CHUNK_CAP live at once; the oldest goes first. They are this client's own parts (named GoreChunk, in
+-- Workspace.GoreChunks): nobody else sees them, and the server never knows.
 --
 -- Crawling: once the server marks the local character GoreDowned (both legs broken or gone), the character goes PlatformStand
 -- (it falls down and can no longer stand or walk) and drags itself along the ground at GoreConfig CRAWL_SPEED (studs per
--- second) the way the player steers (Humanoid.MoveDirection, kept level). The pull is a LinearVelocity (in an Attachment named GoreCrawl on the
--- HumanoidRootPart) as strong as the body's weight, enough to drag the body but gentle. It stops when the character dies.
+-- second) the way the player steers (Humanoid.MoveDirection, kept level). The pull is a LinearVelocity (in an Attachment
+-- named GoreCrawl on the HumanoidRootPart) as strong as the body's weight, enough to drag the body but gentle. It stops when
+-- the character dies.
 local CollectionService = game:GetService("CollectionService")
 local Debris = game:GetService("Debris")
 local Players = game:GetService("Players")
@@ -34,17 +36,23 @@ local random = Random.new()
 local live: { BasePart } = {} -- oldest first
 local chunkFolder: Folder? = nil
 
--- ponytail: constraints per chunk per nearby body part (a few hundred per burst); a client collision group if it ever shows.
-local function noCollide(chunk: BasePart, source: BasePart)
-	local origin = chunk.Position
-	local others = { source }
+-- The parts a burst from `source` must not hit: the source and every BasePart directly in a GoreBody within NEAR_BODIES studs.
+-- Gathered once per burst and shared by its chunks.
+local function bodyPartsNear(source: BasePart): { BasePart }
+	local origin = source.Position
+	local parts = { source }
 	for _, body in CollectionService:GetTagged("GoreBody") do
 		for _, part in body:GetChildren() do
-			if part:IsA("BasePart") and (part.Position - origin).Magnitude < NEAR_BODIES then
-				table.insert(others, part)
+			if part:IsA("BasePart") and part ~= source and (part.Position - origin).Magnitude < NEAR_BODIES then
+				table.insert(parts, part)
 			end
 		end
 	end
+	return parts
+end
+
+-- ponytail: one constraint per chunk per nearby body part (a few hundred per burst); a client collision group if it ever shows.
+local function noCollide(chunk: BasePart, others: { BasePart })
 	for _, other in others do
 		local constraint = Instance.new("NoCollisionConstraint")
 		constraint.Part0 = chunk
@@ -72,6 +80,7 @@ local function burst(body: Model, key: string, part: BasePart)
 	local outward = if torso and torso ~= part then part.Position - torso.Position else Vector3.zero
 	outward = if outward.Magnitude > 0.1 then outward.Unit else Vector3.zero
 	local rest = GoreConfig.get("CHUNK_REST")
+	local bodyParts = bodyPartsNear(part)
 	for _ = 1, random:NextInteger(GoreConfig.get("CHUNKS_MIN"), GoreConfig.get("CHUNKS_MAX")) do
 		while #live >= CHUNK_CAP do
 			table.remove(live, 1):Destroy()
@@ -88,7 +97,7 @@ local function burst(body: Model, key: string, part: BasePart)
 		chunk.Color = colour:Lerp(Color3.new(), random:NextNumber(0, 0.2)) -- a little shading so they read as separate bits
 		chunk.Material = Enum.Material.SmoothPlastic
 		chunk.CFrame = CFrame.new(part.Position + direction * 0.5) * CFrame.fromOrientation(random:NextNumber(0, 6.3), random:NextNumber(0, 6.3), 0)
-		noCollide(chunk, part)
+		noCollide(chunk, bodyParts)
 		chunk.Parent = chunkFolder
 		-- Once in Workspace: set before, a wedge (centre of mass off its middle) would start a little off this speed.
 		chunk.AssemblyAngularVelocity = random:NextUnitVector() * random:NextNumber(0, CHUNK_SPIN)
