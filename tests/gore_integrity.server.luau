@@ -17,7 +17,9 @@
 --                   works both ways, and unlink stops it
 --   I-G copyState   a fresh body takes on every Gore attribute of a damaged one
 --   I-H big hits    a 30-health drop not made by Gore.hurt damages one limb by 60; the same drop while falling (Freefall)
---                   takes 30 from each leg; Gore.hurt(b, 40) damages no limb
+--                   takes 30 from each leg, and so does one right after landing (Freefall ended under 0.5 s ago), on a
+--                   body dropped onto a floor of its own; on that body, a drop more than 0.5 s after landing is one hit of
+--                   60 again; Gore.hurt(b, 40) damages no limb
 -- It removes its bodies at the end and returns "PASS gore_integrity".
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -346,6 +348,67 @@ do
 	expect(falling, "RightLeg", "Intact", 70, "I-H fall")
 	untouched(falling, { "Head", "Torso", "LeftArm", "RightArm" }, "I-H fall")
 	falling:Destroy()
+
+	-- Right after Freefall: fall damage lands on landing, once Freefall has ended. A body dropped about 17 studs onto a floor of
+	-- its own (30 studs from any other body).
+	local landing = newBody(true)
+	local humanoid = landing.Humanoid
+	pcall(landing.HumanoidRootPart.SetNetworkOwner, landing.HumanoidRootPart, nil)
+	local floor = Instance.new("Part")
+	floor.Name = "Floor"
+	floor.Anchored = true
+	floor.Size = Vector3.new(20, 1, 20)
+	floor.Position = Vector3.new(landing.HumanoidRootPart.Position.X, 279.5, 2000)
+	floor.Parent = folder
+	assert(waitFor(function()
+		return humanoid:GetState() == Enum.HumanoidStateType.Freefall
+	end, 3), "I-H: the body dropped onto the floor never entered Freefall")
+	assert(waitFor(function()
+		return humanoid:GetState() ~= Enum.HumanoidStateType.Freefall
+	end, 3), "I-H: the body dropped onto the floor never landed")
+	local landedAt = os.clock()
+	local landedState = humanoid:GetState().Name
+	humanoid.Health -= 30
+	local dropAfter = os.clock() - landedAt
+	assert(waitFor(function()
+		return #changed(landing) > 0
+	end, 2), "I-H: a 30-health drop right after landing damaged no limb")
+	task.wait(0.2)
+	local after = {}
+	for _, key in LIMB_KEYS do
+		table.insert(after, key .. " " .. tostring(hp(landing, key)))
+	end
+	local afterText = table.concat(after, ", ")
+	assert(hp(landing, "LeftLeg") == 70 and hp(landing, "RightLeg") == 70, ("I-H: a drop %.3f s after landing (%s) should take 30 from each leg, got %s"):format(dropAfter, landedState, afterText))
+	untouched(landing, { "Head", "Torso", "LeftArm", "RightArm" }, "I-H right after landing")
+
+	-- More than 0.5 s after Freefall ended, a drop is a hit again: one limb takes 60, the legs share nothing.
+	task.wait(1)
+	local standing = humanoid:GetState()
+	assert(standing ~= Enum.HumanoidStateType.Freefall, "I-H: the landed body is falling again")
+	local before = {}
+	for _, key in LIMB_KEYS do
+		before[key] = hp(landing, key)
+	end
+	local function hits(): { string }
+		local keys = {}
+		for _, key in LIMB_KEYS do
+			if hp(landing, key) ~= before[key] then
+				table.insert(keys, key)
+			end
+		end
+		return keys
+	end
+	humanoid.Health -= 30
+	assert(waitFor(function()
+		return #hits() > 0
+	end, 2), "I-H: a 30-health drop long after landing damaged no limb")
+	task.wait(0.2)
+	local late = hits()
+	assert(#late == 1, ("I-H: a drop long after landing (%s) should damage one limb, it damaged %s"):format(standing.Name, table.concat(late, ", ")))
+	assert(before[late[1]] - hp(landing, late[1]) == 60, ("I-H: %s should take 60 long after landing, it took %s"):format(late[1], tostring(before[late[1]] - hp(landing, late[1]))))
+	landing:Destroy()
+	floor:Destroy()
 
 	local k = newBody()
 	task.wait(1)
