@@ -5,8 +5,9 @@
 -- whole. So the cases can also run one after another in the same playtest.
 --   A  (I-A, I-B, I-C) Explosive into the left arm, with SEVER_CHANCE 1 (an override on GoreConfig, removed however the case
 --      ends) so the blast rips it off: the phases, their timings and the shutter; 1 s into the fuse both left arms glow; after
---      it both are Severed (with the same gore on both bodies), lost and flung (each moved more than 2 studs sideways within
---      0.5 s of coming off into Workspace), both bodies have lost 20 health, no glow is left, no Explosion instance was made and
+--      it both are Severed (with the same gore on both bodies), lost and flung (each leaves sideways at more than 5 studs/s,
+--      read on its first frame in Workspace: it lands within about 0.3 s, so how far it got says little), both bodies have
+--      lost 20 health, no glow is left, no Explosion instance was made and
 --      Booms counted exactly two booms (copy + owner), both with blood (BloodCount + 2); 2 s later both are still at that health
 --      (nobody heals over time); a second injection into the same arm is refused "LIMB ALREADY LOST". (A Broken arm is not
 --      lost: tests/lab_gore.server.luau, L-B.)
@@ -25,6 +26,7 @@ local CASE = "A"
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig"))
@@ -214,18 +216,16 @@ if CASE == "A" then
 		assert(subject["Left Arm"]:FindFirstChild("FuseGlow"), "no FuseGlow on the copy's left arm 1 s into the fuse")
 		assert(character["Left Arm"]:FindFirstChild("FuseGlow"), "no FuseGlow on the player's left arm 1 s into the fuse")
 
-		-- The fling: where each left arm is as it comes off (put into Workspace), and how far it went sideways 0.5 s later.
+		-- The fling: each left arm's sideways speed on its first frame after coming off (put into Workspace).
 		local flung = {}
 		for _, arm in { subject["Left Arm"], character["Left Arm"] } do
 			local connection
 			connection = arm:GetPropertyChangedSignal("Parent"):Connect(function()
 				if arm.Parent == workspace then
 					connection:Disconnect()
-					local from = arm.Position
-					task.delay(0.5, function()
-						local moved = arm.Position - from
-						table.insert(flung, Vector3.new(moved.X, 0, moved.Z).Magnitude)
-					end)
+					RunService.Heartbeat:Wait()
+					local velocity = arm.AssemblyLinearVelocity
+					table.insert(flung, Vector3.new(velocity.X, 0, velocity.Z).Magnitude)
 				end
 			end)
 		end
@@ -268,8 +268,8 @@ if CASE == "A" then
 		assert(waitFor(function()
 			return #flung == 2
 		end, 2), "the two left arms did not both come off into Workspace")
-		for _, distance in flung do
-			assert(distance > 2, ("a left arm moved only %.2f studs sideways in the 0.5 s after it came off: not flung"):format(distance))
+		for _, speed in flung do
+			assert(speed > 5, ("a left arm left at only %.2f studs/s sideways: not flung"):format(speed))
 		end
 		-- Nobody heals over time, so the two stay the same.
 		task.wait(2)
@@ -278,7 +278,7 @@ if CASE == "A" then
 
 		-- I-C
 		refused("LIMB ALREADY LOST", inject("Explosive", "LeftArm"))
-		return ("PASS lab_inject I-A I-B I-C (%s; health %d; arms flung %.1f and %.1f studs sideways in 0.5 s)"):format(table.concat(report, ", "), expectedHealth, flung[1], flung[2])
+		return ("PASS lab_inject I-A I-B I-C (%s; health %d; arms flung at %.1f and %.1f studs/s sideways)"):format(table.concat(report, ", "), expectedHealth, flung[1], flung[2])
 	end)
 	configModule:SetAttribute("SEVER_CHANCE", nil)
 	assert(ok, result)

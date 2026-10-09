@@ -6,7 +6,8 @@
 --                              (a NoCollisionConstraint with each of the body's other parts).
 --   Ragdoll.sever(body, key, remove)
 --                              the limb's joint (a Motor6D or a socket) goes and the limb part (with anything welded to it) leaves
---                              the body for Workspace: owned by the server, flung off (FLING_* below) and removed after
+--                              the body for Workspace: owned by the server, flung off (FLING_* below) without colliding with the
+--                              body it left (it starts out touching it, and would bounce off it), and removed after
 --                              LabConfig.LOST_LIMB_SECONDS. With remove (a body built already missing it, as Gore.copyState
 --                              builds the lab's copy) the part is simply destroyed: nothing flies.
 --   Movement (both of those):  one leg Broken or Severed sets WalkSpeed to GoreConfig LIMP_SPEED and JumpHeight (and JumpPower)
@@ -166,6 +167,7 @@ function Ragdoll.sever(body: Model, key: string, remove: boolean?)
 			part:Destroy()
 			continue
 		end
+		noCollide(body, part)
 		part.Anchored = false
 		part.CanCollide = true
 		part.Parent = workspace
