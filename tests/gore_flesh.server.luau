@@ -15,12 +15,16 @@
 --                  emptied body (it keeps the GoreBody tag with no parts) makes no Gore warning or error
 --   F-E stub       a severed LeftArm leaves one Stub1 welded to the Torso within 0.2 studs of where the arm rests (the shoulder
 --                  joint's C0 * C1:Inverse() * Offset). A body built from it (copyState) arrives without its left arm, stub on
---   F-F all six    all six limbs torn: every R6 part is hidden and each wears its own whole variant set (none lost a deep piece)
+--   F-F all six    all six limbs torn: every R6 part is hidden and each wears its own whole variant set (none lost a deep piece),
+--                  with at least one deep piece (bone or skull) among them; the seed is reset afterwards
 --   F-G level 1    with GORE_LEVEL 1 a torn LeftArm gets no pieces and stays visible; a severed one leaves a plain dark-red
 --                  GoreStump on the Torso and no Stub1
+--   F-H no pieces  with ServerStorage.Gore.Pieces renamed (always put back): a torn LeftArm stays skin (visible, no pieces), an
+--                  arm already wearing its flesh keeps it when it breaks, and the output has the warning about the missing set
+--                  (Integrity warns once per server, so it may come from an earlier run in the same playtest)
 -- Every case runs (one failing does not stop the rest); the error lists each case's result. It removes its bodies and
 -- corpses, and returns "PASS gore_flesh".
-local CASE = "all" -- or one letter, "A" to "G"
+local CASE = "all" -- or one letter, "A" to "H"
 
 local CollectionService = game:GetService("CollectionService")
 local LogService = game:GetService("LogService")
@@ -43,8 +47,9 @@ local PART = { Head = "Head", Torso = "Torso", LeftArm = "Left Arm", RightArm = 
 local KEYS = { "Head", "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg" }
 
 local problems = {}
+local expectWarnings = false -- F-H makes Gore warn on purpose
 local logging = LogService.MessageOut:Connect(function(message, kind)
-	if (kind == Enum.MessageType.MessageError or kind == Enum.MessageType.MessageWarning) and string.find(message, "Gore") then
+	if not expectWarnings and (kind == Enum.MessageType.MessageError or kind == Enum.MessageType.MessageWarning) and string.find(message, "Gore") then
 		table.insert(problems, message)
 	end
 end)
@@ -276,6 +281,7 @@ cases.F = function()
 	for _, key in KEYS do
 		gore("damageLimb", body, key, 50, "hit")
 	end
+	gore("seed", Random.new():NextInteger(1, 2 ^ 30))
 	task.wait()
 	local variants = {}
 	for _, key in KEYS do
@@ -286,7 +292,14 @@ cases.F = function()
 		wears(part, key, setName, "F-F")
 		table.insert(variants, key .. "=" .. setName)
 	end
-	print("gore_flesh F-F sets: " .. table.concat(variants, " "))
+	local deep = 0
+	for _, key in KEYS do
+		for _, piece in piecesOf(body, key) do
+			deep += if piece:GetAttribute("Layer") == "deep" then 1 else 0
+		end
+	end
+	assert(deep > 0, "F-F: no limb wears a deep piece (the seed's variants changed?)")
+	print("gore_flesh F-F sets: " .. table.concat(variants, " ") .. "; deep pieces " .. deep)
 end
 
 -- F-G level 1.
@@ -305,8 +318,40 @@ cases.G = function()
 	end)
 end
 
+-- F-H missing pieces.
+cases.H = function()
+	local dressed = newBody()
+	gore("damageLimb", dressed, "LeftArm", 50, "hit")
+	local setName = "Variant" .. dressed:GetAttribute("GoreVariant_LeftArm")
+	wears(dressed["Left Arm"], "LeftArm", setName, "F-H before")
+	local bare = newBody()
+	expectWarnings = true
+	Pieces.Name = "PiecesAway"
+	local ok, err = pcall(function()
+		gore("damageLimb", bare, "LeftArm", 50, "hit")
+		assert(bare:GetAttribute("Gore_LeftArm") == "Torn", "F-H: the arm should still tear with no Pieces")
+		assert(bare["Left Arm"].Transparency == 0 and #piecesOf(bare, "LeftArm") == 0, "F-H: with no Pieces the torn arm should stay skin")
+		gore("damageLimb", dressed, "LeftArm", 50, "hit")
+		assert(dressed:GetAttribute("Gore_LeftArm") == "Broken", "F-H: the dressed arm should break")
+		assert(dressed["Left Arm"].Transparency == 1, "F-H: the broken arm should stay hidden")
+		wears(dressed["Left Arm"], "LeftArm", setName, "F-H broken with no Pieces")
+	end)
+	Pieces.Name = "Pieces"
+	task.wait(0.1)
+	expectWarnings = false
+	if not ok then
+		error(err, 0)
+	end
+	local warned = false
+	for _, entry in LogService:GetLogHistory() do
+		local message = entry.message
+		warned = warned or (entry.messageType == Enum.MessageType.MessageWarning and string.find(message, "Pieces.LeftArm.", 1, true) ~= nil and string.find(message, "is missing", 1, true) ~= nil)
+	end
+	assert(warned, "F-H: the output has no warning about the missing pieces")
+end
+
 local results = {}
-for _, name in if CASE == "all" then { "A", "B", "C", "D", "E", "F", "G" } else { CASE } do
+for _, name in if CASE == "all" then { "A", "B", "C", "D", "E", "F", "G", "H" } else { CASE } do
 	local ok, err = pcall(cases[name])
 	table.insert(results, "F-" .. name .. " " .. (if ok then "ok" else "FAIL: " .. tostring(err)))
 end
@@ -325,4 +370,4 @@ for _, line in results do
 end
 assert(#failed == 0, table.concat(results, " | "))
 assert(#problems == 0, "Gore complained: " .. table.concat(problems, " | "))
-return "PASS gore_flesh (F-A to F-G)"
+return "PASS gore_flesh (F-A to F-H)"

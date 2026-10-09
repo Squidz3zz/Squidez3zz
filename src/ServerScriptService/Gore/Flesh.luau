@@ -4,7 +4,9 @@
 --   Flesh.dress(body, key)  the limb's R6 part is hidden (Transparency 1, with its decals and the face, so its clothing goes too,
 --                           and any accessory worn on it) and the pieces of the set it should wear are welded on, in a Folder
 --                           named GoreFlesh inside the part (so they go wherever the part goes: off with a severed limb, into the
---                           corpse on death). Whatever it wore before is replaced. The set, read from the body's attributes:
+--                           corpse on death). Whatever it wore before is replaced, but only once the new set is welded: a
+--                           missing or bad set errors before the body changes, so the limb keeps its skin (or its old
+--                           flesh). The set, read from the body's attributes:
 --                             an arm, a leg or the head, once not Intact  Variant<GoreVariant_<Limb>> (Variant1 flesh only,
 --                                                                         Variant2 flesh and bone, or the head's skull)
 --                             a destroyed head                            Death (flesh and skull), without the Skull when
@@ -33,10 +35,13 @@ local STUMP_COLOR = Color3.fromRGB(95, 12, 12)
 
 local Flesh = {}
 
-local function pieces(): Instance
+-- ServerStorage.Gore.Pieces.<key>.<setName>, or an error (before anything on the body has changed).
+local function setNamed(key: string, setName: string): Instance
 	local gore = ServerStorage:FindFirstChild("Gore")
-	local found = gore and gore:FindFirstChild("Pieces")
-	return found or error("Gore: ServerStorage.Gore.Pieces is missing (run studio/build_gore.luau)")
+	local pieces = gore and gore:FindFirstChild("Pieces")
+	local group = pieces and pieces:FindFirstChild(key)
+	local set = group and group:FindFirstChild(setName)
+	return set or error(("Gore: ServerStorage.Gore.Pieces.%s.%s is missing (run studio/build_gore.luau)"):format(key, setName))
 end
 
 -- The set the limb wears now (nil while Intact), and a piece it leaves out.
@@ -103,14 +108,15 @@ function Flesh.dress(body: Model, key: string)
 	if GoreConfig.get("GORE_LEVEL") < 2 or not (part and setName) then
 		return
 	end
+	-- Built off the body first: missing or bad pieces fail here, and the limb keeps what it had (its skin, or its old flesh).
+	local folder = Instance.new("Folder")
+	folder.Name = FOLDER
+	weld(setNamed(key, setName), part, CFrame.identity, folder, skip)
 	local old = part:FindFirstChild(FOLDER)
 	if old then
 		old:Destroy()
 	end
 	hide(body, part)
-	local folder = Instance.new("Folder")
-	folder.Name = FOLDER
-	weld(pieces()[key][setName], part, CFrame.identity, folder, skip)
 	folder.Parent = part
 end
 
@@ -122,7 +128,7 @@ function Flesh.stub(body: Model, key: string)
 		return
 	end
 	if level >= 2 then
-		weld(pieces()[key].Death, torso, rest, torso)
+		weld(setNamed(key, "Death"), torso, rest, torso)
 		return
 	end
 	local stump = Instance.new("Part")

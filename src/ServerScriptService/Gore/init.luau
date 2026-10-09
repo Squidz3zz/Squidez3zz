@@ -69,9 +69,12 @@ local Ragdoll = require(script:WaitForChild("Ragdoll", 5) or error("Gore: Ragdol
 local Flesh = require(script:WaitForChild("Flesh", 5) or error("Gore: Flesh is missing"))
 
 -- Flesh first, while the limb is still on its joint (the stub goes where the joint was). Its own listener, so a failure there
--- (no Pieces) still leaves limbs dangling and coming off.
-Integrity.onStateChanged(function(body, key, _old, new)
-	Flesh.dress(body, key)
+-- (no Pieces) still leaves limbs dangling and coming off. A limb copyState severs is removed at once (Ragdoll.sever), so it is
+-- not dressed; its stub still goes on.
+Integrity.onStateChanged(function(body, key, _old, new, info)
+	if not (new == "Severed" and info.cause == "copy") then
+		Flesh.dress(body, key)
+	end
 	if new == "Severed" then
 		Flesh.stub(body, key)
 	end

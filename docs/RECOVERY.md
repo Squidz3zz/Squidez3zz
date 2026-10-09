@@ -306,7 +306,8 @@ oldest going first, then sinks into the floor and goes (Room 1's copies count as
 something blows up next to it. `Flesh` (a third ModuleScript **inside** `Gore`) dresses the wounds with the pieces from
 `ServerStorage.Gore.Pieces` (see c2): a torn limb turns invisible and shows its flesh (and, for the second variant, its bone or
 skull), a torn torso is sealed until a blast rips it open to show the ribcage, a destroyed head shows its skull unless it was
-blown apart, and a ripped-off arm or leg flies away with its flesh while a bone stub stays at the shoulder or hip. At
+blown apart, and a ripped-off arm or leg flies away with its flesh while a bone stub stays at the shoulder or hip. An accessory
+worn on a hidden part (a hat on the head) is hidden with it. At
 `GORE_LEVEL` 1 none of that shows (a ripped-off limb leaves a plain dark-red stump); without the pieces the rest of the gore
 system still works and the Output window warns once.
 `GoreServer` (a Script next to `Gore`) tracks the characters; in Studio it also makes a `TestHook` for the tests.
