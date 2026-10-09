@@ -41,7 +41,7 @@
 - `LIMP_SPEED = 8`, `CRAWL_SPEED = 3`.
 - `CORPSE_LIFE = 120`, `CORPSES_PER_PLAYER = 4`.
 - `BLEED_PER_OPEN_LIMB = 0.83` (from 2 open limbs up), `DRIP_AFTER_DEATH = 30`, `POOL_MAX = 4`.
-- `SPLAT_LIFE = 90`, `SPLAT_MAX = 150`, `BLOOD_DECALS = {}`.
+- `SPLAT_LIFE = 90`, `SPLAT_MAX = 150`. No blood decals for now (the user left them out).
 - `CHUNKS_MIN = 6`, `CHUNKS_MAX = 10`, `CHUNK_REST = 5`.
 - States: `"Intact"`, `"Torn"`, `"Broken"`, `"Severed"`, `"Destroyed"`.
 - Body attributes:
@@ -82,8 +82,8 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
 **Interfaces (Produces):**
 - **`GoreConfig`:** every value under Global Constraints, with a header comment in MenuAssets style.
   - `GoreConfig.get(name: string): any`. Every gore reader, server and client, uses it.
-  - In Studio only, it returns an attribute override set on the GoreConfig ModuleScript itself, if one exists; otherwise the table value. BLOOD_DECALS is overridden as a comma-separated string.
-  - Server tests set these attributes, and they replicate to clients. This is the "test hook" that Tasks 2, 5, 7 and 8 use for CORPSE_LIFE, GORE_LEVEL and BLOOD_DECALS.
+  - In Studio only, it returns an attribute override set on the GoreConfig ModuleScript itself, if one exists; otherwise the table value.
+  - Server tests set these attributes, and they replicate to clients. This is the "test hook" that Tasks 2, 5, 7 and 8 use for CORPSE_LIFE and GORE_LEVEL.
 - **`Gore` (ModuleScript `ServerScriptService.Gore`):**
   - `track(body: Model): ()` sets the attributes (Intact, HP 100), the tag, and `Humanoid.BreakJointsOnDeath = false`.
   - `link(a: Model, b: Model): ()` and `unlink(body: Model): ()`.
@@ -320,7 +320,7 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
 - **Splats:**
   - about 12 rays in a 60° cone along the direction, up to 14 studs, plus 4 downward;
   - a hit counts only on `IsGrounded()` parts, excluding bodies, corpses, Bob, `Room1.Shutter` and the boom;
-  - each splat is a glossy dark-red base (glass-like or reflective, chosen by eye) plus a random `BLOOD_DECALS` decal, rotated randomly;
+  - each splat is a glossy dark-red base (glass-like or reflective, chosen by eye), rotated randomly, with no decal;
   - on near-vertical surfaces it's stretched 1.5–2.5× along the surface's downward direction;
   - it gets a small random lift;
   - it lasts `SPLAT_LIFE`, with at most `SPLAT_MAX`, oldest first.
@@ -329,10 +329,10 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
   - **S-A:** a blood boom 3 studs from a wall, aimed at it, puts ≥2 splats on the wall, flat on it, each longer vertically than wide.
   - **S-B:** a head blast on the seated copy, aimed at the window (−X), puts ≥1 splat on the observation glass.
   - **S-C:** the spray droplet speed range is 40–90.
-  - **S-D:** with `BLOOD_DECALS = { "rbxassetid://1" }` (test override), each splat has a Decal with that texture.
+  - **S-D:** each splat is glossy (its Material is Glass, or its Reflectance is at least 0.2) and has no Decal.
   - **S-E:** nothing lands on the Shutter or on a body.
   - **S-F:** 200 splats requested leave at most 150.
 - [ ] **Step 2: Run it.** Expected: FAIL.
 - [ ] **Step 3: Implement and push.**
 - [ ] **Step 4: Run every gore, lab, boom and regression test.** Expected: PASS. Capture splats on the glass from outside the window, and describe them.
-- [ ] **Step 5: Commit** `feat(gore): forceful spray, thick mist, glossy splats on walls and glass`. Controller: remind the user to add BLOOD_DECALS IDs and to save.
+- [ ] **Step 5: Commit** `feat(gore): forceful spray, thick mist, glossy splats on walls and glass`. Controller: remind the user to save.

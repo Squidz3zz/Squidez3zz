@@ -30,7 +30,7 @@ publishing. `GoreConfig.GORE_LEVEL` (below) lets them tone everything down witho
 | Broken limbs | One leg broken or gone: half speed, no jumping. Both legs: collapse and drag yourself slowly. Right arm broken or gone: the tablet is dropped. |
 | Bleeding | With 2+ open limbs, death in about 60 s; each extra open limb is faster. |
 | Corpses | Every death ragdolls. Bodies stay 2 minutes; at most 4 per player (oldest first). |
-| Splat look | The user's blood decals over a glossy, wet dark-red base; the base alone until decals are given. |
+| Splat look | A glossy, wet dark-red base. Blood decals are left out for now (the user's call); they may be layered on later. |
 | Skin chunks | When a limb tears, chunks of skin burst off it before the flesh shows. |
 | Torso | Stays sealed when torn; only an explosion's chance rips it open. Legs never open it. |
 | Head | When destroyed, a chance also blows the skull apart (flesh only). |
@@ -157,7 +157,7 @@ clothing covers the part.
     A fixed surface is `IsGrounded()`, excluding bodies, Bob, the Shutter and the boom.
   - On walls and glass the splats are stretched 1.5–2.5× downward along the surface, like running blood.
   - Each splat is a glossy, wet, dark-red base (glass-like or reflective material, chosen by eye) with one of
-    GoreConfig.BLOOD_DECALS on top, chosen at random with the splat rotated randomly. With no decals, the base alone.
+    no decal (decals are left out for now), rotated randomly.
   - Splats are lifted slightly with a small random offset so overlapping ones don't flicker.
   - SPLAT_LIFE 90 s, SPLAT_MAX 150 (oldest first).
 
@@ -173,7 +173,7 @@ clothing covers the part.
 
 | File | Job |
 |---|---|
-| `src/ReplicatedStorage/GoreConfig.luau` | Every number above, the gore level and BLOOD_DECALS |
+| `src/ReplicatedStorage/GoreConfig.luau` | Every number above and the gore level |
 | `src/ServerScriptService/Gore/init.luau` (ModuleScript `Gore`) | The public API: `damageLimb`, `explode`, `track(body)`, `link(a, b)`, `stateOf(body, key)` |
 | `src/ServerScriptService/Gore/Integrity.luau` | Integrity, states, chance rolls (one Random per server, seedable from a Studio-only TestHook), big hits, the link |
 | `src/ServerScriptService/Gore/Flesh.luau` | Welding pieces, hiding skin, deep-layer rules, stubs (Part B) |
@@ -233,7 +233,7 @@ results repeat.
 - a blast near a wall puts splats on it, stretched downward;
 - a head blast in the chair puts splats on the observation glass;
 - the caps;
-- decals used when listed.
+- the splat base is glossy (its material or reflectance as chosen).
 
 **Human checks:** the look of the flesh, the chunks and the blood; the sounds; the phone emulator.
 
