@@ -1,8 +1,10 @@
 -- LabServer: Room 1's server side: claiming the room, the linked copy of the owner, the tablet, and the injections.
 -- A player triggers the claim prompt on the panel outside the window and becomes the owner (Room1.Owner holds their UserId, 0 when
 -- free; the sign reads "ROOM 1 / FREE" or "ROOM 1 / <display name>"). A copy of their avatar sits in the chair as Room1.Subject, and a
--- Tablet goes into their Backpack. Whatever kills one of them kills the other. The owner triggering the prompt again, or leaving the
--- game, frees the room and removes the copy and the tablet; when the owner respawns, a fresh copy and a fresh tablet are made.
+-- Tablet goes into their Backpack. Whatever kills one of them kills the other. The copy is built with the owner's gore and then
+-- linked to the owner's character through the gore system (Gore.copyState, then Gore.link), so every gore change on either lands
+-- on both. The owner triggering the prompt again, or leaving the game, frees the room and removes the copy and the tablet; when the
+-- owner respawns, a fresh copy and a fresh tablet are made. Without Gore the lab runs as it did before it.
 -- Spawning and respawning players is MenuServer's job; this script only sets Players.RespawnTime at startup and reacts to CharacterAdded.
 --
 -- Injections: the owner's tablet calls ReplicatedStorage.LabRemotes.RequestInjection(hardDriveId, limbKey). Everything is checked
@@ -22,6 +24,11 @@ local effectsLoaded, HardDriveEffects = pcall(require, script.Parent:WaitForChil
 if not effectsLoaded then
 	warn("LabServer: HardDriveEffects did not load, so every injection is refused: " .. tostring(HardDriveEffects))
 	HardDriveEffects = {}
+end
+local goreLoaded, Gore = pcall(require, script.Parent:WaitForChild("Gore", 5))
+if not goreLoaded then
+	warn("LabServer: Gore did not load, so Room 1 runs without gore: " .. tostring(Gore))
+	Gore = nil
 end
 
 Players.RespawnTime = LabConfig.RESPAWN_TIME
@@ -102,9 +109,24 @@ local function giveTablet(player: Player)
 	end
 end
 
-local function killHumanoidOf(model: Instance?)
+-- Gore[fnName](...), pcall'd: false when Gore is missing or the call failed (the first failure warns).
+local goreWarned = false
+local function gore(fnName: string, ...: any): boolean
+	if not Gore then
+		return false
+	end
+	local ok, err = pcall(Gore[fnName], ...)
+	if not ok and not goreWarned then
+		goreWarned = true
+		warn("LabServer: Gore." .. fnName .. " failed: " .. tostring(err))
+	end
+	return ok
+end
+
+-- Through Gore.hurt, so the gore system's big-hit watcher does not count the death as a hit.
+local function killHumanoidOf(model: Model?)
 	local humanoid = model and model:FindFirstChildOfClass("Humanoid")
-	if humanoid then
+	if humanoid and not gore("hurt", model, math.huge) then
 		humanoid.Health = 0
 	end
 end
@@ -155,9 +177,14 @@ local function seatCopy(player: Player, humanoid: Humanoid): string
 	copyHumanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	copyHumanoid.MaxHealth = humanoid.MaxHealth
 	copyHumanoid.Health = humanoid.Health
-	-- The copy is the owner as they are now: an arm or a leg the owner has lost (a release and a new claim keep a blown-off limb
-	-- off) is missing on the copy too.
-	local character = humanoid.Parent
+	-- Its corpse counts toward the owner's (GoreConfig.CORPSES_PER_PLAYER).
+	model:SetAttribute("GoreOwner", player.UserId)
+	-- The copy is the owner as they are now: it takes on their whole gore (a release and a new claim keep a dangling limb
+	-- dangling and a ripped-off one off). Before the link, which copies each change across without comparing the two.
+	local character = humanoid.Parent :: Model
+	gore("copyState", character, model)
+	-- Without Gore (or at GORE_LEVEL 0, where blasts blow limbs off with no gore) an arm or a leg the owner has lost is missing on
+	-- the copy too.
 	for _, key in { "LeftArm", "RightArm", "LeftLeg", "RightLeg" } do
 		if character and LabConfig.isLost(character, key) then
 			local joint = LabConfig.limbJoint(model, key)
@@ -173,6 +200,7 @@ local function seatCopy(player: Player, humanoid: Humanoid): string
 	model:PivotTo(spot.WorldCFrame * CFrame.new(0, SEAT_LIFT, 0))
 	model.Parent = room
 	subject = model
+	gore("link", model, character)
 
 	-- Whatever kills the copy kills its owner (the current character: the owner may have respawned since).
 	copyHumanoid.Died:Once(function()
@@ -200,6 +228,7 @@ local function release(player: Player)
 	end
 	table.clear(ownerConnections)
 	if subject then
+		gore("unlink", subject)
 		subject:Destroy()
 		subject = nil
 	end
@@ -246,9 +275,11 @@ local function setUpCharacter(player: Player, character: Model, waitForLook: ((n
 			end
 		end)
 	)
-	-- Tools hang from the right hand: with the right arm gone (whatever took it) the owner has no tablet until they respawn.
+	-- Tools hang from the right hand: with the right arm Broken (dangling) or gone, whatever did it, the owner has no tablet until
+	-- they respawn. Either way its Motor6D leaves the Torso, which is when this runs.
 	local function dropTabletsIfNoRightArm()
-		if player.Character == character and LabConfig.isLost(character, "RightArm") then
+		local broken = character:GetAttribute("Gore_RightArm") == "Broken"
+		if player.Character == character and (broken or LabConfig.isLost(character, "RightArm")) then
 			clearTablets(player:FindFirstChildOfClass("Backpack"))
 			clearTablets(character)
 		end

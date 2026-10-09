@@ -6,7 +6,7 @@
 -- Numbers (seconds unless it says otherwise):
 --   RESPAWN_TIME       how long a player stays dead before respawning. The server copies it into Players.RespawnTime at startup,
 --                      and the death screen fades its ringing out over the same time.
---   LIMB_DAMAGE        health taken from the player and from their copy when Explosive blows off an arm or a leg (health, not
+--   LIMB_DAMAGE        health taken from the player and from their copy when Explosive blows up an arm or a leg (health, not
 --                      seconds). A head or torso hit is always fatal, whatever this says.
 --   FUSE_SECONDS       Explosive's fuse: from the needle leaving the limb to the blast. Keep it above 0.
 --   LOST_LIMB_SECONDS  how long a blown-off limb lies on the floor before it disappears.
@@ -35,11 +35,14 @@
 --
 -- The limb table (LIMB_KEYS and Limbs): you should not need to edit this. The game is R6 only: every character and every copy is
 -- an R6 body, so each of the six limb keys is one R6 part (by its name in the body) and the Motor6D in the Torso that holds it on
--- (joint = that Motor6D's name; the torso has none). A limb is "lost" when its joint no longer exists, or when its part is no
--- longer in the body. These helpers read the table; everything else asks them instead of looking at the body itself:
+-- (joint = that Motor6D's name; the torso has none). A limb is "lost" when its part is no longer in the body, or, on a body the
+-- gore system tracks (it has a Gore_<limb> attribute), when that says "Severed": a "Broken" limb dangles from a socket instead
+-- of its Motor6D but is still there, and can be injected again. On a body without the attribute, a limb whose joint no longer
+-- exists is lost too. These helpers read the table; everything else asks them instead of looking at the body itself:
 --   LabConfig.limbParts(body, key)  the limb's parts that are still in the body (a list of one part, or {} for an unknown key or a
 --                                   missing limb)
---   LabConfig.limbJoint(body, key)  the Motor6D holding the limb on, or nil (the torso has none, and a lost limb's is gone)
+--   LabConfig.limbJoint(body, key)  the Motor6D holding the limb on, or nil (the torso has none, a lost limb's is gone, and a
+--                                   Broken one hangs from a socket instead)
 --   LabConfig.isLost(body, key)     true when the limb is lost (an unknown key counts as lost). The torso is never lost while it is
 --                                   in the body
 --   LabConfig.limbCentre(body, key) the middle of the box around the limb's parts (a Vector3), or nil when it is lost
@@ -92,6 +95,10 @@ function LabConfig.isLost(body, key)
 	local spec = LabConfig.Limbs[key]
 	if not spec or #LabConfig.limbParts(body, key) == 0 then
 		return true
+	end
+	local state = body:GetAttribute("Gore_" .. key)
+	if state ~= nil then
+		return state == "Severed"
 	end
 	return spec.joint ~= nil and LabConfig.limbJoint(body, key) == nil
 end

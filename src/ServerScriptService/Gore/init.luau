@@ -8,12 +8,14 @@
 --   GoreSkull           only once the head is destroyed: "blasted" (blown apart) or "shown"
 --   GoreDowned          true once both legs are Broken or Severed (the body is downed and crawls)
 --   GoreDiedAt          the server time (workspace:GetServerTimeNow()) the body died; corpses carry it
---   GoreOwner           on a corpse: the UserId of the player whose character it was
+--   GoreOwner           on a corpse: the UserId of the player whose character it was (Room 1's copy carries its owner's,
+--                       which its corpse keeps)
 -- <Limb> is each of LabConfig.LIMB_KEYS (Head, Torso, LeftArm, RightArm, LeftLeg, RightLeg). Tracked bodies carry the
 -- CollectionService tag GoreBody. The numbers (when a limb tears, the chances, the blast) are GoreConfig's.
 -- What happens to the body itself (Ragdoll, inside Gore, says how):
 --   a limb turning Broken dangles: its Motor6D becomes a BallSocketConstraint;
---   a limb turning Severed is ripped off and flung, and goes after LabConfig.LOST_LIMB_SECONDS;
+--   a limb turning Severed is ripped off and flung, and goes after LabConfig.LOST_LIMB_SECONDS (one that copyState brings is
+--   simply removed: the copy arrives without it);
 --   one leg Broken or Severed: WalkSpeed GoreConfig LIMP_SPEED, no jumping; both: GoreDowned (each player's GoreClient makes
 --   its own downed character crawl);
 --   on death the body ragdolls and its parts move into a corpse in Workspace.Corpses, which stays tracked (blasts still tear
@@ -28,7 +30,9 @@
 --                                       player's character as it spawns.
 --   Gore.link(a, b), Gore.unlink(body)  links two bodies (a player's character and their copy) so every gore change on
 --                                       either is decided once and lands identically on both; unlink (or destroying either
---                                       body) ends it.
+--                                       body) ends it. The change is worked out on the body it happens to and copied onto the
+--                                       other, so the two must match first (copyState, then link). A linked body that dies
+--                                       hands its link to its corpse.
 --   Gore.damageLimb(body, key, amount, cause)
 --                                       the one way limbs are damaged. cause is "explosion", "hit", "fall" or a future name;
 --                                       only "explosion" can sever an arm or a leg or open the torso. Ignored for an untracked
@@ -57,11 +61,12 @@ local RunService = game:GetService("RunService")
 local Integrity = require(script:WaitForChild("Integrity"))
 local Ragdoll = require(script:WaitForChild("Ragdoll"))
 
-Integrity.onStateChanged(function(body, key, _old, new)
+Integrity.onStateChanged(function(body, key, _old, new, info)
 	if new == "Broken" then
 		Ragdoll.loosen(body, key)
 	elseif new == "Severed" then
-		Ragdoll.sever(body, key)
+		-- copyState builds a body already missing the limb: nothing is flung.
+		Ragdoll.sever(body, key, info.cause == "copy")
 	end
 end)
 

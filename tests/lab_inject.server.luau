@@ -1,18 +1,21 @@
 -- Run in the Server datamodel during a playtest, one case at a time (set CASE below). It needs a spawned character: start a
 -- fresh playtest, run tests/fire_play.client.luau in the Client datamodel (it presses Play), wait for the character, then run this.
--- Every case starts the same way: a live, whole character (one that lost a limb in an earlier case is killed and respawns first)
--- at full health, Bob on Standby with the shutter open, and the room claimed afresh, so the copy is new and whole. So the cases can
--- also run one after another in the same playtest.
---   A  (I-A, I-B, I-C) Explosive into the left arm: the phases, their timings and the shutter; 1 s into the fuse both left arms
---      glow; after it both are lost and flung (each moved more than 2 studs sideways within 0.5 s of coming off into Workspace),
---      both bodies have lost 20 health, no glow is left, no Explosion instance was made and Booms counted exactly two booms
---      (copy + owner), both with blood (BloodCount + 2); 2 s later both are still at that health (nobody heals over time); a
---      second injection into the same arm is refused "LIMB ALREADY LOST"
+-- Every case starts the same way: a live, whole character (one that lost a limb, or has any gore, in an earlier case is killed
+-- and respawns first) at full health, Bob on Standby with the shutter open, and the room claimed afresh, so the copy is new and
+-- whole. So the cases can also run one after another in the same playtest.
+--   A  (I-A, I-B, I-C) Explosive into the left arm, with SEVER_CHANCE 1 (an override on GoreConfig, removed however the case
+--      ends) so the blast rips it off: the phases, their timings and the shutter; 1 s into the fuse both left arms glow; after
+--      it both are Severed (with the same gore on both bodies), lost and flung (each moved more than 2 studs sideways within
+--      0.5 s of coming off into Workspace), both bodies have lost 20 health, no glow is left, no Explosion instance was made and
+--      Booms counted exactly two booms (copy + owner), both with blood (BloodCount + 2); 2 s later both are still at that health
+--      (nobody heals over time); a second injection into the same arm is refused "LIMB ALREADY LOST". (A Broken arm is not
+--      lost: tests/lab_gore.server.luau, L-B.)
 --   D  (I-D) Explosive into the head kills both; an injection while the copy is dead is refused "NO SUBJECT"
 --   E  (I-E) two requests back to back: the first starts, the second is refused "BOB IS BUSY" and changes nothing
 --   F  (I-F) releasing the room 1 s into the fuse stops it: no glow left, no Explosion and no boom, the player's leg and health
 --      untouched
---   G  (I-G) blowing off the right arm takes the tablet away, even one held in the hand
+--   G  (I-G) blowing up the right arm (both right arms end Broken or Severed, the same on both) takes the tablet away, even one
+--      held in the hand
 --   H  (I-H) releasing mid-Moving (what PlayerRemoving does): free room, Bob back on Standby within Return + 0.5 s, shutter open
 --   I  (I-I) refusals: "UNKNOWN HARDDRIVE" (checked before the limb), "UNKNOWN LIMB", and "NOT YOUR ROOM" once released
 --   J  (I-J) a limb whose fuse is burning is refused: Explosive into the left leg; back on Standby the fuse still burns on a whole
@@ -160,7 +163,8 @@ local function prepare()
 	assert(waitFor(shutterOpen, 1), "the shutter did not open")
 	local whole = true
 	for _, key in LabConfig.LIMB_KEYS do
-		whole = whole and not LabConfig.isLost(player.Character, key)
+		local state = player.Character:GetAttribute("Gore_" .. key)
+		whole = whole and not LabConfig.isLost(player.Character, key) and (state or "Intact") == "Intact"
 	end
 	if not whole then
 		local old = player.Character
@@ -182,89 +186,103 @@ local function prepare()
 	return subject, player.Character, humanoid
 end
 
+local configModule = ReplicatedStorage:WaitForChild("GoreConfig")
+
 if CASE == "A" then
-	local subject, character, humanoid = prepare()
-	local seen, phases = recordPhases()
-	local blasts, blastWatch = countExplosions()
-	local boomsBefore, bloodBefore = boomCount(), bloodCount()
-	local t0 = now()
-	local ok, reason = inject("Explosive", "LeftArm")
-	assert(ok == true and reason == nil, "the injection was refused: " .. tostring(reason))
-	assert(state() == "Moving", "State should be Moving at once, is " .. tostring(state()))
-	assert(math.abs(bob:GetAttribute("PhaseStart") - t0) <= SLACK, "Moving's PhaseStart is not now")
-	assert(bob:GetAttribute("Target") == "LeftArm" and bob:GetAttribute("HardDrive") == "Explosive", "Target / HardDrive not set")
-	assert(hook:Invoke("state").bobState == "Moving", "the hook's bobState should be Moving")
-	task.wait(0.5)
-	assert(state() == "Moving", "State should still be Moving 0.5 s in")
-	assert(shutter.CanCollide == true and shutter.Transparency == 0, "the shutter should be closed (solid) during Moving")
+	configModule:SetAttribute("SEVER_CHANCE", 1)
+	local ok, result = pcall(function()
+		local subject, character, humanoid = prepare()
+		local seen, phases = recordPhases()
+		local blasts, blastWatch = countExplosions()
+		local boomsBefore, bloodBefore = boomCount(), bloodCount()
+		local t0 = now()
+		local ok, reason = inject("Explosive", "LeftArm")
+		assert(ok == true and reason == nil, "the injection was refused: " .. tostring(reason))
+		assert(state() == "Moving", "State should be Moving at once, is " .. tostring(state()))
+		assert(math.abs(bob:GetAttribute("PhaseStart") - t0) <= SLACK, "Moving's PhaseStart is not now")
+		assert(bob:GetAttribute("Target") == "LeftArm" and bob:GetAttribute("HardDrive") == "Explosive", "Target / HardDrive not set")
+		assert(hook:Invoke("state").bobState == "Moving", "the hook's bobState should be Moving")
+		task.wait(0.5)
+		assert(state() == "Moving", "State should still be Moving 0.5 s in")
+		assert(shutter.CanCollide == true and shutter.Transparency == 0, "the shutter should be closed (solid) during Moving")
 
-	-- I-B: the fuse starts as Injecting ends (= Returning starts); 1 s into it both left arms glow.
-	assert(waitFor(function()
-		return seen.Returning
-	end, MOVE + INJECT + 1), "Bob never started Returning")
-	waitUntil(seen.Returning.start + 1)
-	assert(subject["Left Arm"]:FindFirstChild("FuseGlow"), "no FuseGlow on the copy's left arm 1 s into the fuse")
-	assert(character["Left Arm"]:FindFirstChild("FuseGlow"), "no FuseGlow on the player's left arm 1 s into the fuse")
+		-- I-B: the fuse starts as Injecting ends (= Returning starts); 1 s into it both left arms glow.
+		assert(waitFor(function()
+			return seen.Returning
+		end, MOVE + INJECT + 1), "Bob never started Returning")
+		waitUntil(seen.Returning.start + 1)
+		assert(subject["Left Arm"]:FindFirstChild("FuseGlow"), "no FuseGlow on the copy's left arm 1 s into the fuse")
+		assert(character["Left Arm"]:FindFirstChild("FuseGlow"), "no FuseGlow on the player's left arm 1 s into the fuse")
 
-	-- The fling: where each left arm is as it comes off (put into Workspace), and how far it went sideways 0.5 s later.
-	local flung = {}
-	for _, arm in { subject["Left Arm"], character["Left Arm"] } do
-		local connection
-		connection = arm:GetPropertyChangedSignal("Parent"):Connect(function()
-			if arm.Parent == workspace then
-				connection:Disconnect()
-				local from = arm.Position
-				task.delay(0.5, function()
-					local moved = arm.Position - from
-					table.insert(flung, Vector3.new(moved.X, 0, moved.Z).Magnitude)
-				end)
+		-- The fling: where each left arm is as it comes off (put into Workspace), and how far it went sideways 0.5 s later.
+		local flung = {}
+		for _, arm in { subject["Left Arm"], character["Left Arm"] } do
+			local connection
+			connection = arm:GetPropertyChangedSignal("Parent"):Connect(function()
+				if arm.Parent == workspace then
+					connection:Disconnect()
+					local from = arm.Position
+					task.delay(0.5, function()
+						local moved = arm.Position - from
+						table.insert(flung, Vector3.new(moved.X, 0, moved.Z).Magnitude)
+					end)
+				end
+			end)
+		end
+
+		assert(waitFor(function()
+			return seen.Standby
+		end, RETURN + 1), "Bob never got back to Standby")
+		local report = {}
+		for _, phase in { { "Injecting", MOVE }, { "Returning", MOVE + INJECT }, { "Standby", MOVE + INJECT + RETURN } } do
+			local name, expected = phase[1], phase[2]
+			local start, at = seen[name].start - t0, seen[name].at - t0
+			assert(math.abs(start - expected) <= SLACK, ("%s's PhaseStart is %.2f s in, expected %.2f"):format(name, start, expected))
+			assert(math.abs(at - expected) <= SLACK, ("%s was seen %.2f s in, expected %.2f"):format(name, at, expected))
+			table.insert(report, ("%s %.2f"):format(name, start))
+		end
+		assert(bob:GetAttribute("Target") == "" and bob:GetAttribute("HardDrive") == "", "Target / HardDrive should be cleared on Standby")
+		task.wait(0.5)
+		assert(shutterOpen(), "the shutter should be open (not collidable, invisible) after Standby")
+
+		waitUntil(seen.Returning.start + FUSE + 0.5)
+		phases:Disconnect()
+		blastWatch:Disconnect()
+		assert(subject:GetAttribute("Gore_LeftArm") == "Severed" and character:GetAttribute("Gore_LeftArm") == "Severed", "both left arms should be Severed")
+		for name, value in subject:GetAttributes() do
+			if string.sub(name, 1, 4) == "Gore" and name ~= "GoreOwner" then
+				assert(character:GetAttribute(name) == value, ("%s is %s on the copy and %s on the player"):format(name, tostring(value), tostring(character:GetAttribute(name))))
 			end
-		end)
-	end
+		end
+		assert(LabConfig.isLost(subject, "LeftArm"), "the copy's left arm should be lost")
+		assert(LabConfig.isLost(character, "LeftArm"), "the player's left arm should be lost")
+		local expectedHealth = humanoid.MaxHealth - LabConfig.LIMB_DAMAGE
+		assert(math.abs(subject.Humanoid.Health - expectedHealth) < 0.01, "the copy's health is " .. subject.Humanoid.Health)
+		assert(math.abs(humanoid.Health - expectedHealth) < 0.01, "the player's health is " .. humanoid.Health)
+		assert(glowCount() == 0, glowCount() .. " FuseGlow(s) left after the blast")
+		assert(blasts.n == 0, blasts.n .. " Explosion instance(s) were made: the blast should only call Booms.at")
+		local booms = boomCount() - boomsBefore
+		assert(booms == 2, "expected 2 booms (copy + owner), got " .. booms)
+		local bloods = bloodCount() - bloodBefore
+		assert(bloods == 2, "expected 2 blood booms (copy + owner), got " .. bloods)
+		assert(waitFor(function()
+			return #flung == 2
+		end, 2), "the two left arms did not both come off into Workspace")
+		for _, distance in flung do
+			assert(distance > 2, ("a left arm moved only %.2f studs sideways in the 0.5 s after it came off: not flung"):format(distance))
+		end
+		-- Nobody heals over time, so the two stay the same.
+		task.wait(2)
+		local later, copyLater = humanoid.Health, subject.Humanoid.Health
+		assert(later == copyLater and math.abs(later - expectedHealth) < 0.01, ("2 s after the blast the player has %s health and the copy %s, both should still have %d"):format(later, copyLater, expectedHealth))
 
-	assert(waitFor(function()
-		return seen.Standby
-	end, RETURN + 1), "Bob never got back to Standby")
-	local report = {}
-	for _, phase in { { "Injecting", MOVE }, { "Returning", MOVE + INJECT }, { "Standby", MOVE + INJECT + RETURN } } do
-		local name, expected = phase[1], phase[2]
-		local start, at = seen[name].start - t0, seen[name].at - t0
-		assert(math.abs(start - expected) <= SLACK, ("%s's PhaseStart is %.2f s in, expected %.2f"):format(name, start, expected))
-		assert(math.abs(at - expected) <= SLACK, ("%s was seen %.2f s in, expected %.2f"):format(name, at, expected))
-		table.insert(report, ("%s %.2f"):format(name, start))
-	end
-	assert(bob:GetAttribute("Target") == "" and bob:GetAttribute("HardDrive") == "", "Target / HardDrive should be cleared on Standby")
-	task.wait(0.5)
-	assert(shutterOpen(), "the shutter should be open (not collidable, invisible) after Standby")
-
-	waitUntil(seen.Returning.start + FUSE + 0.5)
-	phases:Disconnect()
-	blastWatch:Disconnect()
-	assert(LabConfig.isLost(subject, "LeftArm"), "the copy's left arm should be lost")
-	assert(LabConfig.isLost(character, "LeftArm"), "the player's left arm should be lost")
-	local expectedHealth = humanoid.MaxHealth - LabConfig.LIMB_DAMAGE
-	assert(math.abs(subject.Humanoid.Health - expectedHealth) < 0.01, "the copy's health is " .. subject.Humanoid.Health)
-	assert(math.abs(humanoid.Health - expectedHealth) < 0.01, "the player's health is " .. humanoid.Health)
-	assert(glowCount() == 0, glowCount() .. " FuseGlow(s) left after the blast")
-	assert(blasts.n == 0, blasts.n .. " Explosion instance(s) were made: the blast should only call Booms.at")
-	local booms = boomCount() - boomsBefore
-	assert(booms == 2, "expected 2 booms (copy + owner), got " .. booms)
-	local bloods = bloodCount() - bloodBefore
-	assert(bloods == 2, "expected 2 blood booms (copy + owner), got " .. bloods)
-	assert(waitFor(function()
-		return #flung == 2
-	end, 2), "the two left arms did not both come off into Workspace")
-	for _, distance in flung do
-		assert(distance > 2, ("a left arm moved only %.2f studs sideways in the 0.5 s after it came off: not flung"):format(distance))
-	end
-	-- Nobody heals over time, so the two stay the same.
-	task.wait(2)
-	local later, copyLater = humanoid.Health, subject.Humanoid.Health
-	assert(later == copyLater and math.abs(later - expectedHealth) < 0.01, ("2 s after the blast the player has %s health and the copy %s, both should still have %d"):format(later, copyLater, expectedHealth))
-
-	-- I-C
-	refused("LIMB ALREADY LOST", inject("Explosive", "LeftArm"))
-	return ("PASS lab_inject I-A I-B I-C (%s; health %d; arms flung %.1f and %.1f studs sideways in 0.5 s)"):format(table.concat(report, ", "), expectedHealth, flung[1], flung[2])
+		-- I-C
+		refused("LIMB ALREADY LOST", inject("Explosive", "LeftArm"))
+		return ("PASS lab_inject I-A I-B I-C (%s; health %d; arms flung %.1f and %.1f studs sideways in 0.5 s)"):format(table.concat(report, ", "), expectedHealth, flung[1], flung[2])
+	end)
+	configModule:SetAttribute("SEVER_CHANCE", nil)
+	assert(ok, result)
+	return result
 elseif CASE == "D" then
 	local subject, character = prepare()
 	assert(inject("Explosive", "Head") == true, "the injection was refused")
@@ -318,9 +336,13 @@ elseif CASE == "G" then
 	end, MOVE + INJECT + 1), "Bob never started Returning")
 	waitUntil(seen.Returning.start + FUSE + 0.5)
 	phases:Disconnect()
-	assert(LabConfig.isLost(subject, "RightArm") and LabConfig.isLost(character, "RightArm"), "both right arms should be lost")
+	local state = subject:GetAttribute("Gore_RightArm")
+	assert(
+		(state == "Broken" or state == "Severed") and character:GetAttribute("Gore_RightArm") == state,
+		("both right arms should be Broken or Severed, the same: the copy's is %s, the player's %s"):format(tostring(state), tostring(character:GetAttribute("Gore_RightArm")))
+	)
 	assert(tabletCount() == 0, tabletCount() .. " tablet(s) left after losing the right arm")
-	return "PASS lab_inject I-G"
+	return "PASS lab_inject I-G (" .. state .. ")"
 elseif CASE == "H" then
 	prepare()
 	assert(inject("Explosive", "LeftArm") == true, "the injection was refused")

@@ -199,7 +199,9 @@ claiming and the injections. Claiming: a player who triggers the claim prompt be
 0 when free, and the sign reads "ROOM 1 / FREE" or "ROOM 1 / <their name>"), a copy of their avatar sits in the chair as
 `Room1.Subject`, and a `Tablet` goes into their Backpack. If the copy dies the owner dies, and the other way round. The
 owner triggering the prompt again, or leaving the game, frees the room; when the owner respawns, a fresh copy and tablet are
-made. A limb the owner has lost (blown off before a release and a new claim) is missing on the new copy too. Only an R6
+made. The copy and the owner are linked through the gore system (see `Gore` below): every tear, break or ripped-off limb on
+one lands on the other too, and a new copy (after a release and a new claim, or a respawn) starts with the owner's gore as it
+is, a dangling arm dangling and a ripped-off one missing. A held tablet never stays in a corpse. Only an R6
 character can claim: any other rig is refused, and the Output window says to set the avatar type to R6 (see f). It reads
 where to seat the copy from `Chair.Seat.SubjectSpot`, so a moved chair works without a code change. It also
 sets `Players.RespawnTime` from `LabConfig.RESPAWN_TIME` at startup. `LabClient` sets the claim prompt's text on each player's
@@ -214,18 +216,24 @@ what he is doing on `Room1.BobTheInjector` as attributes (`State`, `Target`, `Ha
 game animates him from those, so do not delete those attributes. As the needle comes out, `HardDriveEffects` (which goes
 straight into `ServerScriptService`, next to `LabServer`, not inside it) does what the Harddrive does, to the copy and the
 owner at once. Explosive: the limb glows red and beeps faster and faster for `LabConfig.FUSE_SECONDS`, then blows with your
-boom and its blood (see `Booms` above): an arm or a leg is flung off both bodies, upward and to a random side at 15 to 30
-studs a second and spinning (`FLING_SPEED` and `FLING_SPIN` at the top of `HardDriveEffects`), and lies on the floor for
-`LabConfig.LOST_LIMB_SECONDS`, and both lose `LabConfig.LIMB_DAMAGE` health; the head or the torso kills both. Losing the right arm also takes the tablet away until the owner respawns. If the
-room is freed or the owner dies before the blast, Bob goes home and the fuse goes out with nothing blown off. Without
-`HardDriveEffects` the room can still be claimed, but every injection is refused (the Output window says why).
+boom and its blood on both bodies (see `Booms` above). The blast itself is the gore system's (`GoreConfig.EXPLOSIVE_POWER` and
+`BLAST_RADIUS`), set off once at the copy's limb, and the link gives the owner exactly the same: the injected arm or leg always
+breaks and dangles, or (one time in four, `SEVER_CHANCE`) is ripped off and flung; the torso and the head next to it tear. Both
+lose `LabConfig.LIMB_DAMAGE` health; the head or the torso kills both. A dangling limb can be injected again (the second blast
+is likely to finish the torso). A broken or ripped-off right arm takes the tablet away until the owner respawns. At
+`GORE_LEVEL` 0, or without `Gore`, the Explosive works as it did before the gore system: the arm or leg is flung off both
+bodies (`FLING_SPEED` and `FLING_SPIN` at the top of `HardDriveEffects`) and nothing else is hurt. A limb that comes off lies
+on the floor for `LabConfig.LOST_LIMB_SECONDS`. If the room is freed or the owner dies before the blast, Bob goes home and
+the fuse goes out with nothing blown off. Without `HardDriveEffects` the room can still be claimed, but every injection is
+refused (the Output window says why).
 
 `TabletMenu` is the tablet's menu (it sits **inside** `LabClient`, like the ModuleScripts under `MainMenuClient`) and needs the
 `ReplicatedStorage.TabletMenu` template that `studio/build_lab.luau` builds (see c). `LabClient` opens it when the owner
 clicks, taps or presses the trigger with the Tablet in hand, and closes it when the tablet is put away or taken (a lost right
 arm, a release), when the owner's character dies, and on the X or a controller's B. The owner picks a Harddrive (the list is
 `LabConfig.HardDrives`) and a limb (drawn as a body seen from the front, so the owner's right limbs are on the screen's
-left), and CONFIRM then asks the server (`RequestInjection`). A limb already blown off reads LOST and cannot be picked. While
+left), and CONFIRM then asks the server (`RequestInjection`). A limb already ripped off reads LOST and cannot be picked (a
+dangling one can). While
 Bob is busy the menu opens read-only and shows what he is doing, and a refusal from the server (such as "BOB IS BUSY") shows
 in the top bar for three seconds. It plays the main menu's hover and click sounds (`SoundService.MenuSfxHover` and
 `MenuSfxConfirm`) and is silent without them. If `TabletMenu` or its template is broken, the Output window says so once and
@@ -253,12 +261,12 @@ but injections still happen.
 
 `GoreConfig`, `Gore` (with `Integrity` and `Ragdoll` **inside** it), `GoreServer` and `GoreClient` are the gore system
 (`docs/superpowers/specs/2026-10-08-gore-system-design.md`), still being built: so far it covers every player's character
-(`GoreServer` tracks each one as it spawns), but not yet Room 1's copy or its Explosive, which still blows limbs off its own
-way. Every limb of a body it tracks has 100 integrity. Damage tears a limb at 60 or less, and at 0 or
+(`GoreServer` tracks each one as it spawns) and Room 1's copy and Explosive (`LabServer` and `HardDriveEffects` use it; without
+`Gore` the lab works as it did before it). Every limb of a body it tracks has 100 integrity. Damage tears a limb at 60 or less, and at 0 or
 less it breaks an arm or a leg, or destroys the head or the torso (which kills). An explosion can also rip a broken arm or leg
 off, open a torn torso and blow a destroyed skull apart, each by chance. A single loss of 30 health or more from anything else
-(a big hit) damages a random limb, or both legs after a fall. A player and their copy can be linked so they always come out
-the same. The results are written on the body as attributes (`Gore_<limb>`, `GoreHP_<limb>`, `GoreVariant_<limb>`,
+(a big hit) damages a random limb, or both legs after a fall. A player and their copy are linked so they always come out
+the same, and the link carries on to their corpses (a blast on one corpse shows on the other). The results are written on the body as attributes (`Gore_<limb>`, `GoreHP_<limb>`, `GoreVariant_<limb>`,
 `GoreTorsoOpen`, `GoreSkull`), and the body gets the tag `GoreBody`. `GoreConfig` (a ModuleScript straight in
 `ReplicatedStorage`) holds every number and `GORE_LEVEL` (how gory the game is: 2, 1 or 0), each explained at its top. In
 Studio, an attribute with a number's name on `GoreConfig` overrides that number while you test. `Gore` (a ModuleScript in
@@ -269,7 +277,8 @@ walks at half speed (`LIMP_SPEED`) and cannot jump, and with both they fall down
 (`CRAWL_SPEED`; `GoreClient`, a LocalScript in `StarterPlayerScripts`, does the dragging on each player's own screen). Every
 death goes limp (a ragdoll), and the body stays lying where it fell as a corpse in `Workspace.Corpses` (a Folder the game
 makes; do not build it by hand) for `CORPSE_LIFE` seconds (2 minutes), at most `CORPSES_PER_PLAYER` (4) per player with the
-oldest going first, then sinks into the floor and goes. A corpse still tears when something blows up next to it.
+oldest going first, then sinks into the floor and goes (Room 1's copies count as their owner's). A corpse still tears when
+something blows up next to it.
 `GoreServer` (a Script next to `Gore`) tracks the characters; in Studio it also makes a `TestHook` for the tests.
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
@@ -357,9 +366,10 @@ Press **Play** in Studio (the Test tab) and check each of these:
    EXPLOSIVE and its picture, and a body drawn from the front with HEAD, TORSO, R ARM, L ARM, R LEG and L LEG (R ARM is on the
    left of the screen). CONFIRM stays grey ("PICK A HARDDRIVE AND A LIMB") until you pick EXPLOSIVE and a limb, then reads
    e.g. "CONFIRM: EXPLOSIVE INTO LEFT ARM". Press it: the menu closes and Bob goes to work. Open the tablet again while he
-   moves: it is read-only and the top bar shows MOVING, INJECTING or RETURNING. The limb blows off with your explosion, a spray
-   of blood and the two blood sounds, flies away, and leaves a few dark-red splats on the floor that fade after about 20
-   seconds. After the blast the limb reads LOST and cannot be picked. The X, putting the tablet away, and (on a controller) B all close the menu, and so does dying. On a
+   moves: it is read-only and the top bar shows MOVING, INJECTING or RETURNING. The limb blows with your explosion, a spray
+   of blood and the two blood sounds, and leaves a few dark-red splats on the floor that fade after about 20 seconds. The
+   copy's limb and your own then dangle limp, or (sometimes) are ripped off and fly away. A ripped-off limb reads LOST and
+   cannot be picked; a dangling one can. The X, putting the tablet away, and (on a controller) B all close the menu, and so does dying. On a
    phone every button is easy to tap and the menu stays clear of the notch and the top bar.
 9. The Output window has no red text. A warning about a sound that did not load (`LoadingScreen: sound '...'`, `ButtonSounds: ...` or `MenuAudio: ...`) means
    Roblox refused that sound's asset id: fix the id in `MenuAssets`, or its permissions.

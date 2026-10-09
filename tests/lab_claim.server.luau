@@ -7,9 +7,12 @@
 --   C  the owner dying kills the copy; after the respawn a new copy sits, wearing the owner's look (not black), and there is
 --      one tablet again
 --   D  the copy dying kills the owner; after the respawn, releasing frees the room
---   E  a lost limb stays lost: claim, blow the owner's left arm off (Explosive through the TestHook, the fuse waited out), release,
---      claim again: the new copy has no left arm either (as the tablet menu sees Room1.Subject), its other limbs are whole and its
---      health is the owner's. Leaves the room free and the player without a left arm, so run it last (or respawn before A-D).
+--   E  the copy takes on the owner's gore: with SEVER_CHANCE 1 (an override on GoreConfig, removed however the case ends) claim,
+--      blow the owner's left arm off (Explosive through the TestHook, the fuse waited out), release, claim again: the new copy
+--      has every Gore attribute of the owner (states, integrity, variants, torso, skull) and no left arm either (as the tablet
+--      menu sees Room1.Subject), removed outright (no left arm was flung into Workspace by the claim); its other limbs are not
+--      lost and its health is the owner's. Leaves the room free and the player without a left arm, so run it last (or respawn
+--      before A-D).
 -- ("ROOM 1 IS TAKEN" needs a second player, and the owner leaving is PlayerRemoving: both are checked by reading LabServer.)
 local CASE = "A"
 
@@ -200,29 +203,57 @@ elseif CASE == "D" then
 	assertFree("D after release")
 	return "PASS lab_claim D"
 elseif CASE == "E" then
-	local character = player.Character
-	assert(not LabConfig.isLost(character, "LeftArm"), "the player has already lost the left arm: respawn first")
-	assert(hook:Invoke("claim", player) == true, "claim refused")
-	local ok, reason = hook:Invoke("inject", player, "Explosive", "LeftArm")
-	assert(ok == true, "the injection was refused: " .. tostring(reason))
-	local Timings = LabConfig.Timings
-	local fuseOut = Timings.Move + Timings.NeedleOut + Timings.Hold + Timings.NeedleIn + LabConfig.FUSE_SECONDS + 1
-	assert(waitFor(function()
-		return LabConfig.isLost(character, "LeftArm")
-	end, fuseOut), "the player's left arm was not blown off")
-	hook:Invoke("release", player)
-	assertFree("E after release")
-	assert(hook:Invoke("claim", player) == true, "the second claim was refused")
-	local subject = subjectOf()
-	assertSeated(subject, "E")
-	assert(LabConfig.isLost(subject, "LeftArm"), "the new copy has a left arm, but its owner lost theirs")
-	assert(LabConfig.isLost(room.Subject, "LeftArm"), "the tablet menu would show the left arm as whole")
-	for _, key in LabConfig.LIMB_KEYS do
-		assert(key == "LeftArm" or not LabConfig.isLost(subject, key), "the new copy has lost its " .. key .. " too")
-	end
-	local health, copyHealth = aliveHumanoid().Health, subject.Humanoid.Health
-	assert(copyHealth == health, ("the copy's health %s is not the owner's %s"):format(copyHealth, health))
-	hook:Invoke("release", player)
-	return ("PASS lab_claim E (the new copy has no left arm; health %s on both)"):format(health)
+	local configModule = ReplicatedStorage:WaitForChild("GoreConfig")
+	configModule:SetAttribute("SEVER_CHANCE", 1)
+	local ok, result = pcall(function()
+		local character = player.Character
+		assert(not LabConfig.isLost(character, "LeftArm"), "the player has already lost the left arm: respawn first")
+		assert(hook:Invoke("claim", player) == true, "claim refused")
+		local injected, reason = hook:Invoke("inject", player, "Explosive", "LeftArm")
+		assert(injected == true, "the injection was refused: " .. tostring(reason))
+		local Timings = LabConfig.Timings
+		local fuseOut = Timings.Move + Timings.NeedleOut + Timings.Hold + Timings.NeedleIn + LabConfig.FUSE_SECONDS + 1
+		assert(waitFor(function()
+			return character:GetAttribute("Gore_LeftArm") == "Severed"
+		end, fuseOut), "the player's left arm was not blown off")
+		assert(LabConfig.isLost(character, "LeftArm"), "the player's Severed left arm should be lost")
+		hook:Invoke("release", player)
+		assertFree("E after release")
+		-- A left arm the claim flings into Workspace (instead of removing it) would land here.
+		local flung = 0
+		local watch = workspace.ChildAdded:Connect(function(child)
+			if child.Name == "Left Arm" then
+				flung += 1
+			end
+		end)
+		local claimed = hook:Invoke("claim", player)
+		task.wait(0.5)
+		watch:Disconnect()
+		assert(claimed == true, "the second claim was refused")
+		local subject = subjectOf()
+		assertSeated(subject, "E")
+		for _, prefix in { "Gore_", "GoreHP_", "GoreVariant_" } do
+			for _, key in LabConfig.LIMB_KEYS do
+				local name = prefix .. key
+				assert(subject:GetAttribute(name) == character:GetAttribute(name), ("the new copy's %s is %s, the owner's %s"):format(name, tostring(subject:GetAttribute(name)), tostring(character:GetAttribute(name))))
+			end
+		end
+		for _, name in { "GoreTorsoOpen", "GoreSkull" } do
+			assert(subject:GetAttribute(name) == character:GetAttribute(name), "the new copy's " .. name .. " is not the owner's")
+		end
+		assert(LabConfig.isLost(subject, "LeftArm") and not subject:FindFirstChild("Left Arm"), "the new copy has a left arm, but its owner lost theirs")
+		assert(LabConfig.isLost(room.Subject, "LeftArm"), "the tablet menu would show the left arm as whole")
+		assert(flung == 0, "the claim flung " .. flung .. " left arm(s) into Workspace: the copy's should be removed outright")
+		for _, key in LabConfig.LIMB_KEYS do
+			assert(key == "LeftArm" or not LabConfig.isLost(subject, key), "the new copy has lost its " .. key .. " too")
+		end
+		local health, copyHealth = aliveHumanoid().Health, subject.Humanoid.Health
+		assert(copyHealth == health, ("the copy's health %s is not the owner's %s"):format(copyHealth, health))
+		hook:Invoke("release", player)
+		return ("PASS lab_claim E (the new copy took on the owner's gore, no left arm; torso %s; health %s on both)"):format(tostring(subject:GetAttribute("Gore_Torso")), health)
+	end)
+	configModule:SetAttribute("SEVER_CHANCE", nil)
+	assert(ok, result)
+	return result
 end
 error("unknown CASE " .. tostring(CASE))

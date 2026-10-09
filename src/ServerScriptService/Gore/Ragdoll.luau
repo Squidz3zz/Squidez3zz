@@ -4,9 +4,11 @@
 --   Ragdoll.loosen(body, key)  the limb's Motor6D becomes a BallSocketConstraint (same name, under the Torso) with natural limits
 --                              (LIMITS below), so it hangs and flops; the limb collides with the world but not with its own body
 --                              (a NoCollisionConstraint with each of the body's other parts).
---   Ragdoll.sever(body, key)   the limb's joint (a Motor6D or a socket) goes and the limb part (with anything welded to it) leaves
+--   Ragdoll.sever(body, key, remove)
+--                              the limb's joint (a Motor6D or a socket) goes and the limb part (with anything welded to it) leaves
 --                              the body for Workspace: owned by the server, flung off (FLING_* below) and removed after
---                              LabConfig.LOST_LIMB_SECONDS.
+--                              LabConfig.LOST_LIMB_SECONDS. With remove (a body built already missing it, as Gore.copyState
+--                              builds the lab's copy) the part is simply destroyed: nothing flies.
 --   Movement (both of those):  one leg Broken or Severed sets WalkSpeed to GoreConfig LIMP_SPEED and JumpHeight (and JumpPower)
 --                              to 0; both legs set the attribute GoreDowned = true on the body, and each player's GoreClient
 --                              makes its own downed character crawl.
@@ -14,9 +16,11 @@
 --   Ragdoll.die(body)          every remaining Motor6D becomes a socket (the HumanoidRootPart's RootJoint becomes a Weld, so the
 --                              invisible root stays inside the torso), every body part is unanchored and collides (not with
 --                              the body's other parts), and the corpse is made: a Model named Corpse in Workspace.Corpses (made
---                              when missing) takes every child of the body but its Humanoid, the body's attributes and tags (so
---                              it stays a GoreBody that blasts still tear), GoreDiedAt (server time) and, for a player's
---                              character, GoreOwner (their UserId; another body keeps any GoreOwner it had). The Humanoid stays
+--                              when missing) takes every child of the body but its Humanoid and its Tools (a held tool, such as
+--                              the lab's tablet, is destroyed), the body's attributes and tags (so it stays a GoreBody that
+--                              blasts still tear), its link (Gore.link: the corpse takes the dead body's place), GoreDiedAt
+--                              (server time) and, for a player's character, GoreOwner (their UserId; another body keeps any
+--                              GoreOwner it had, as the lab's copy carries its owner's). The Humanoid stays
 --                              in the emptied body, which is left for whoever removes it (a respawn); the corpse gets a still
 --                              Humanoid of its own (Health 0, no state machine) so its clothes keep showing. The corpse's parts
 --                              are owned by the server. Each owner (bodies with no owner count as one) keeps at most GoreConfig
@@ -31,6 +35,7 @@ local TweenService = game:GetService("TweenService")
 
 local GoreConfig = require(ReplicatedStorage:WaitForChild("GoreConfig"))
 local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig"))
+local Integrity = require(script.Parent:WaitForChild("Integrity"))
 
 -- Each R6 joint's limits, in degrees: how far the limb swings away from hanging straight (a cone) and how far it twists about
 -- its own length.
@@ -149,7 +154,7 @@ function Ragdoll.loosen(body: Model, key: string)
 	limp(body)
 end
 
-function Ragdoll.sever(body: Model, key: string)
+function Ragdoll.sever(body: Model, key: string, remove: boolean?)
 	local spec = LabConfig.Limbs[key]
 	local torso = body:FindFirstChild("Torso")
 	local joint = spec and spec.joint and torso and torso:FindFirstChild(spec.joint)
@@ -157,6 +162,10 @@ function Ragdoll.sever(body: Model, key: string)
 		joint:Destroy()
 	end
 	for _, part in LabConfig.limbParts(body, key) do
+		if remove then
+			part:Destroy()
+			continue
+		end
 		part.Anchored = false
 		part.CanCollide = true
 		part.Parent = workspace
@@ -207,11 +216,14 @@ function Ragdoll.die(body: Model)
 	for _, tag in CollectionService:GetTags(body) do
 		CollectionService:AddTag(corpse, tag)
 	end
+	Integrity.relink(body, corpse)
 	-- In Workspace before the parts move in, so they never leave it (and keep falling as they were).
 	corpse.Parent = folder
 	local humanoid = body:FindFirstChildOfClass("Humanoid")
 	for _, child in body:GetChildren() do
-		if child ~= humanoid then
+		if child:IsA("Tool") then
+			child:Destroy()
+		elseif child ~= humanoid then
 			child.Parent = corpse
 		end
 	end

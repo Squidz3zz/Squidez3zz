@@ -152,6 +152,14 @@ function Integrity.unlink(body: Model)
 	end
 end
 
+-- Hands `from`'s link (if it has one) to `to`: a linked body that dies passes it on to its corpse.
+function Integrity.relink(from: Model, to: Model)
+	local other = partner[from]
+	if other then
+		Integrity.link(to, other)
+	end
+end
+
 function Integrity.damageLimb(body: Model, key: string, amount: number, cause: string)
 	local old = body:GetAttribute("Gore_" .. key)
 	if old == nil or old == "Severed" or old == "Destroyed" or not (type(amount) == "number" and amount > 0) then
