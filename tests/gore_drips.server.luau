@@ -4,6 +4,9 @@
 -- copy's limbs: LeftArm Torn (a "hit" of 50), RightArm Broken (a "hit" of 100) and LeftLeg Severed (an explosion of 150,
 -- seeded to sever). The copy bleeds (3 open limbs) and drips; 8 s later it is killed, so its corpse drips on. The copy is
 -- linked, so the owner's limbs open and the owner dies with it (and respawns).
+-- Then the walker (for D-D): an R6 body in Workspace.GoreDripsWalk (a Model streamed to every client: Persistent), far from
+-- the rooms (from x 5960, z 6000, on a floor of its own whose top is at y 300), tracked, stands for 1 s, has both arms torn and at once walks +X at its WalkSpeed (16) for
+-- WALK_SECONDS; then the folder gets the attribute Walked and goes 1 s later.
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -12,6 +15,7 @@ local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig"))
 local RESPAWN_WAIT = LabConfig.RESPAWN_TIME + 5
 local SEVER_SEED = 3 -- first roll 0.181: an explosion that breaks a limb severs it
 local BLEED_SECONDS = 8
+local WALK_SECONDS = 4
 
 local function waitFor(predicate, timeout)
 	local deadline = os.clock() + timeout
@@ -76,4 +80,36 @@ local humanoid = subject:FindFirstChildOfClass("Humanoid")
 local health = humanoid.Health
 assert(health > 0 and health < 100, ("the bleeding copy has %.1f health"):format(health))
 gore("hurt", subject, math.huge)
-return ("PASS gore_drips.server (3 open limbs, %.1f health after %d s, then killed)"):format(health, BLEED_SECONDS)
+
+local old = workspace:FindFirstChild("GoreDripsWalk")
+if old then
+	old:Destroy()
+end
+local folder = Instance.new("Model")
+folder.Name = "GoreDripsWalk"
+folder.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+local floor = Instance.new("Part")
+floor.Anchored = true
+floor.Size = Vector3.new(120, 1, 20)
+floor.Position = Vector3.new(6000, 299.5, 6000)
+floor.Parent = folder
+local walker = Players:CreateHumanoidModelFromDescription(Instance.new("HumanoidDescription"), Enum.HumanoidRigType.R6)
+walker.Name = "Walker"
+walker:PivotTo(CFrame.new(5960, 303, 6000))
+walker.Parent = folder
+folder.Parent = workspace
+pcall(walker.HumanoidRootPart.SetNetworkOwner, walker.HumanoidRootPart, nil)
+task.wait(1)
+gore("track", walker)
+gore("damageLimb", walker, "LeftArm", 50, "hit")
+gore("damageLimb", walker, "RightArm", 50, "hit")
+local start = walker.HumanoidRootPart.Position
+walker.Humanoid:Move(Vector3.xAxis)
+task.wait(WALK_SECONDS)
+walker.Humanoid:Move(Vector3.zero)
+local walked = (walker.HumanoidRootPart.Position - start).Magnitude
+folder:SetAttribute("Walked", true)
+task.wait(1)
+folder:Destroy()
+assert(walked > WALK_SECONDS * 10, ("the walker only walked %.1f studs in %d s"):format(walked, WALK_SECONDS))
+return ("PASS gore_drips.server (3 open limbs, %.1f health after %d s, then killed; the walker walked %.1f studs)"):format(health, BLEED_SECONDS, walked)

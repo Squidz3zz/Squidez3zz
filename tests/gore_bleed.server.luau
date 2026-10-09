@@ -8,7 +8,10 @@
 --   B-C  a linked pair (Gore.link), both with 2 open limbs (torn on one, the link tears the other): they lose exactly the same
 --        health, each at 1.66 +- 0.1 per second (a pair hurt twice, once for itself and once through its partner, loses double)
 --   B-D  GORE_LEVEL 0 (an override on GoreConfig, always removed): 2 open limbs lose none in 2 s
+--   B-E  a body with 2 open limbs is killed: for 1.5 s neither its corpse (in Workspace.Corpses) nor the emptied body it left
+--        has any health change, and the output has no Gore error or warning
 -- It removes its bodies and returns "PASS gore_bleed".
+local LogService = game:GetService("LogService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
@@ -107,7 +110,42 @@ local ok, err = pcall(function()
 	tear(zero, { "LeftArm", "RightArm" })
 	local z = measure({ zero }, 2)
 	assert(z[1].lost == 0, ("B-D: at GORE_LEVEL 0, 2 open limbs lost %.3f health"):format(z[1].lost))
-	return ("B-A %.3f/s, B-B 0, B-C %.3f and %.3f/s (lost %.3f each), B-D 0"):format(r[1].rate, r[3].rate, r[4].rate, r[3].lost)
+	-- B-E
+	configModule:SetAttribute("GORE_LEVEL", nil)
+	local dying = newBody()
+	tear(dying, { "LeftArm", "RightArm" })
+	local torso = dying.Torso
+	gore("hurt", dying, math.huge)
+	local corpse
+	local deadline = os.clock() + 3
+	repeat
+		task.wait()
+		local parent = torso.Parent
+		corpse = if parent and parent.Name == "Corpse" and parent.Parent == workspace:FindFirstChild("Corpses") then parent else nil
+	until corpse or os.clock() > deadline
+	assert(corpse, "B-E: the killed body left no corpse")
+	local changes, problems = 0, {}
+	local watching = {
+		corpse:FindFirstChildOfClass("Humanoid").HealthChanged:Connect(function()
+			changes += 1
+		end),
+		dying:FindFirstChildOfClass("Humanoid").HealthChanged:Connect(function()
+			changes += 1
+		end),
+		LogService.MessageOut:Connect(function(message, kind)
+			if (kind == Enum.MessageType.MessageError or kind == Enum.MessageType.MessageWarning) and string.find(message, "Gore") then
+				table.insert(problems, message)
+			end
+		end),
+	}
+	task.wait(1.5)
+	for _, connection in watching do
+		connection:Disconnect()
+	end
+	corpse:Destroy()
+	assert(changes == 0, ("B-E: the corpse or the emptied body changed health %d times"):format(changes))
+	assert(#problems == 0, "B-E: Gore complained: " .. table.concat(problems, " | "))
+	return ("B-A %.3f/s, B-B 0, B-C %.3f and %.3f/s (lost %.3f each), B-D 0, B-E 0"):format(r[1].rate, r[3].rate, r[4].rate, r[3].lost)
 end)
 configModule:SetAttribute("GORE_LEVEL", nil)
 folder:Destroy()

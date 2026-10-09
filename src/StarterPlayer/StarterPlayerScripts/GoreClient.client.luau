@@ -14,12 +14,14 @@
 -- ParticleEmitter named GoreDrip of dark-red drops falling under gravity, in the limb part, or for a severed limb in an
 -- Attachment GoreDrip_<Limb> on the Torso where the limb hung (the flying limb drips no more). Once a body stops dripping its
 -- emitters are switched off. The emptied character a death leaves behind (no Torso) is skipped.
--- While a body drips, a pool grows under it: a glossy dark-red disc (a part named GorePool in Workspace.GorePools) where a ray
--- straight down from the Torso (POOL_REACH studs, past bodies and chunks; pools can't be hit) meets something that
--- collides. It starts POOL_START studs across and widens by POOL_GROW studs a second for each dripping limb, up to GoreConfig
--- POOL_MAX. A body that has moved POOL_MOVE studs from its pool starts a new one there. A corpse's pools stay as long as the
--- corpse; any other body's pool stays SPLAT_LIFE seconds after it last grew. At most POOL_CAP pools at once; the oldest goes
--- first.
+-- While a body drips and its Torso is nearly still (slower than POOL_STILL studs a second: a body walking, falling or
+-- slumping only drips until it settles), a pool grows under it: a glossy dark-red disc (a part named GorePool in
+-- Workspace.GorePools) where a ray straight down from the Torso (POOL_REACH studs, past bodies and chunks; pools can't be
+-- hit) meets something that collides. It starts POOL_START studs across and widens by POOL_GROW studs a second for each
+-- dripping limb, up to GoreConfig POOL_MAX. A body that settles POOL_MOVE studs from its pool starts a new one there. A
+-- corpse's pools stay as long as the corpse; any other body's pool stays SPLAT_LIFE seconds after it last grew. At most
+-- POOL_CAP pools at once: past that the oldest pool that is not a corpse's goes first (the oldest corpse pool only when
+-- every pool is a corpse's).
 --
 -- Crawling: once the server marks the local character GoreDowned (both legs broken or gone), the character goes PlatformStand
 -- (it falls down and can no longer stand or walk) and drags itself along the ground at GoreConfig CRAWL_SPEED (studs per
@@ -174,6 +176,7 @@ local POOL_START = 0.5
 local POOL_GROW = 0.15
 local POOL_REACH = 20
 local POOL_MOVE = 1.5
+local POOL_STILL = 2
 local POOL_THICK = 0.05
 local POOL_CAP = 40
 -- Where a severed limb's stump drips from, in the Torso's space: just inside the top of the limb as it hung.
@@ -228,7 +231,14 @@ local function pour(torso: BasePart, grow: number, params: RaycastParams)
 			poolFolder.Parent = workspace
 		end
 		while #pools >= POOL_CAP do
-			table.remove(pools, 1).part:Destroy()
+			local index = 1
+			for i, other in pools do
+				if not other.corpse then
+					index = i
+					break
+				end
+			end
+			table.remove(pools, index).part:Destroy()
 		end
 		local part = Instance.new("Part")
 		part.Name = "GorePool"
@@ -290,7 +300,7 @@ local function dripTick(dt: number)
 				flowing += 1
 			end
 		end
-		if flowing > 0 then
+		if flowing > 0 and torso.AssemblyLinearVelocity.Magnitude < POOL_STILL then
 			if not params then
 				params = RaycastParams.new()
 				params.FilterType = Enum.RaycastFilterType.Exclude

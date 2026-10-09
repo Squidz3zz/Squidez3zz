@@ -3,7 +3,7 @@
 --   A-1  Client, CASE = "A-1": arms the check (a watcher that keeps running) and returns at once
 --   S    Server: tests/gore_drips.server.luau (a fresh copy in Room 1: LeftArm Torn, RightArm Broken, LeftLeg Severed; killed
 --        8 s later)
---   A-2  Client, CASE = "A-2": waits for the watcher's verdict (about 15 s) and returns it
+--   A-2  Client, CASE = "A-2": waits for the watcher's verdict (about 20 s) and returns it
 -- On this player's screen (GoreClient's drips are ParticleEmitters named GoreDrip; its pools are parts named GorePool, in
 -- Workspace.GorePools):
 --   D-A  1 s after the copy's limbs open, each open limb drips: an enabled GoreDrip in the Left Arm and in the Right Arm, and
@@ -12,7 +12,9 @@
 --   D-B  a pool lies under the copy's torso, wider 6 s after the limbs opened than 2 s after, and never wider than POOL_MAX
 --   D-C  the corpse still drips 1 s after the death, and with DRIP_AFTER_DEATH 3 (an override set here, on this client's
 --        GoreConfig only, and always removed) has no enabled GoreDrip 4.5 s after it; its pool is still there
--- The verdict sits in the PlayerGui attribute GD_Result; A-2 returns "PASS gore_drips (D-A to D-C; ...)".
+--   D-D  a bleeding body walking (the server step's walker, 4 s at 16 studs/s) drips but starts at most 2 pools near its
+--        floor (x 5940 to 6060, z 6000): one while it stands before it walks and one once it stops are fine, a stream is not
+-- The verdict sits in the PlayerGui attribute GD_Result; A-2 returns "PASS gore_drips (D-A to D-D; ...)".
 local CASE = "A-1"
 local AFTER_DEATH = 3
 
@@ -61,6 +63,27 @@ if CASE == "A-1" then
 	configModule:SetAttribute("DRIP_AFTER_DEATH", AFTER_DEATH)
 	local room = workspace:WaitForChild("Room1", 10)
 	assert(room, "Workspace.Room1 missing")
+
+	-- D-D, watched from now on: every pool that appears near the walker's floor, and whether the walker drips while it walks.
+	local walkerPools, walkerDripped, watching = 0, false, true
+	local added = workspace.DescendantAdded:Connect(function(thing)
+		if thing.Name == "GorePool" and thing:IsA("BasePart") then
+			local at = thing.Position
+			if math.abs(at.X - 6000) <= 60 and math.abs(at.Z - 6000) <= 10 then
+				walkerPools += 1
+			end
+		end
+	end)
+	task.spawn(function()
+		while watching do
+			local walk = workspace:FindFirstChild("GoreDripsWalk")
+			local walker = walk and walk:FindFirstChild("Walker")
+			if walker and walk:GetAttribute("Walked") ~= true and enabledIn(walker) > 0 then
+				walkerDripped = true
+			end
+			task.wait(0.1)
+		end
+	end)
 
 	-- Waits for a copy's LeftArm to change to Torn (a copy that arrives torn does not count); returns the time and the copy.
 	local function opened(timeout: number): (number?, Model?)
@@ -137,10 +160,20 @@ if CASE == "A-1" then
 			assert(enabledIn(corpse) == 0, ("D-C: the corpse has %d enabled drips %.1f s after the death"):format(enabledIn(corpse), AFTER_DEATH + 1.5))
 			assert(poolUnder(torso), "D-C: the corpse's pool is gone")
 			assert(widest <= poolMax + 1e-3, ("D-B: the pool grew to %.2f studs, more than POOL_MAX %d"):format(widest, poolMax))
-			return ("pool %.2f at 2 s, %.2f at 6 s, widest %.2f"):format(at2, at6, widest)
+			-- D-D: the walker comes and goes.
+			local walk = workspace:WaitForChild("GoreDripsWalk", 15)
+			assert(walk, "D-D: no GoreDripsWalk: run tests/gore_drips.server.luau")
+			while walk.Parent and walk:GetAttribute("Walked") ~= true do
+				task.wait(0.1)
+			end
+			assert(walkerDripped, ("D-D: the walking body never dripped (%d pools near it)"):format(walkerPools))
+			assert(walkerPools <= 2, ("D-D: the walking body started %d pools"):format(walkerPools))
+			return ("pool %.2f at 2 s, %.2f at 6 s, widest %.2f; the walker started %d pools"):format(at2, at6, widest, walkerPools)
 		end)
+		added:Disconnect()
+		watching = false
 		configModule:SetAttribute("DRIP_AFTER_DEATH", nil)
-		playerGui:SetAttribute(RESULT, if ok then "PASS gore_drips (D-A to D-C; " .. err .. ")" else "FAIL " .. tostring(err))
+		playerGui:SetAttribute(RESULT, if ok then "PASS gore_drips (D-A to D-D; " .. err .. ")" else "FAIL " .. tostring(err))
 	end)
 	return "armed: now run tests/gore_drips.server.luau, then CASE A-2"
 elseif CASE == "A-2" then
