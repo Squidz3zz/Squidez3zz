@@ -87,6 +87,29 @@ front face toward the way Bob's needle should point), then run the script again.
 - If `ServerStorage.LabBackup` is gone too, Bob, the tablet and the hard drive cannot be rebuilt: open an older saved or
   published version of the place.
 
+### c2) Rebuild the gore system's flesh pieces
+
+Your flesh chart (`FleshChart`: the flesh, bone, ribcage, skull and stub models for every limb, and the `SizingModel` with the
+dummy `thxalloverme123`) was built by hand in Studio. Like Room 1, it exists **only in the place file**.
+
+Run `studio/build_gore.luau`. The first time, it moves your `Workspace.Mesh.FleshChart` untouched into
+`ServerStorage.Gore.FleshChart` and removes the empty `Workspace.Mesh` folder. Every time, it makes
+`ServerStorage.Gore.Pieces` again from the chart:
+
+- `Head`, `LeftArm`, `RightArm`, `LeftLeg` and `RightLeg`, each with `Variant1` (the limb's flesh, as your Variant1 shows it),
+  `Variant2` (the limb's flesh and bone; for the head, the flesh and the skull) and `Death` (an arm's or leg's bone stub; the
+  head's flesh and skull).
+- `Torso` with `Sealed` (the torso flesh with `TorsoFilling`), `Open` (the torso flesh without it, plus the `Ribcage`) and
+  `Death` (the torso flesh and the `Ribcage`).
+- `FullBody.Variant1`: every limb's flesh, used when all six are torn.
+
+Each piece is a copy of a chart piece, sized and placed the way `SizingModel` fits it on the dummy, with the attributes `Offset`
+(where it goes on its R6 part), `Layer` (`deep` for bone, ribcage, skull and stubs, `flesh` for the rest) and `Limb`. The
+script works out which limb a piece belongs to from where it sits, so a misnamed piece in the chart still lands right.
+
+To change the flesh: drag `ServerStorage.Gore.FleshChart` into `Workspace`, edit it, drag it back into `ServerStorage.Gore`,
+then run the script again. It refuses to run while there is a chart in both `Workspace.Mesh` and `ServerStorage.Gore`.
+
 ### d) Put the scripts back
 
 There are thirty-four scripts. The file names are in `src/`.
@@ -387,3 +410,5 @@ so are they, and so is their backup in `ServerStorage.LabBackup`, which lives in
 explosion, `ReplicatedStorage.LabAssets.Explosion`, and the `EmitCount` attributes on its emitters (the counts are listed under
 `Booms` in d, so you can type them in again), and for your two blood sounds in `ReplicatedStorage.LabAssets.Blood` (their ids
 are under `Booms` in d). The blood's emitters and splat settings come back with `studio/build_lab.luau`.
+Your flesh chart (`ServerStorage.Gore.FleshChart`) is not in any script either; the pieces made from it come back with
+`studio/build_gore.luau` only while the chart is there (see c2).
