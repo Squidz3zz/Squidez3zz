@@ -89,7 +89,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are thirty-two scripts. The file names are in `src/`.
+There are thirty-four scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -116,7 +116,9 @@ scripts (and the menu's ScreenGuis in `ReplicatedStorage`) alone.
 | `GoreConfig` | ModuleScript | `ReplicatedStorage` | `src/ReplicatedStorage/GoreConfig.luau` |
 | `Gore` | ModuleScript | `ServerScriptService` | `src/ServerScriptService/Gore/init.luau` |
 | `Integrity` | ModuleScript | `Gore` | `.../Gore/Integrity.luau` |
+| `Ragdoll` | ModuleScript | `Gore` | `.../Gore/Ragdoll.luau` |
 | `GoreServer` | Script | `ServerScriptService` | `src/ServerScriptService/GoreServer.server.luau` |
+| `GoreClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/GoreClient.client.luau` |
 | `BoomClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/BoomClient.client.luau` |
 | `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
 | `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
@@ -249,9 +251,10 @@ and Bob resting at `BobHome`. How far the carriage may travel is a list at the t
 52.2), next to the follow speed, swing and flinch settings. If it breaks, the Output window says so once and Bob stays still,
 but injections still happen.
 
-`GoreConfig`, `Gore` (with `Integrity` **inside** it) and `GoreServer` are the start of the gore system
-(`docs/superpowers/specs/2026-10-08-gore-system-design.md`). So far it only keeps score, and nothing in the game uses it yet,
-so nothing shows on any body. Every limb of a body it tracks has 100 integrity. Damage tears a limb at 60 or less, and at 0 or
+`GoreConfig`, `Gore` (with `Integrity` and `Ragdoll` **inside** it), `GoreServer` and `GoreClient` are the gore system
+(`docs/superpowers/specs/2026-10-08-gore-system-design.md`), still being built: so far it covers every player's character
+(`GoreServer` tracks each one as it spawns), but not yet Room 1's copy or its Explosive, which still blows limbs off its own
+way. Every limb of a body it tracks has 100 integrity. Damage tears a limb at 60 or less, and at 0 or
 less it breaks an arm or a leg, or destroys the head or the torso (which kills). An explosion can also rip a broken arm or leg
 off, open a torn torso and blow a destroyed skull apart, each by chance. A single loss of 30 health or more from anything else
 (a big hit) damages a random limb, or both legs after a fall. A player and their copy can be linked so they always come out
@@ -259,8 +262,15 @@ the same. The results are written on the body as attributes (`Gore_<limb>`, `Gor
 `GoreTorsoOpen`, `GoreSkull`), and the body gets the tag `GoreBody`. `GoreConfig` (a ModuleScript straight in
 `ReplicatedStorage`) holds every number and `GORE_LEVEL` (how gory the game is: 2, 1 or 0), each explained at its top. In
 Studio, an attribute with a number's name on `GoreConfig` overrides that number while you test. `Gore` (a ModuleScript in
-`ServerScriptService`) holds the rules, in `Integrity` (a ModuleScript **inside** `Gore`). `GoreServer` (a Script next to it)
-only loads `Gore` for now; in Studio it also makes a `TestHook` for the tests.
+`ServerScriptService`) holds the rules, in `Integrity` (a ModuleScript **inside** `Gore`). `Ragdoll` (another ModuleScript
+**inside** `Gore`) does what the rules decide to the body: a broken arm or leg hangs limp from its shoulder or hip and flops
+about; a ripped-off one flies away and disappears after `LabConfig.LOST_LIMB_SECONDS`; with one leg broken or gone the player
+walks at half speed (`LIMP_SPEED`) and cannot jump, and with both they fall down and drag themselves along slowly
+(`CRAWL_SPEED`; `GoreClient`, a LocalScript in `StarterPlayerScripts`, does the dragging on each player's own screen). Every
+death goes limp (a ragdoll), and the body stays lying where it fell as a corpse in `Workspace.Corpses` (a Folder the game
+makes; do not build it by hand) for `CORPSE_LIFE` seconds (2 minutes), at most `CORPSES_PER_PLAYER` (4) per player with the
+oldest going first, then sinks into the floor and goes. A corpse still tears when something blows up next to it.
+`GoreServer` (a Script next to `Gore`) tracks the characters; in Studio it also makes a `TestHook` for the tests.
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
@@ -337,7 +347,7 @@ Press **Play** in Studio (the Test tab) and check each of these:
 5. **Play** spawns your character and the menu goes away.
 6. Reset your character. The screen cuts to black at once with a ringing in your ears, the music and sound effects turn quiet
    and muffled, and after about 5 seconds you respawn, the black fades out and the music and sound effects come back clear.
-   The menu does not come back.
+   The menu does not come back. Your old body is still lying limp where you fell, and sinks into the floor after 2 minutes.
 7. Walk to the panel outside Room 1's window and press its prompt ("Claim Room 1"). The sign changes to your name, a copy of
    your avatar sits in the chair facing the window, and a Tablet is in your toolbar. Hold the prompt for a second
    ("Release Room 1"): the copy and the Tablet go and the sign says FREE. Claim again and reset your character: after it respawns

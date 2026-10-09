@@ -1,11 +1,36 @@
--- GoreServer: starts the gore system on the server. For now it only loads Gore (ServerScriptService.Gore) and, in Studio only,
--- makes its TestHook; tracking every player's character comes later.
+-- GoreServer: starts the gore system on the server. It loads Gore (ServerScriptService.Gore) and tracks every player's
+-- character as it spawns (Gore.track), so every character's limbs keep score, break, dangle and come off, and every death
+-- ragdolls and leaves a corpse (Gore and its Ragdoll do the rest, including removing old corpses). A character Gore fails to
+-- track only warns (once) and plays on without gore.
 -- TestHook: a BindableFunction inside this script, made only in Studio. A test that requires Gore gets a separate copy of it
 -- (its own Random, links and big-hit watchers), so the tests reach the game's own Gore through this instead:
 -- TestHook:Invoke("call", fnName, ...) calls Gore[fnName](...) here and returns what it returns.
+local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local Gore = require(script.Parent:WaitForChild("Gore"))
+
+local warned = false
+local function onCharacter(character: Model)
+	character:WaitForChild("Humanoid", 5)
+	local ok, err = pcall(Gore.track, character)
+	if not ok and not warned then
+		warned = true
+		warn("GoreServer: Gore could not track " .. character.Name .. ": " .. tostring(err))
+	end
+end
+
+local function onPlayer(player: Player)
+	player.CharacterAdded:Connect(onCharacter)
+	if player.Character then
+		task.spawn(onCharacter, player.Character)
+	end
+end
+
+Players.PlayerAdded:Connect(onPlayer)
+for _, player in Players:GetPlayers() do
+	onPlayer(player)
+end
 
 if RunService:IsStudio() then
 	local hook = Instance.new("BindableFunction")
