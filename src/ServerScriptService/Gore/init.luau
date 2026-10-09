@@ -45,7 +45,11 @@
 --                                       damages every limb of every tracked body (corpses too) whose centre is within radius,
 --                                       by power * (1 - distance / radius)^2, as "explosion".
 --   Gore.hurt(body, amount)             takes health from the body as gore damage, which the big-hit watcher ignores. Any
---                                       health the gore system or the lab takes should go through this.
+--                                       health the gore system or the lab takes should go through this. It is not carried
+--                                       across a link: whatever hurts one linked body hurts the other itself if it should.
+--   Gore.bleed(dt)                      dt seconds of bleeding (Bleeding, inside Gore): every living tracked body with n >= 2
+--                                       open limbs (Torn, Broken or Severed) loses GoreConfig BLEED_PER_OPEN_LIMB * n health
+--                                       per second through hurt, at GORE_LEVEL 1 and up. GoreServer calls it every 0.25 s.
 --   Gore.stateOf(body, key), Gore.integrityOf(body, key)
 --                                       the limb's state and integrity, or nil when the body is not tracked.
 --   Gore.copyState(from, to)            tracks `to` (as track does) and gives it all of `from`'s gore (states, integrity,
@@ -67,6 +71,7 @@ local RunService = game:GetService("RunService")
 local Integrity = require(script:WaitForChild("Integrity", 5) or error("Gore: Integrity is missing"))
 local Ragdoll = require(script:WaitForChild("Ragdoll", 5) or error("Gore: Ragdoll is missing"))
 local Flesh = require(script:WaitForChild("Flesh", 5) or error("Gore: Flesh is missing"))
+local Bleeding = require(script:WaitForChild("Bleeding", 5) or error("Gore: Bleeding is missing"))
 
 -- Flesh first, while the limb is still on its joint (the stub goes where the joint was). Its own listener, so a failure there
 -- (no Pieces) still leaves limbs dangling and coming off. A limb copyState severs is removed at once (Ragdoll.sever), so it is
@@ -101,6 +106,7 @@ return {
 	damageLimb = Integrity.damageLimb,
 	explode = Integrity.explode,
 	hurt = Integrity.hurt,
+	bleed = Bleeding.tick,
 	stateOf = Integrity.stateOf,
 	integrityOf = Integrity.integrityOf,
 	copyState = function(from: Model, to: Model)

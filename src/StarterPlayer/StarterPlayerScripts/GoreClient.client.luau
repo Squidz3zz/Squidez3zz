@@ -9,6 +9,18 @@
 -- gone. At most CHUNK_CAP live at once; the oldest goes first. They are this client's own parts (named GoreChunk, in
 -- Workspace.GoreChunks): nobody else sees them, and the server never knows.
 --
+-- Drips and pools (GORE_LEVEL 1 and up). Every DRIP_TICK seconds, each GoreBody that is alive (a living Humanoid), or a corpse
+-- younger than GoreConfig DRIP_AFTER_DEATH (from its GoreDiedAt), drips from each open limb (Torn, Broken or Severed): a
+-- ParticleEmitter named GoreDrip of dark-red drops falling under gravity, in the limb part, or for a severed limb in an
+-- Attachment GoreDrip_<Limb> on the Torso where the limb hung (the flying limb drips no more). Once a body stops dripping its
+-- emitters are switched off. The emptied character a death leaves behind (no Torso) is skipped.
+-- While a body drips, a pool grows under it: a glossy dark-red disc (a part named GorePool in Workspace.GorePools) where a ray
+-- straight down from the Torso (POOL_REACH studs, past bodies and chunks; pools can't be hit) meets something that
+-- collides. It starts POOL_START studs across and widens by POOL_GROW studs a second for each dripping limb, up to GoreConfig
+-- POOL_MAX. A body that has moved POOL_MOVE studs from its pool starts a new one there. A corpse's pools stay as long as the
+-- corpse; any other body's pool stays SPLAT_LIFE seconds after it last grew. At most POOL_CAP pools at once; the oldest goes
+-- first.
+--
 -- Crawling: once the server marks the local character GoreDowned (both legs broken or gone), the character goes PlatformStand
 -- (it falls down and can no longer stand or walk) and drags itself along the ground at GoreConfig CRAWL_SPEED (studs per
 -- second) the way the player steers (Humanoid.MoveDirection, kept level). The pull is a LinearVelocity (in an Attachment
@@ -141,6 +153,11 @@ local function watchBody(body: Instance)
 		if (state == "Torn" or state == "Severed") and part and part.Parent and GoreConfig.get("GORE_LEVEL") >= 2 then
 			burst(body, key, part)
 		end
+		-- A severed limb drips from its stump now (below), not from the limb flying off.
+		local drip = state == "Severed" and part and part:FindFirstChild("GoreDrip")
+		if drip then
+			drip:Destroy()
+		end
 	end)
 end
 
@@ -148,6 +165,171 @@ CollectionService:GetInstanceAddedSignal("GoreBody"):Connect(watchBody)
 for _, body in CollectionService:GetTagged("GoreBody") do
 	watchBody(body)
 end
+
+local OPEN = { Torn = true, Broken = true, Severed = true }
+local DRIP_TICK = 0.25
+local DRIP_COLOR = Color3.fromRGB(95, 0, 0)
+local POOL_COLOR = Color3.fromRGB(70, 0, 0)
+local POOL_START = 0.5
+local POOL_GROW = 0.15
+local POOL_REACH = 20
+local POOL_MOVE = 1.5
+local POOL_THICK = 0.05
+local POOL_CAP = 40
+-- Where a severed limb's stump drips from, in the Torso's space: just inside the top of the limb as it hung.
+local STUMP_AT = {
+	LeftArm = Vector3.new(-1.5, 0.9, 0),
+	RightArm = Vector3.new(1.5, 0.9, 0),
+	LeftLeg = Vector3.new(-0.5, -1.1, 0),
+	RightLeg = Vector3.new(0.5, -1.1, 0),
+}
+
+type Pool = { part: BasePart, torso: BasePart, size: number, lastDrip: number, corpse: boolean }
+local pools: { Pool } = {} -- oldest first
+local poolOf: { [BasePart]: Pool } = setmetatable({}, { __mode = "k" }) :: any
+local poolFolder: Folder? = nil
+
+local function newDrip(): ParticleEmitter
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Name = "GoreDrip"
+	emitter.Texture = "rbxasset://textures/smallWhiteCircle.png"
+	emitter.Color = ColorSequence.new(DRIP_COLOR)
+	emitter.Size = NumberSequence.new(0.12, 0.08)
+	emitter.LightInfluence = 1
+	emitter.Rate = 10
+	emitter.Lifetime = NumberRange.new(0.2, 0.35)
+	emitter.Speed = NumberRange.new(0, 1)
+	emitter.SpreadAngle = Vector2.new(15, 15)
+	emitter.EmissionDirection = Enum.NormalId.Bottom
+	emitter.Acceleration = Vector3.new(0, -workspace.Gravity, 0)
+	return emitter
+end
+
+local function dripping(body: Model): boolean
+	local diedAt = body:GetAttribute("GoreDiedAt")
+	if diedAt then
+		return workspace:GetServerTimeNow() < diedAt + GoreConfig.get("DRIP_AFTER_DEATH")
+	end
+	local humanoid = body:FindFirstChildOfClass("Humanoid")
+	return humanoid ~= nil and humanoid.Health > 0
+end
+
+-- Grows the pool under `torso` by `grow` (studs across), or starts one.
+local function pour(torso: BasePart, grow: number, params: RaycastParams)
+	local hit = workspace:Raycast(torso.Position, Vector3.new(0, -POOL_REACH, 0), params)
+	if not hit then
+		return
+	end
+	local pool = poolOf[torso]
+	if not pool or not pool.part.Parent or (pool.part.Position - hit.Position).Magnitude > POOL_MOVE then
+		if not (poolFolder and poolFolder.Parent) then
+			poolFolder = Instance.new("Folder")
+			poolFolder.Name = "GorePools"
+			poolFolder.Parent = workspace
+		end
+		while #pools >= POOL_CAP do
+			table.remove(pools, 1).part:Destroy()
+		end
+		local part = Instance.new("Part")
+		part.Name = "GorePool"
+		part.Shape = Enum.PartType.Cylinder
+		part.Anchored = true
+		part.CanCollide = false
+		part.CanQuery = false
+		part.CanTouch = false
+		part.CastShadow = false
+		part.Material = Enum.Material.Glass
+		part.Reflectance = 0.2
+		part.Color = POOL_COLOR
+		-- The disc's axis (X) along the surface normal, lifted a little (a random bit more, so overlapping pools don't flicker).
+		local normal = hit.Normal
+		local side = if math.abs(normal.X) < 0.9 then Vector3.xAxis else Vector3.zAxis
+		part.CFrame = CFrame.fromMatrix(hit.Position + normal * (POOL_THICK / 2 + random:NextNumber(0.005, 0.02)), normal, normal:Cross(side).Unit)
+		pool = { part = part, torso = torso, size = POOL_START, lastDrip = 0, corpse = false }
+		poolOf[torso] = pool
+		table.insert(pools, pool)
+		part.Parent = poolFolder
+	else
+		pool.size = math.min(GoreConfig.get("POOL_MAX"), pool.size + grow)
+	end
+	pool.part.Size = Vector3.new(POOL_THICK, pool.size, pool.size)
+	pool.lastDrip = os.clock()
+end
+
+local function dripTick(dt: number)
+	local level = GoreConfig.get("GORE_LEVEL")
+	local bodies = CollectionService:GetTagged("GoreBody")
+	local params: RaycastParams? = nil
+	for _, body in bodies do
+		local torso = body:FindFirstChild("Torso")
+		if not (body:IsA("Model") and torso and torso:IsA("BasePart")) then
+			continue
+		end
+		local on = level >= 1 and dripping(body)
+		local flowing = 0
+		for _, key in LabConfig.LIMB_KEYS do
+			local state = body:GetAttribute("Gore_" .. key)
+			local open = on and OPEN[state] == true
+			local holder: Instance? = if state == "Severed" then torso:FindFirstChild("GoreDrip_" .. key) else LabConfig.limbParts(body, key)[1]
+			if open and not holder and STUMP_AT[key] then
+				local stump = Instance.new("Attachment")
+				stump.Name = "GoreDrip_" .. key
+				stump.Position = STUMP_AT[key]
+				stump.Parent = torso
+				holder = stump
+			end
+			local emitter = holder and holder:FindFirstChild("GoreDrip")
+			if open and holder and not emitter then
+				emitter = newDrip()
+				emitter.Parent = holder
+			end
+			if emitter then
+				(emitter :: ParticleEmitter).Enabled = open
+			end
+			if open and holder then
+				flowing += 1
+			end
+		end
+		if flowing > 0 then
+			if not params then
+				params = RaycastParams.new()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+				params.RespectCanCollide = true
+				local skip: { Instance } = table.clone(bodies)
+				if chunkFolder then
+					table.insert(skip, chunkFolder)
+				end
+				params.FilterDescendantsInstances = skip
+			end
+			pour(torso, flowing * POOL_GROW * dt, params :: RaycastParams)
+		end
+	end
+	-- A corpse's pools go with the corpse; the others SPLAT_LIFE after they last grew.
+	local life = GoreConfig.get("SPLAT_LIFE")
+	for index = #pools, 1, -1 do
+		local pool = pools[index]
+		local owner = pool.torso.Parent
+		if owner then
+			pool.corpse = owner:GetAttribute("GoreDiedAt") ~= nil
+		end
+		local gone = if pool.corpse then owner == nil else os.clock() - pool.lastDrip > life
+		if gone or not pool.part.Parent then
+			pool.part:Destroy()
+			table.remove(pools, index)
+		end
+	end
+end
+
+task.spawn(function()
+	local dripWarned = false
+	while true do
+		local ok, err = pcall(dripTick, task.wait(DRIP_TICK))
+		if not ok and not dripWarned then
+			dripWarned = true
+			warn("GoreClient: drips failed: " .. tostring(err))
+		end
+	end
+end)
 
 local function crawl(character: Model, humanoid: Humanoid, root: BasePart)
 	if character:GetAttribute("GoreDowned") ~= true or humanoid.Health <= 0 or root:FindFirstChild("GoreCrawl") then

@@ -1,7 +1,8 @@
 -- GoreServer: starts the gore system on the server. It loads Gore (ServerScriptService.Gore) and tracks every player's
 -- character as it spawns (Gore.track), so every character's limbs keep score, break, dangle and come off, and every death
 -- ragdolls and leaves a corpse (Gore and its Ragdoll do the rest, including removing old corpses). A character Gore fails to
--- track only warns (once) and plays on without gore.
+-- track only warns (once) and plays on without gore. Every BLEED_TICK seconds it bleeds every open body (Gore.bleed, with the
+-- time since the last tick); a failed tick only warns (once).
 -- TestHook: a BindableFunction inside this script, made only in Studio. A test that requires Gore gets a separate copy of it
 -- (its own Random, links and big-hit watchers), so the tests reach the game's own Gore through this instead:
 -- TestHook:Invoke("call", fnName, ...) calls Gore[fnName](...) here and returns what it returns.
@@ -9,6 +10,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local Gore = require(script.Parent:WaitForChild("Gore"))
+
+local BLEED_TICK = 0.25
 
 local warned = false
 local function onCharacter(character: Model)
@@ -31,6 +34,17 @@ Players.PlayerAdded:Connect(onPlayer)
 for _, player in Players:GetPlayers() do
 	onPlayer(player)
 end
+
+task.spawn(function()
+	local bleedWarned = false
+	while true do
+		local ok, err = pcall(Gore.bleed, task.wait(BLEED_TICK))
+		if not ok and not bleedWarned then
+			bleedWarned = true
+			warn("GoreServer: bleeding failed: " .. tostring(err))
+		end
+	end
+end)
 
 if RunService:IsStudio() then
 	local hook = Instance.new("BindableFunction")

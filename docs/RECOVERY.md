@@ -142,6 +142,7 @@ scripts (and the menu's ScreenGuis in `ReplicatedStorage`) alone.
 | `Integrity` | ModuleScript | `Gore` | `.../Gore/Integrity.luau` |
 | `Ragdoll` | ModuleScript | `Gore` | `.../Gore/Ragdoll.luau` |
 | `Flesh` | ModuleScript | `Gore` | `.../Gore/Flesh.luau` |
+| `Bleeding` | ModuleScript | `Gore` | `.../Gore/Bleeding.luau` |
 | `GoreServer` | Script | `ServerScriptService` | `src/ServerScriptService/GoreServer.server.luau` |
 | `GoreClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/GoreClient.client.luau` |
 | `BoomClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/BoomClient.client.luau` |
@@ -284,7 +285,7 @@ and Bob resting at `BobHome`. How far the carriage may travel is a list at the t
 52.2), next to the follow speed, swing and flinch settings. If it breaks, the Output window says so once and Bob stays still,
 but injections still happen.
 
-`GoreConfig`, `Gore` (with `Integrity`, `Ragdoll` and `Flesh` **inside** it), `GoreServer` and `GoreClient` are the gore system
+`GoreConfig`, `Gore` (with `Integrity`, `Ragdoll`, `Flesh` and `Bleeding` **inside** it), `GoreServer` and `GoreClient` are the gore system
 (`docs/superpowers/specs/2026-10-08-gore-system-design.md`), still being built: so far it covers every player's character
 (`GoreServer` tracks each one as it spawns) and Room 1's copy and Explosive (`LabServer` and `HardDriveEffects` use it; without
 `Gore` the lab works as it did before it). Every limb of a body it tracks has 100 integrity. Damage tears a limb at 60 or less, and at 0 or
@@ -309,8 +310,15 @@ skull), a torn torso is sealed until a blast rips it open to show the ribcage, a
 blown apart, and a ripped-off arm or leg flies away with its flesh while a bone stub stays at the shoulder or hip. An accessory
 worn on a hidden part (a hat on the head) is hidden with it. At
 `GORE_LEVEL` 1 none of that shows (a ripped-off limb leaves a plain dark-red stump); without the pieces the rest of the gore
-system still works and the Output window warns once.
-`GoreServer` (a Script next to `Gore`) tracks the characters; in Studio it also makes a `TestHook` for the tests.
+system still works and the Output window warns once. `Bleeding` (a fourth ModuleScript **inside** `Gore`) makes open wounds
+(torn, broken or ripped-off limbs) bleed: with two or more, a living body loses `BLEED_PER_OPEN_LIMB` health a second for each
+(about a minute to death with two), at `GORE_LEVEL` 1 and 2; a player and their copy bleed the same. On each player's screen
+`GoreClient` makes every open limb drip (a ripped-off one from its stump), on the living and on corpses for
+`DRIP_AFTER_DEATH` seconds, and a glossy pool of blood grows under the body up to `POOL_MAX` studs across (in
+`Workspace.GorePools`, which the game makes; it stays with a corpse, or `SPLAT_LIFE` seconds after a living body stops
+dripping).
+`GoreServer` (a Script next to `Gore`) tracks the characters and runs the bleeding every quarter second; in Studio it also
+makes a `TestHook` for the tests.
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the

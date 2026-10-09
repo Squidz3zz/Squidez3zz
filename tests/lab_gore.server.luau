@@ -8,7 +8,8 @@
 -- module, Studio only), removed again when the case ends.
 --   A  (L-A) Explosive into the left arm: the copy's and the owner's left arms end in the same state (Broken or Severed), with the
 --      same torso and head integrity (every Gore attribute equal on both). It was one blast, at the copy's arm: the arm took
---      exactly EXPLOSIVE_POWER, and both bodies lost exactly LIMB_DAMAGE health (a second blast would destroy the torso)
+--      exactly EXPLOSIVE_POWER, and both bodies lost LIMB_DAMAGE health (a second blast would destroy the torso), plus the same
+--      bleeding (the open arm, torso and head bleed from the blast on: at most BLEED_ALLOWANCE more by the time it looks)
 --   B  (L-B) with SEVER_CHANCE 0 the blast leaves both left arms Broken: still on the body, not lost (LabConfig.isLost on
 --      Room1.Subject, which is what the tablet menu's lost.LeftArm reads), and a second injection into it is accepted. A release
 --      and a new claim build a copy whose left arm is Broken too, dangling from a socket instead of its Motor6D
@@ -184,6 +185,9 @@ local function blast(subject, key)
 	return state
 end
 
+-- Health a body can have bled (on top of LIMB_DAMAGE) by the time L-A looks, under a second after the blast.
+local BLEED_ALLOWANCE = 5
+
 local cases = {}
 
 cases.A = function()
@@ -198,9 +202,11 @@ cases.A = function()
 	local arm = subject:GetAttribute("GoreHP_LeftArm")
 	assert(math.abs(arm - (100 - GoreConfig.EXPLOSIVE_POWER)) < 0.01, ("L-A: the left arm is at %s: not one blast of %d at its centre"):format(tostring(arm), GoreConfig.EXPLOSIVE_POWER))
 	local expected = humanoid.MaxHealth - LabConfig.LIMB_DAMAGE
+	local copyHealth = subject:FindFirstChildOfClass("Humanoid").Health
 	for _, body in { subject, character } do
 		local health = body:FindFirstChildOfClass("Humanoid").Health
-		assert(math.abs(health - expected) < 0.01, ("L-A: %s has %s health, expected %s"):format(body.Name, health, expected))
+		assert(health <= expected + 0.01 and health >= expected - BLEED_ALLOWANCE, ("L-A: %s has %s health, expected %s (less what it bled, up to %d)"):format(body.Name, health, expected, BLEED_ALLOWANCE))
+		assert(math.abs(health - copyHealth) < 0.01, ("L-A: the owner has %s health, the copy %s: they should bleed the same"):format(health, copyHealth))
 	end
 	return ("L-A (%s; torso %.1f, head %.1f)"):format(state, subject:GetAttribute("GoreHP_Torso"), subject:GetAttribute("GoreHP_Head"))
 end

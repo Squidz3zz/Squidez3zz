@@ -7,9 +7,10 @@
 --      ends) so the blast rips it off: the phases, their timings and the shutter; 1 s into the fuse both left arms glow; after
 --      it both are Severed (with the same gore on both bodies), lost and flung (each leaves sideways at more than 5 studs/s,
 --      read on its first frame in Workspace: it lands within about 0.3 s, so how far it got says little), both bodies have
---      lost 20 health, no glow is left, no Explosion instance was made and
---      Booms counted exactly two booms (copy + owner), both with blood (BloodCount + 2); 2 s later both are still at that health
---      (nobody heals over time); a second injection into the same arm is refused "LIMB ALREADY LOST". (A Broken arm is not
+--      lost 20 health (plus up to 5 they have bled since: the open arm, torso and head bleed, the same on both), no glow is
+--      left, no Explosion instance was made and Booms counted exactly two booms (copy + owner), both with blood
+--      (BloodCount + 2); 2 s later both have bled a little more and still have the same health (nobody heals over time, and
+--      both bleed alike); a second injection into the same arm is refused "LIMB ALREADY LOST". (A Broken arm is not
 --      lost: tests/lab_gore.server.luau, L-B.)
 --   D  (I-D) Explosive into the head kills both; an injection while the copy is dead is refused "NO SUBJECT"
 --   E  (I-E) two requests back to back: the first starts, the second is refused "BOB IS BUSY" and changes nothing
@@ -256,9 +257,14 @@ if CASE == "A" then
 		end
 		assert(LabConfig.isLost(subject, "LeftArm"), "the copy's left arm should be lost")
 		assert(LabConfig.isLost(character, "LeftArm"), "the player's left arm should be lost")
+		-- LIMB_DAMAGE, and the same bleeding on both from the blast on (the open arm, torso and head): at most 5 more by now.
 		local expectedHealth = humanoid.MaxHealth - LabConfig.LIMB_DAMAGE
-		assert(math.abs(subject.Humanoid.Health - expectedHealth) < 0.01, "the copy's health is " .. subject.Humanoid.Health)
-		assert(math.abs(humanoid.Health - expectedHealth) < 0.01, "the player's health is " .. humanoid.Health)
+		local function bledFrom(health: number): boolean
+			return health <= expectedHealth + 0.01 and health >= expectedHealth - 5
+		end
+		assert(bledFrom(subject.Humanoid.Health), "the copy's health is " .. subject.Humanoid.Health)
+		assert(bledFrom(humanoid.Health), "the player's health is " .. humanoid.Health)
+		assert(math.abs(humanoid.Health - subject.Humanoid.Health) < 0.01, "the player and the copy have different health")
 		assert(glowCount() == 0, glowCount() .. " FuseGlow(s) left after the blast")
 		assert(blasts.n == 0, blasts.n .. " Explosion instance(s) were made: the blast should only call Booms.at")
 		local booms = boomCount() - boomsBefore
@@ -271,10 +277,11 @@ if CASE == "A" then
 		for _, speed in flung do
 			assert(speed > 5, ("a left arm left at only %.2f studs/s sideways: not flung"):format(speed))
 		end
-		-- Nobody heals over time, so the two stay the same.
+		-- Nobody heals over time, and the two bleed the same, so they stay equal (and lower).
+		local earlier = humanoid.Health
 		task.wait(2)
 		local later, copyLater = humanoid.Health, subject.Humanoid.Health
-		assert(later == copyLater and math.abs(later - expectedHealth) < 0.01, ("2 s after the blast the player has %s health and the copy %s, both should still have %d"):format(later, copyLater, expectedHealth))
+		assert(math.abs(later - copyLater) < 0.01 and later < earlier and later > 0, ("2 s after the blast the player has %s health and the copy %s (%s before): both should have bled the same"):format(later, copyLater, earlier))
 
 		-- I-C
 		refused("LIMB ALREADY LOST", inject("Explosive", "LeftArm"))
