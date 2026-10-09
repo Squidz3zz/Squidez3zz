@@ -89,7 +89,7 @@ front face toward the way Bob's needle should point), then run the script again.
 
 ### d) Put the scripts back
 
-There are twenty-eight scripts. The file names are in `src/`.
+There are thirty-two scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -113,6 +113,10 @@ scripts (and the menu's ScreenGuis in `ReplicatedStorage`) alone.
 | `HardDriveEffects` | ModuleScript | `ServerScriptService` | `src/ServerScriptService/HardDriveEffects.luau` |
 | `Booms` | ModuleScript | `ServerScriptService` | `src/ServerScriptService/Booms.luau` |
 | `ExplosionReplacer` | Script | `ServerScriptService` | `src/ServerScriptService/ExplosionReplacer.server.luau` |
+| `GoreConfig` | ModuleScript | `ReplicatedStorage` | `src/ReplicatedStorage/GoreConfig.luau` |
+| `Gore` | ModuleScript | `ServerScriptService` | `src/ServerScriptService/Gore/init.luau` |
+| `Integrity` | ModuleScript | `Gore` | `.../Gore/Integrity.luau` |
+| `GoreServer` | Script | `ServerScriptService` | `src/ServerScriptService/GoreServer.server.luau` |
 | `BoomClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/BoomClient.client.luau` |
 | `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
 | `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
@@ -244,6 +248,19 @@ names `studio/build_lab.luau` gives (`Column.Core.ColumnPivot`, `Needle.NeedleTi
 and Bob resting at `BobHome`. How far the carriage may travel is a list at the top of the script (x 35.5 to 56, z 19.2 to
 52.2), next to the follow speed, swing and flinch settings. If it breaks, the Output window says so once and Bob stays still,
 but injections still happen.
+
+`GoreConfig`, `Gore` (with `Integrity` **inside** it) and `GoreServer` are the start of the gore system
+(`docs/superpowers/specs/2026-10-08-gore-system-design.md`). So far it only keeps score, and nothing in the game uses it yet,
+so nothing shows on any body. Every limb of a body it tracks has 100 integrity. Damage tears a limb at 60 or less, and at 0 or
+less it breaks an arm or a leg, or destroys the head or the torso (which kills). An explosion can also rip a broken arm or leg
+off, open a torn torso and blow a destroyed skull apart, each by chance. A single loss of 30 health or more from anything else
+(a big hit) damages a random limb, or both legs after a fall. A player and their copy can be linked so they always come out
+the same. The results are written on the body as attributes (`Gore_<limb>`, `GoreHP_<limb>`, `GoreVariant_<limb>`,
+`GoreTorsoOpen`, `GoreSkull`), and the body gets the tag `GoreBody`. `GoreConfig` (a ModuleScript straight in
+`ReplicatedStorage`) holds every number and `GORE_LEVEL` (how gory the game is: 2, 1 or 0), each explained at its top. In
+Studio, an attribute with a number's name on `GoreConfig` overrides that number while you test. `Gore` (a ModuleScript in
+`ServerScriptService`) holds the rules, in `Integrity` (a ModuleScript **inside** `Gore`). `GoreServer` (a Script next to it)
+only loads `Gore` for now; in Studio it also makes a `TestHook` for the tests.
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
