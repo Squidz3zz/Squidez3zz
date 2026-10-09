@@ -20,6 +20,10 @@
 --   its own downed character crawl);
 --   on death the body ragdolls and its parts move into a corpse in Workspace.Corpses, which stays tracked (blasts still tear
 --   it) and goes after GoreConfig CORPSE_LIFE, at most CORPSES_PER_PLAYER per player.
+-- And what it looks like (Flesh, inside Gore, says how; GoreConfig GORE_LEVEL 2 only):
+--   a limb turning Torn (or worse) is hidden and wears its flesh (ServerStorage.Gore.Pieces): its variant, the sealed torso
+--   (the open one, with the ribcage, once GoreTorsoOpen), the destroyed head with or without its skull;
+--   a limb turning Severed flies off wearing its flesh, and its bone stub goes on the torso (at level 1, a plain stump).
 --
 --   Gore.track(body)                    starts tracking an R6 body: every limb Intact at 100, GoreTorsoOpen false (a body
 --                                       already tracked keeps what it has), the GoreBody tag, Humanoid.BreakJointsOnDeath off,
@@ -62,6 +66,16 @@ local RunService = game:GetService("RunService")
 -- instead of hanging them.
 local Integrity = require(script:WaitForChild("Integrity", 5) or error("Gore: Integrity is missing"))
 local Ragdoll = require(script:WaitForChild("Ragdoll", 5) or error("Gore: Ragdoll is missing"))
+local Flesh = require(script:WaitForChild("Flesh", 5) or error("Gore: Flesh is missing"))
+
+-- Flesh first, while the limb is still on its joint (the stub goes where the joint was). Its own listener, so a failure there
+-- (no Pieces) still leaves limbs dangling and coming off.
+Integrity.onStateChanged(function(body, key, _old, new)
+	Flesh.dress(body, key)
+	if new == "Severed" then
+		Flesh.stub(body, key)
+	end
+end)
 
 Integrity.onStateChanged(function(body, key, _old, new, info)
 	if new == "Broken" then

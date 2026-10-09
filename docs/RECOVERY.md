@@ -101,7 +101,8 @@ Run `studio/build_gore.luau`. The first time, it moves your `Workspace.Mesh.Fles
   head's flesh and skull).
 - `Torso` with `Sealed` (the torso flesh with `TorsoFilling`), `Open` (the torso flesh without it, plus the `Ribcage`) and
   `Death` (the torso flesh and the `Ribcage`).
-- `FullBody.Variant1`: every limb's flesh, used when all six are torn.
+- `FullBody.Variant1`: every limb's flesh, kept for reference. With all six limbs torn each limb still shows its own set (the
+  full-body flesh is the same as every `Variant1`, and a `Variant2` limb keeps its bone).
 
 Each piece is a copy of a chart piece, sized and placed the way `SizingModel` fits it on the dummy, with the attributes `Offset`
 (where it goes on its R6 part), `Layer` (`deep` for bone, ribcage, skull and stubs, `flesh` for the rest) and `Limb`. The
@@ -112,7 +113,7 @@ then run the script again. It refuses to run while there is a chart in both `Wor
 
 ### d) Put the scripts back
 
-There are thirty-four scripts. The file names are in `src/`.
+There are thirty-five scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -140,6 +141,7 @@ scripts (and the menu's ScreenGuis in `ReplicatedStorage`) alone.
 | `Gore` | ModuleScript | `ServerScriptService` | `src/ServerScriptService/Gore/init.luau` |
 | `Integrity` | ModuleScript | `Gore` | `.../Gore/Integrity.luau` |
 | `Ragdoll` | ModuleScript | `Gore` | `.../Gore/Ragdoll.luau` |
+| `Flesh` | ModuleScript | `Gore` | `.../Gore/Flesh.luau` |
 | `GoreServer` | Script | `ServerScriptService` | `src/ServerScriptService/GoreServer.server.luau` |
 | `GoreClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/GoreClient.client.luau` |
 | `BoomClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/BoomClient.client.luau` |
@@ -282,7 +284,7 @@ and Bob resting at `BobHome`. How far the carriage may travel is a list at the t
 52.2), next to the follow speed, swing and flinch settings. If it breaks, the Output window says so once and Bob stays still,
 but injections still happen.
 
-`GoreConfig`, `Gore` (with `Integrity` and `Ragdoll` **inside** it), `GoreServer` and `GoreClient` are the gore system
+`GoreConfig`, `Gore` (with `Integrity`, `Ragdoll` and `Flesh` **inside** it), `GoreServer` and `GoreClient` are the gore system
 (`docs/superpowers/specs/2026-10-08-gore-system-design.md`), still being built: so far it covers every player's character
 (`GoreServer` tracks each one as it spawns) and Room 1's copy and Explosive (`LabServer` and `HardDriveEffects` use it; without
 `Gore` the lab works as it did before it). Every limb of a body it tracks has 100 integrity. Damage tears a limb at 60 or less, and at 0 or
@@ -301,7 +303,12 @@ walks at half speed (`LIMP_SPEED`) and cannot jump, and with both they fall down
 death goes limp (a ragdoll), and the body stays lying where it fell as a corpse in `Workspace.Corpses` (a Folder the game
 makes; do not build it by hand) for `CORPSE_LIFE` seconds (2 minutes), at most `CORPSES_PER_PLAYER` (4) per player with the
 oldest going first, then sinks into the floor and goes (Room 1's copies count as their owner's). A corpse still tears when
-something blows up next to it.
+something blows up next to it. `Flesh` (a third ModuleScript **inside** `Gore`) dresses the wounds with the pieces from
+`ServerStorage.Gore.Pieces` (see c2): a torn limb turns invisible and shows its flesh (and, for the second variant, its bone or
+skull), a torn torso is sealed until a blast rips it open to show the ribcage, a destroyed head shows its skull unless it was
+blown apart, and a ripped-off arm or leg flies away with its flesh while a bone stub stays at the shoulder or hip. At
+`GORE_LEVEL` 1 none of that shows (a ripped-off limb leaves a plain dark-red stump); without the pieces the rest of the gore
+system still works and the Output window warns once.
 `GoreServer` (a Script next to `Gore`) tracks the characters; in Studio it also makes a `TestHook` for the tests.
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
