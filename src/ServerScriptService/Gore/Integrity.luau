@@ -6,8 +6,8 @@
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local GoreConfig = require(ReplicatedStorage:WaitForChild("GoreConfig"))
-local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig"))
+local GoreConfig = require(ReplicatedStorage:WaitForChild("GoreConfig", 5) or error("Gore: GoreConfig is missing"))
+local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig", 5) or error("Gore: LabConfig is missing"))
 
 local TAG = "GoreBody"
 local FULL = 100

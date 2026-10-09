@@ -58,8 +58,10 @@
 -- big-hit watchers and death watchers. Tests reach the game's copy through ServerScriptService.GoreServer.TestHook.
 local RunService = game:GetService("RunService")
 
-local Integrity = require(script:WaitForChild("Integrity"))
-local Ragdoll = require(script:WaitForChild("Ragdoll"))
+-- Every load-time wait has a timeout and fails loudly, so a missing piece fails the require (and its callers fall back)
+-- instead of hanging them.
+local Integrity = require(script:WaitForChild("Integrity", 5) or error("Gore: Integrity is missing"))
+local Ragdoll = require(script:WaitForChild("Ragdoll", 5) or error("Gore: Ragdoll is missing"))
 
 Integrity.onStateChanged(function(body, key, _old, new, info)
 	if new == "Broken" then

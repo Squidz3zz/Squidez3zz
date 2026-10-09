@@ -20,6 +20,11 @@
 --   E  (L-E) the owner dies (and the copy with them); before the respawn a blast at the copy's corpse's left arm (well away
 --      from the owner's corpse) changes it, and the owner's corpse shows exactly the same change. After the respawn the new
 --      character and the new copy are untouched
+--   F  (L-F) a Gore that cannot load does not stop the lab. Not part of "all": it needs its own playtest. In Edit, move
+--      ServerScriptService.Gore.Integrity out (to ServerStorage), start the playtest, run tests/fire_play.client.luau, then
+--      this with CASE "F"; stop the playtest and put Integrity back in Gore. LabServer's TestHook is there within 15 s of the
+--      start, the room can be claimed, the copy and the character carry no Gore attributes, and the Explosive into the left
+--      arm takes the old path: both left arms come off into Workspace and both bodies lose LIMB_DAMAGE health
 local CASE = "all"
 
 local LogService = game:GetService("LogService")
@@ -65,12 +70,14 @@ local room = workspace:FindFirstChild("Room1")
 assert(room, "Workspace.Room1 missing")
 local bob = room.BobTheInjector
 local labServer = ServerScriptService:FindFirstChild("LabServer")
-local hook = labServer and labServer:FindFirstChild("TestHook")
-assert(hook and hook:IsA("BindableFunction"), "ServerScriptService.LabServer.TestHook (BindableFunction) missing")
-local goreServer = ServerScriptService:FindFirstChild("GoreServer")
-local goreHook = goreServer and goreServer:FindFirstChild("TestHook")
-assert(goreHook and goreHook:IsA("BindableFunction"), "ServerScriptService.GoreServer.TestHook (BindableFunction) missing")
+-- LabServer makes its TestHook once it has loaded; L-F needs that within 15 s of the start (time() is seconds since then).
+local hook = labServer and labServer:WaitForChild("TestHook", math.max(0, 15 - time()))
+local hookSeenAt = time()
+assert(hook and hook:IsA("BindableFunction"), "ServerScriptService.LabServer.TestHook (BindableFunction) missing 15 s into the game")
 local function gore(fnName, ...)
+	local goreServer = ServerScriptService:FindFirstChild("GoreServer")
+	local goreHook = goreServer and goreServer:FindFirstChild("TestHook")
+	assert(goreHook and goreHook:IsA("BindableFunction"), "ServerScriptService.GoreServer.TestHook (BindableFunction) missing")
 	return goreHook:Invoke("call", fnName, ...)
 end
 
@@ -322,6 +329,36 @@ cases.E = function()
 	assert(whole(player.Character) and whole(fresh), "L-E: the corpses' gore reached the new character or the new copy")
 	hook:Invoke("release", player)
 	return ("L-E (%s on both corpses, %.1f studs apart)"):format(state, apart)
+end
+
+cases.F = function()
+	local goreModule = ServerScriptService:FindFirstChild("Gore")
+	assert(goreModule and not goreModule:FindFirstChild("Integrity"), "L-F: start this playtest with ServerScriptService.Gore.Integrity moved out (see the header)")
+	local humanoid = waitFor(aliveHumanoid, RESPAWN_WAIT)
+	assert(humanoid, "L-F: the player has no live character")
+	hook:Invoke("release", player)
+	humanoid.Health = humanoid.MaxHealth
+	local ok, reason = hook:Invoke("claim", player)
+	assert(ok == true, "L-F: the claim was refused: " .. tostring(reason))
+	local subject, character = subjectOf(), player.Character
+	assert(subject, "L-F: no Room1.Subject after the claim")
+	for _, body in { subject, character } do
+		assert(body:GetAttribute("Gore_LeftArm") == nil, "L-F: " .. body.Name .. " carries Gore attributes with no Gore")
+	end
+	local arms = { subject["Left Arm"], character["Left Arm"] }
+	local injected, why = inject("LeftArm")
+	assert(injected == true, "L-F: the injection was refused: " .. tostring(why))
+	assert(waitFor(function()
+		return arms[1].Parent == workspace and arms[2].Parent == workspace
+	end, MOVE + INJECT + FUSE + 2), "L-F: the two left arms did not come off into Workspace")
+	assert(LabConfig.isLost(subject, "LeftArm") and LabConfig.isLost(character, "LeftArm"), "L-F: both left arms should be lost")
+	local expected = character.Humanoid.MaxHealth - LabConfig.LIMB_DAMAGE
+	for _, body in { subject, character } do
+		local health = body.Humanoid.Health
+		assert(math.abs(health - expected) < 0.01, ("L-F: %s has %s health, expected %s"):format(body.Name, health, expected))
+	end
+	hook:Invoke("release", player)
+	return ("L-F (LabServer's TestHook found %.1f s into the game; the old Explosive blew both left arms off)"):format(hookSeenAt)
 end
 
 local order = if CASE == "all" then { "A", "B", "C", "D", "E" } else { CASE }

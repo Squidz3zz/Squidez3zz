@@ -33,9 +33,9 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
-local GoreConfig = require(ReplicatedStorage:WaitForChild("GoreConfig"))
-local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig"))
-local Integrity = require(script.Parent:WaitForChild("Integrity"))
+local GoreConfig = require(ReplicatedStorage:WaitForChild("GoreConfig", 5) or error("Gore: GoreConfig is missing"))
+local LabConfig = require(ReplicatedStorage:WaitForChild("LabConfig", 5) or error("Gore: LabConfig is missing"))
+local Integrity = require(script.Parent:WaitForChild("Integrity", 5) or error("Gore: Integrity is missing"))
 
 -- Each R6 joint's limits, in degrees: how far the limb swings away from hanging straight (a cone) and how far it twists about
 -- its own length.
