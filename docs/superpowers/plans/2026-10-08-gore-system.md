@@ -30,7 +30,7 @@
 ### Tests
 - Tests live in `tests/`, run in the datamodel their suffix names, as the committed file's text (there is no loadstring; paste it or byte-check a ModuleScript copy). They use `assert` and end with `return "PASS ..."`.
 - A test that needs a player presses Play by firing `ReplicatedStorage.PlayPressed` from the Client. It claims Room 1 with `ServerScriptService.LabServer.TestHook:Invoke("claim", player)`.
-- A server test may `require(ServerScriptService.Gore)`. Since it's the same ModuleScript, it shares the game's state.
+- A test that `require`s a ModuleScript gets its **own copy**, separate from the game's (execute_luau runs in its own context). So tests drive the game's Gore through `ServerScriptService.GoreServer.TestHook` (a Studio-only BindableFunction made by GoreServer): `Invoke("call", fnName, ...)` calls `Gore[fnName](...)` on the game's copy and returns its results. A test may still require its own copy for pure-logic cases that need no game state. Attributes (states, GoreConfig.get overrides) are shared either way.
 - Chance rolls come from one `Random` held by Gore. Studio-only `Gore.seed(n)` reseeds it, so seeded cases repeat.
 - After each task, rerun the earlier gore tests plus lab_claim A/C, lab_inject (all), tablet_menu A, bob_animator A-C, boom tests, death_screen, menu_client and scenes A. Some lab assertions change in Task 3; update them there.
 
@@ -100,7 +100,7 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
   - `explode` damages every tracked body, corpses included (Review Focus 1).
 
 - [ ] **Step 1: Write `tests/gore_integrity.server.luau`.** Use Server playtest R6 bodies from `Players:CreateHumanoidModelFromDescription(HumanoidDescription.new(), R6)`, placed at known spots. Cases:
-  - **I-A thresholds:** `damageLimb(b, "LeftArm", 40, "hit")` leaves it Intact (60); +1 makes it Torn; +60 makes it Broken (cause "hit" never severs). Torso at 0 is "Destroyed", Health 0.
+  - **I-A thresholds:** `damageLimb(b, "LeftArm", 39, "hit")` leaves it Intact (61); +1 makes it Torn (60); +60 makes it Broken (0; cause "hit" never severs). Integrity is not clamped: it can go below 0. Torso at 0 is "Destroyed", Health 0.
   - **I-B explode falloff:** at 0 / 1.5 / 3 studs from limb centres, the damage is 150 / 84.4 / 37.5 (±0.5).
   - **I-C sever:** `seed(1)` with a fixed outcome table. Find seeds giving sever and not-sever, assert both outcomes and that repeating a seed repeats it.
   - **I-D torso:** a torn torso hit by explode opens on the seeded "open" roll, stays sealed on the other, and never opens from `damageLimb(..., "hit")`. Legs at Severed never set `GoreTorsoOpen`.
@@ -109,7 +109,7 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
   - **I-G copyState:** a fresh body gets every attribute of a damaged one.
   - **I-H big hits:** a 30-health drop not made by `hurt` damages a random limb by 60. A drop right after Freefall splits 30/30 over both legs. `hurt(b, 40)` triggers nothing.
 - [ ] **Step 2: Run it.** Expected: FAIL (Gore missing).
-- [ ] **Step 3: Implement GoreConfig, Gore and Integrity,** then push (the Gore folder becomes a ModuleScript with a child ModuleScript).
+- [ ] **Step 3: Implement GoreConfig, Gore and Integrity, plus a minimal `src/ServerScriptService/GoreServer.server.luau` that only requires Gore and makes the Studio-only `TestHook` (`Invoke("call", fnName, ...)`),** then push (the Gore folder becomes a ModuleScript with a child ModuleScript). Task 2 extends GoreServer.
 - [ ] **Step 4: Run it.** Expected: PASS for every case.
 - [ ] **Step 5: Commit** `feat(gore): limb integrity, states, the link and big hits`.
 
