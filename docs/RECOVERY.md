@@ -65,7 +65,7 @@ change them.
 - `ServerStorage.Tablet`: the tablet, made into a Tool.
 - `ReplicatedStorage.LabAssets.HardDrives.Explosive`: the hard drive, the picture in the tablet's list.
 - `ReplicatedStorage.LabAssets.Blood`: the blood of a limb blast (see `Booms` in d): the emitters `Spray` and `Mist` and the
-  splat settings. A re-run only adds what is missing (an emitter, or an attribute), so your changes to them stay. Your two
+  old splat settings (no longer used). A re-run only adds what is missing (an emitter, or an attribute), so your changes to them stay. Your two
   blood sounds in it are not made by the script (see d).
 - `ReplicatedStorage.TabletMenu`: the tablet's menu, a `ScreenGui` that is switched off (the game copies it into each
   player's screen). It is in the factory look and made of fractions of the screen, so it fits a phone. You can restyle it
@@ -208,17 +208,24 @@ off: the boom fires them itself. Without `LabAssets.Explosion` the Output window
 (they still shake the camera, and a limb blast still bleeds). An emitter or sound that cannot be copied or played is skipped
 with one warning in the Output window; the rest of the boom still shows.
 
-A limb blast also bleeds: `Booms.at(position, true)` sends the blood along, and `BoomClient` then fires
-`ReplicatedStorage.LabAssets.Blood` into the same `Boom` attachment. `studio/build_lab.luau` makes that folder (see c): `Spray`
-(dark-red droplets thrown out that fall, `EmitCount` 60) and `Mist` (a short dark-red haze, `EmitCount` 8), switched off and
-fired once like the explosion's. Every Sound in the folder plays with the burst, in the `SFX` SoundGroup: your two blood sounds
+A limb blast also bleeds: `Booms.at(position, true, direction)` sends the blood along, with the way it flies (from the
+torso out through the arm or leg, or the way the body faces for the head or the torso), and each player's `GoreClient` fires
+`ReplicatedStorage.LabAssets.Blood` into an Attachment named `BloodBurst` pointed that way. `studio/build_lab.luau` makes that
+folder (see c): `Spray` (dark-red droplets, `EmitCount` 60) and `Mist` (a dark-red haze, `EmitCount` 8), switched off and fired
+once. `GoreClient` makes them much stronger: the spray is a forceful jet of twice the droplets at 40 to 90 studs a second in a
+45 degree cone, and the mist has twice the puffs at twice the size, is more opaque and lasts about 3 seconds (its numbers are at the top of
+the blood part of `GoreClient`). Every Sound in the folder plays with the burst, in the `SFX` SoundGroup: your two blood sounds
 live there, `BloodSquirt` (rbxassetid://91834483567891) and `Blood Splatter Sound Effect ` (rbxassetid://127991013927235; the
 name ends in a space), both at volume 0.5. They were made by hand and are **only in the place file**; any Sound you drop into
-the folder plays too. The blood also leaves splats: `SplatCount` (4) flat dark-red discs on whatever anchored part is below the
-blast (the floor or the chair; never a player, the copy, Bob or a loose part such as a blown-off limb), up to 4 studs to the side, in `SplatColor` (80, 0, 0); each fades out
-over its last 5 seconds and is gone after `SplatLife` (20) seconds, and no more than 60 stay at once. Those three are attributes
-of the `Blood` folder; the splats are only on each player's own screen. Without `LabAssets.Blood` the Output window says so
-once and limb blasts do not bleed.
+the folder plays too. The blood also leaves splats: 12 rays in a 60 degree cone along the spray and 4 more downward, each up
+to 24 studs, put a glossy, wet, dark-red oval wherever they meet a fixed surface: the floor, the walls, the chair or the
+observation glass (never a body, a corpse, Bob, the Shutter, a loose part such as a blown-off limb, skin chunks or pools). On a
+wall or the glass a splat runs down it, 1.5 to 2.5 times longer than it is wide. Splats are parts named `BloodSplat` in
+`Workspace.GoreSplats` (the game makes it), only on each player's own screen; each fades out over its last 5 seconds and goes
+after `GoreConfig`'s `SPLAT_LIFE` (90) seconds, and no more than `SPLAT_MAX` (150) stay at once. The folder's `SplatCount`,
+`SplatLife` and `SplatColor` attributes are no longer used. At `GORE_LEVEL` 0 the blood is the plain one from before (the
+emitters as built, splats only below the blast). Without `LabAssets.Blood` the Output window says so once and limb blasts do
+not bleed.
 
 `LabServer` is Room 1's server side and needs the pieces that `studio/build_lab.luau` builds (see c). It handles
 claiming and the injections. Claiming: a player who triggers the claim prompt becomes the owner (`Workspace.Room1`'s `Owner` attribute holds their UserId,
@@ -406,7 +413,8 @@ Press **Play** in Studio (the Test tab) and check each of these:
    left of the screen). CONFIRM stays grey ("PICK A HARDDRIVE AND A LIMB") until you pick EXPLOSIVE and a limb, then reads
    e.g. "CONFIRM: EXPLOSIVE INTO LEFT ARM". Press it: the menu closes and Bob goes to work. Open the tablet again while he
    moves: it is read-only and the top bar shows MOVING, INJECTING or RETURNING. The limb blows with your explosion, a spray
-   of blood and the two blood sounds, and leaves a few dark-red splats on the floor that fade after about 20 seconds. The
+   of blood with a thick red mist and the two blood sounds, and paints glossy dark-red splats on the floor, the walls and the
+   observation glass (running down the walls and glass) that fade after about 90 seconds. The
    copy's limb and your own then dangle limp, or (sometimes) are ripped off and fly away. A ripped-off limb reads LOST and
    cannot be picked; a dangling one can. The X, putting the tablet away, and (on a controller) B all close the menu, and so does dying. On a
    phone every button is easy to tap and the menu stays clear of the notch and the top bar.
@@ -425,6 +433,6 @@ Room 1's walls, Bob, the tablet and the hard drive are not in any script at all 
 so are they, and so is their backup in `ServerStorage.LabBackup`, which lives in the same place file. The same goes for your
 explosion, `ReplicatedStorage.LabAssets.Explosion`, and the `EmitCount` attributes on its emitters (the counts are listed under
 `Booms` in d, so you can type them in again), and for your two blood sounds in `ReplicatedStorage.LabAssets.Blood` (their ids
-are under `Booms` in d). The blood's emitters and splat settings come back with `studio/build_lab.luau`.
+are under `Booms` in d). The blood's emitters come back with `studio/build_lab.luau`.
 Your flesh chart (`ServerStorage.Gore.FleshChart`) is not in any script either; the pieces made from it come back with
 `studio/build_gore.luau` only while the chart is there (see c2).

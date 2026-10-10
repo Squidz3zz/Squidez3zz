@@ -88,7 +88,8 @@ local function sfxGroup(): SoundGroup
 end
 
 -- Explosive: a fuse of FUSE_SECONDS (the limb glows red and beeps, faster and faster), then a blast at the limb: a blood boom
--- (Booms.at with blood) at each body's limb centre (taken before anything comes off; no Explosion instance). An arm or a leg
+-- (Booms.at with blood, spraying away from the body) at each body's limb centre (taken before anything comes off; no Explosion
+-- instance). An arm or a leg
 -- costs the body LIMB_DAMAGE health; the head or the torso kills.
 -- Through Gore (GORE_LEVEL 1 or 2) the blast is Gore.explode(EXPLOSIVE_POWER, BLAST_RADIUS) at the first body's limb (the
 -- copy's) and nowhere else: it tears every tracked limb near it, the injected one always breaks (dangling, or ripped off by
@@ -152,9 +153,16 @@ function HardDriveEffects.Explosive(bodies: { Model }, limbKey: string, stillLin
 
 	local centres: { [Model]: Vector3 } = {}
 	for _, body in fused do
-		centres[body] = LabConfig.limbCentre(body, limbKey)
-		if centres[body] then
-			Booms.at(centres[body], true)
+		local centre = LabConfig.limbCentre(body, limbKey)
+		centres[body] = centre
+		local torso = body:FindFirstChild("Torso")
+		if centre and torso then
+			-- The blood sprays away from the body: from the torso out through an arm or a leg, the way the body faces for the
+			-- head or the torso.
+			local away = centre - torso.Position
+			Booms.at(centre, true, if FATAL[limbKey] or away.Magnitude < 0.1 then torso.CFrame.LookVector else away.Unit)
+		elseif centre then
+			Booms.at(centre, true)
 		end
 	end
 	local first = fused[1]
