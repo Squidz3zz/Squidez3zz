@@ -368,13 +368,18 @@ A sword or projectile (server side):
 ```lua
 local Gore = require(game:GetService("ServerScriptService").Gore)
 
-local hitOnce = {}
+local lastHit = {} -- character -> when it was last hit, so one swing hits each character once
 blade.Touched:Connect(function(part)
 	local character = part:FindFirstAncestorWhichIsA("Model")
-	if character and character ~= tool.Parent and not hitOnce[character] and character:FindFirstChildOfClass("Humanoid") then
-		hitOnce[character] = true
+	if character and character ~= tool.Parent and character:FindFirstChildOfClass("Humanoid")
+		and os.clock() - (lastHit[character] or 0) > 0.5 then
+		lastHit[character] = os.clock()
 		pcall(Gore.hit, part, 30)
 	end
+end)
+-- Forget characters that are gone, so the table does not keep them alive.
+workspace.DescendantRemoving:Connect(function(thing)
+	lastHit[thing] = nil
 end)
 ```
 
