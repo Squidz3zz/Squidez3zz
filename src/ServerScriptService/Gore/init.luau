@@ -54,7 +54,16 @@
 --                                       body, an unknown limb, an amount that is not above 0, or a Severed or Destroyed limb.
 --   Gore.explode(position, power, radius)
 --                                       damages every limb of every tracked body (corpses too) whose centre is within radius,
---                                       by power * (1 - distance / radius)^2, as "explosion".
+--                                       by power * (1 - distance / radius)^2, as "explosion", and marks each as a hit
+--                                       (GoreHit, as Gore.hit does).
+--   Gore.roblox(explosion)              a Roblox Explosion, through gore (ExplosionReplacer calls it the moment one is added
+--                                       to Workspace, visible or not). It sets DestroyJointRadiusPercent to 0, so Roblox never
+--                                       snaps a joint; runs Gore.explode at its Position with its BlastRadius and power
+--                                       EXPLOSIVE_POWER * clamp(BlastPressure / 500000, 0.3, 2); kills, through hurt (so they
+--                                       ragdoll), the living bodies whose Torso was within the joint radius its maker set
+--                                       (BlastRadius * DestroyJointRadiusPercent); and, on the Heartbeat after their corpses
+--                                       exist, pushes every part of every corpse within BlastRadius away from it at
+--                                       GoreConfig BLAST_PUSH * (1 - d / BlastRadius). Its BlastPressure push stays as it is.
 --   Gore.blastLimb(body, key, power)    an aimed blast (Bob's injections): damageLimb(body, key, power, "explosion") on that
 --                                       one limb only, no radius, nothing else hurt (the link gives the partner the same).
 --   Gore.hurt(body, amount)             takes health from the body as gore damage, which the hit watcher ignores. Any
@@ -77,6 +86,7 @@
 --                                       a test's rolls repeat.
 -- A script that requires Gore from Studio's command bar (or a test) gets its own copy: its own Random, links, listeners,
 -- hit watchers and death watchers. Tests reach the game's copy through ServerScriptService.GoreServer.TestHook.
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -121,12 +131,63 @@ local function track(body: Model)
 	Ragdoll.watch(body)
 end
 
+local function roblox(explosion: Explosion)
+	local position, radius = explosion.Position, explosion.BlastRadius
+	local jointRadius = radius * explosion.DestroyJointRadiusPercent
+	explosion.DestroyJointRadiusPercent = 0
+	-- Who it kills is taken before any damage moves anything. Each one's Torso goes into its corpse when it dies.
+	local doomed: { [Model]: BasePart } = {}
+	for _, body in CollectionService:GetTagged("GoreBody") do
+		local humanoid = body:FindFirstChildOfClass("Humanoid")
+		local torso = body:FindFirstChild("Torso")
+		if humanoid and humanoid.Health > 0 and torso and torso:IsA("BasePart") and (torso.Position - position).Magnitude < jointRadius then
+			doomed[body] = torso
+		end
+	end
+	Integrity.explode(position, GoreConfig.get("EXPLOSIVE_POWER") * math.clamp(explosion.BlastPressure / 500000, 0.3, 2), radius)
+	for body in doomed do
+		Integrity.hurt(body, math.huge)
+	end
+	task.spawn(function()
+		-- ponytail: waits at most 10 frames for the deaths to become corpses; a body still dying then is not pushed.
+		for _ = 1, 10 do
+			RunService.Heartbeat:Wait()
+			local dying = false
+			for body, torso in doomed do
+				dying = dying or torso.Parent == body
+			end
+			if not dying then
+				break
+			end
+		end
+		local corpses = workspace:FindFirstChild("Corpses")
+		if not corpses then
+			return
+		end
+		local push = GoreConfig.get("BLAST_PUSH")
+		-- Once per assembly (a limb and the flesh welded to it move as one), from its root part.
+		local pushed = {}
+		for _, part in corpses:GetDescendants() do
+			local root = if part:IsA("BasePart") then part.AssemblyRootPart else nil
+			if root and not pushed[root] then
+				pushed[root] = true
+				local away = root.Position - position
+				local d = away.Magnitude
+				if d > 0 and d < radius then
+					root.AssemblyLinearVelocity += away.Unit * push * (1 - d / radius)
+				end
+			end
+		end
+	end)
+end
+
 return {
 	track = track,
 	link = Integrity.link,
 	unlink = Integrity.unlink,
 	damageLimb = Integrity.damageLimb,
 	explode = Integrity.explode,
+	roblox = roblox,
 	blastLimb = function(body: Model, key: string, power: number)
 		Integrity.damageLimb(body, key, power, "explosion")
 	end,

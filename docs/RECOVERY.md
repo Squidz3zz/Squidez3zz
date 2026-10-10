@@ -191,8 +191,12 @@ once). That folder was made by hand in Studio and is **only in the place file**,
 after you change it. `Booms` (a ModuleScript in `ServerScriptService`) is the one way to make a boom: `Booms.at(position)` tells
 every player's game to show it there; it makes `ReplicatedStorage.BoomEvent` itself (do not build it by hand). `ExplosionReplacer`
 (a Script next to it) catches every Roblox `Explosion` made on the server anywhere in Workspace, from any script, tool or free
-model: it hides Roblox's own blast at once and plays your boom in its place, while the explosion still pushes and breaks things
-as its maker set it up. An `Explosion` its maker already made invisible (`Visible` off) is left alone, with no boom. One made
+model: it hides Roblox's own blast at once and plays your boom in its place, and hands the explosion to the gore system
+(`Gore.roblox`, see the gore system below): it no longer snaps joints, so no plain limbs fly off. The limbs near it tear, break
+or come off instead, a body it would have killed (its torso within `BlastRadius * DestroyJointRadiusPercent`) dies a gore death
+and ragdolls, and every corpse near it is thrown away from it (`GoreConfig`'s `BLAST_PUSH`). Its `BlastPressure` push and its
+`Hit` event still work as its maker set them up. An `Explosion` its maker already made invisible (`Visible` off) gets no boom,
+but it still goes through the gore system. Without `Gore` explosions work as Roblox's own. One made
 by a LocalScript only exists on that one player's screen, so it is not replaced. (Hiding it may or may not also silence
 Roblox's own explosion sound; that was not checked by ear.) Room 1's Explosive hard drive
 makes no Roblox explosion at all: it calls `Booms.at` at the limb, with blood (see below). `BoomClient` (a LocalScript in `StarterPlayerScripts`) shows a
@@ -301,7 +305,9 @@ but injections still happen.
 less it breaks an arm or a leg, or destroys the head or the torso (which kills). An explosion can also rip a broken arm or leg
 off, open a torn torso and blow a destroyed skull apart, each by chance. At `GORE_LEVEL` 1 and 2 a head that tears (shows any
 flesh) or a torso that is ripped open kills at once; a torn torso that stays sealed does not. Room 1's injections are aimed
-(`Gore.blastLimb`, only the injected limb); every other explosion (`Gore.explode`) still spreads to the limbs near it. Any other loss of health is a hit, and
+(`Gore.blastLimb`, only the injected limb); every other explosion (`Gore.explode`, and every Roblox `Explosion` through
+`Gore.roblox`, see `ExplosionReplacer` above) spreads to the limbs near it, and its strength follows the explosion's
+`BlastPressure`. A Roblox explosion that kills always ragdolls the body, and it throws the corpses near it. Any other loss of health is a hit, and
 it also costs one limb half as much (`HIT_SCALE`): the limb a weapon hit (`Gore.hit`, see "Calling the gore system from a
 weapon" below), else the limb something loose (a projectile, another player's tool) touched in the last `TOUCH_WINDOW`
 seconds, else the torso; after a fall, both legs. A hit never rips a limb off; it breaks it. A player and their copy are linked so they always come out

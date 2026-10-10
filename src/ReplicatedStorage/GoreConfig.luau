@@ -26,6 +26,8 @@
 --                       around the 7th; a 100 hit tears it at once.
 --   TOUCH_WINDOW        seconds a touch by something loose (not anchored, not part of the world or of the body) counts: a
 --                       health drop this soon after lands on the limb it touched.
+--   BLAST_PUSH          how hard (studs per second) a Roblox Explosion throws a corpse (the body it just killed, or one lying
+--                       there): each part d studs from it is pushed away at BLAST_PUSH * (1 - d / its BlastRadius).
 --
 -- Broken legs:
 --   LIMP_SPEED          walk speed (studs per second) with one leg broken or gone; no jumping.
@@ -73,6 +75,7 @@ local GoreConfig = {
 	BLAST_RADIUS = 6,
 	HIT_SCALE = 0.5,
 	TOUCH_WINDOW = 0.2,
+	BLAST_PUSH = 60,
 
 	LIMP_SPEED = 8,
 	CRAWL_SPEED = 3,

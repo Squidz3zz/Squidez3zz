@@ -298,6 +298,7 @@ function Integrity.explode(position: Vector3, power: number, radius: number)
 		end
 	end
 	for _, hit in hits do
+		Integrity.markHit(hit.body, hit.key, hit.amount)
 		Integrity.damageLimb(hit.body, hit.key, hit.amount, "explosion")
 	end
 end
