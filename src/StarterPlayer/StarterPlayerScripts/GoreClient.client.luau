@@ -32,7 +32,7 @@
 -- they and the sounds are over. Then the splats: SPLAT_RAYS rays in a cone SPLAT_CONE degrees across along the direction and
 -- SPLAT_DOWN_RAYS more downward, each up to SPLAT_REACH studs. Where one meets a fixed surface (grounded, colliding; never a
 -- body, a corpse, Bob, Room1.Shutter, a chunk, a pool or another splat; the floor, the walls, the chair and the observation
--- glass are) a splat sticks: a thin wet dark-red ellipse (Foil, which reads wet in sun and shade, a SpecialMesh Cylinder, no
+-- glass are) a splat sticks: a thin wet dark-red ellipse (Foil, which reads wet in sun and shade, a SpecialMesh Sphere, no
 -- decal; a part named BloodSplat in Workspace.GoreSplats) SPLAT_SIZE studs across and up to 1.4 times that long, turned at
 -- random, lifted a random hair off the surface so overlapping ones don't flicker. On a wall or the glass it runs down:
 -- SPLAT_STRETCH times longer down the surface. Each fades out over its
@@ -418,10 +418,10 @@ local function splatAt(hit: RaycastResult)
 	end
 	local splat = Instance.new("Part")
 	splat.Name = "BloodSplat"
-	-- An ellipse: a cylinder mesh fills the part's whole box (a Cylinder part's face is always round; a squashed sphere mesh
-	-- shades like a ball). Its axis is its X.
+	-- An ellipse: a sphere mesh fills the part's whole box, squashed thin along X (a Cylinder part or cylinder mesh always
+	-- draws a round face, so a run down a wall would not show).
 	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Cylinder
+	mesh.MeshType = Enum.MeshType.Sphere
 	mesh.Parent = splat
 	splat.Anchored = true
 	splat.CanCollide = false

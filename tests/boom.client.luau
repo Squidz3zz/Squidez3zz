@@ -13,9 +13,9 @@
 --   C-1  Client, CASE = "C-1": arms it, with GoreConfig SPLAT_LIFE set to SPLAT_LIFE below (an override on this client's
 --        GoreConfig only, removed by C-2 however it ends). For each of the next two booms it records the names of the
 --        ParticleEmitters in GoreClient's "BloodBurst" attachment at its position (found within 0.5 s), the BloodSplat Parts
---        added anywhere in Workspace within 0.5 s, whether each lies flat on the surface under it (it is a cylinder drawn along
---        its X, so X must be its thinnest side; a ray into it along X from 0.1 studs above, past every character, the copy and
---        Bob, hits a surface whose normal is within 10 degrees of X, and the splat's centre is within 0.2 studs of it; most land
+--        added anywhere in Workspace within 0.5 s, whether each lies flat on the surface under it (it is drawn by a SpecialMesh
+--        Sphere, R18, and its thinnest side is its axis; a ray into it along that axis from 0.1 studs above, past every character, the copy and
+--        Bob, hits a surface whose normal is within 10 degrees of the axis, and the splat's centre is within 0.2 studs of it; most land
 --        on the floor, but a ray can meet a low edge, such as the SpawnLocation pad's side), and how many are left
 --        SPLAT_LIFE + 1 s after the boom.
 --   C    Server: tests/boom.server.luau, CASE = "C" (a blood boom near the character with no direction, so the blood goes down,
@@ -223,12 +223,13 @@ elseif CASE == "C-1" then
 		table.insert(skip, room and room:FindFirstChild("Subject"))
 		table.insert(skip, room and room:FindFirstChild("BobTheInjector"))
 		params.FilterDescendantsInstances = skip
-		-- A splat is a cylinder drawn along its X: that is its axis, and it must be its thinnest side (or it draws a rod).
-		local size = splat.Size
-		if size.X > math.min(size.Y, size.Z) then
-			return ("a splat's X (its cylinder axis) is not its thinnest side (Size %s): it draws a rod"):format(tostring(size))
+		-- A splat is drawn by a SpecialMesh Sphere; its thinnest side is its axis.
+		local mesh = splat:FindFirstChildOfClass("SpecialMesh")
+		if not (mesh and mesh.MeshType == Enum.MeshType.Sphere) then
+			return "a splat has no SpecialMesh Sphere"
 		end
-		local axis = splat.CFrame.RightVector
+		local size = splat.Size
+		local axis = if size.X <= size.Y and size.X <= size.Z then splat.CFrame.RightVector elseif size.Y <= size.Z then splat.CFrame.UpVector else splat.CFrame.LookVector
 		local hit = workspace:Raycast(splat.Position + axis * 0.1, axis * -0.6, params)
 		if not hit then
 			return ("a splat at %s has no surface under it"):format(tostring(splat.Position))

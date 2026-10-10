@@ -329,7 +329,7 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
   - **S-A:** a blood boom 3 studs from a wall, aimed at it, puts ≥2 splats on the wall, flat on it, each longer vertically than wide.
   - **S-B:** a head blast on the seated copy, aimed at the window (−X), puts ≥1 splat on the observation glass.
   - **S-C:** the spray droplet speed range is 40–90.
-  - **S-D:** each splat is Foil (R17), has no Decal, and is drawn as a disc (its cylinder axis X is its thinnest side).
+  - **S-D:** each splat is Foil (R17), has no Decal, and is drawn as an oval: a SpecialMesh Sphere (R18) whose thinnest side lies along the surface normal.
   - **S-E:** nothing lands on the Shutter or on a body.
   - **S-F:** 200 splats requested leave at most 150.
 - [ ] **Step 2: Run it.** Expected: FAIL.

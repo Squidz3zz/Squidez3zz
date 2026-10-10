@@ -12,8 +12,8 @@
 --   S-B  the head blast on the seated copy (facing -X, the window) puts at least 1 splat on the inside of the observation glass
 --        (a Glass part, the splat facing +X)
 --   S-C  every BloodBurst's Spray throws its droplets at 40 to 90 studs/s
---   S-D  every splat is wet-looking Foil (ruling R17: Material Foil), holds no Decal, and is drawn as a disc: a SpecialMesh
---        Cylinder (whose axis is the part's X) on a part whose X is its thinnest side (otherwise it draws a rod)
+--   S-D  every splat is wet-looking Foil (ruling R17: Material Foil), holds no Decal, and is drawn as an oval: a SpecialMesh
+--        Sphere (R18) whose thinnest side lies along the surface normal (every splat with a surface is flat on it)
 --   S-E  no splat lies on Room1.Shutter or on a body (a GoreBody, a character or anything in Workspace.Corpses)
 --   S-F  200 splats asked of GoreClient (its Studio-only TestHook, "splatter", at a wall this client makes for itself) leave
 --        at most SPLAT_MAX (150) at once; the test removes its wall and its splats
@@ -68,14 +68,12 @@ local function inspect(splat: BasePart)
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = { splat }
 	local hit = workspace:Raycast(splat.Position + normal * 0.1, normal * -0.6, params)
-	-- A cylinder (a SpecialMesh one, or the part's own shape) is drawn along the part's X.
 	local mesh = splat:FindFirstChildOfClass("SpecialMesh")
-	local cylinder = if mesh then mesh.MeshType == Enum.MeshType.Cylinder else splat.Shape == Enum.PartType.Cylinder
 	local entry = {
 		splat = splat,
 		normal = normal,
 		foil = splat.Material == Enum.Material.Foil,
-		disc = cylinder and splat.Size.X <= math.min(splat.Size.Y, splat.Size.Z),
+		oval = mesh ~= nil and mesh.MeshType == Enum.MeshType.Sphere,
 		decal = splat:FindFirstChildWhichIsA("Decal", true) ~= nil,
 	}
 	if hit then
@@ -133,7 +131,8 @@ if CASE == "A-1" then
 				-- S-D
 				assert(entry.foil, "S-D: a splat is " .. entry.splat.Material.Name .. ", not Foil")
 				assert(not entry.decal, "S-D: a splat holds a Decal")
-				assert(entry.disc, ("S-D: a splat is not drawn as a disc (Size %s): its cylinder axis X must be its thinnest side"):format(tostring(entry.splat.Size)))
+				assert(entry.oval, "S-D: a splat has no SpecialMesh Sphere, so it does not draw as an oval")
+				assert(not entry.host or entry.flat, ("S-D: a splat's thinnest side is not along its surface's normal (Size %s on %s)"):format(tostring(entry.splat.Size), if entry.host then entry.host:GetFullName() else "?"))
 				-- S-E
 				assert(not entry.shutter, "S-E: a splat lies on Room1.Shutter")
 				assert(not entry.body, "S-E: a splat lies on a body: " .. (if entry.host then entry.host:GetFullName() else "?"))
