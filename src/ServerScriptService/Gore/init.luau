@@ -19,7 +19,9 @@
 --   one leg Broken or Severed: WalkSpeed GoreConfig LIMP_SPEED, no jumping; both: GoreDowned (each player's GoreClient makes
 --   its own downed character crawl);
 --   on death the body ragdolls and its parts move into a corpse in Workspace.Corpses, which stays tracked (blasts still tear
---   it) and goes after GoreConfig CORPSE_LIFE, at most CORPSES_PER_PLAYER per player.
+--   it) and goes after GoreConfig CORPSE_LIFE, at most CORPSES_PER_PLAYER per player;
+--   a head turning Torn or worse (any flesh showing), or a torso ripping open, kills the body at once through Gore.hurt
+--   (GORE_LEVEL 1 and 2; a torn but sealed torso does not).
 -- And what it looks like (Flesh, inside Gore, says how; GoreConfig GORE_LEVEL 2 only):
 --   a limb turning Torn (or worse) is hidden and wears its flesh (ServerStorage.Gore.Pieces): its variant, the sealed torso
 --   (the open one, with the ribcage, once GoreTorsoOpen), the destroyed head with or without its skull;
@@ -44,6 +46,8 @@
 --   Gore.explode(position, power, radius)
 --                                       damages every limb of every tracked body (corpses too) whose centre is within radius,
 --                                       by power * (1 - distance / radius)^2, as "explosion".
+--   Gore.blastLimb(body, key, power)    an aimed blast (Bob's injections): damageLimb(body, key, power, "explosion") on that
+--                                       one limb only, no radius, nothing else hurt (the link gives the partner the same).
 --   Gore.hurt(body, amount)             takes health from the body as gore damage, which the big-hit watcher ignores. Any
 --                                       health the gore system or the lab takes should go through this. It is not carried
 --                                       across a link: whatever hurts one linked body hurts the other itself if it should.
@@ -64,6 +68,7 @@
 --                                       a test's rolls repeat.
 -- A script that requires Gore from Studio's command bar (or a test) gets its own copy: its own Random, links, listeners,
 -- big-hit watchers and death watchers. Tests reach the game's copy through ServerScriptService.GoreServer.TestHook.
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 -- Every load-time wait has a timeout and fails loudly, so a missing piece fails the require (and its callers fall back)
@@ -72,6 +77,7 @@ local Integrity = require(script:WaitForChild("Integrity", 5) or error("Gore: In
 local Ragdoll = require(script:WaitForChild("Ragdoll", 5) or error("Gore: Ragdoll is missing"))
 local Flesh = require(script:WaitForChild("Flesh", 5) or error("Gore: Flesh is missing"))
 local Bleeding = require(script:WaitForChild("Bleeding", 5) or error("Gore: Bleeding is missing"))
+local GoreConfig = require(ReplicatedStorage:WaitForChild("GoreConfig", 5) or error("Gore: GoreConfig is missing"))
 
 -- Flesh first, while the limb is still on its joint (the stub goes where the joint was). Its own listener, so a failure there
 -- (no Pieces) still leaves limbs dangling and coming off. A limb copyState severs is removed at once (Ragdoll.sever), so it is
@@ -94,6 +100,13 @@ Integrity.onStateChanged(function(body, key, _old, new, info)
 	end
 end)
 
+-- Instant deaths, after Flesh so the body dies wearing its wounds (hurt does nothing to a body already dead).
+Integrity.onStateChanged(function(body, key, _old, new, info)
+	if GoreConfig.get("GORE_LEVEL") >= 1 and ((key == "Head" and new ~= "Intact") or info.torsoOpened) then
+		Integrity.hurt(body, math.huge)
+	end
+end)
+
 local function track(body: Model)
 	Integrity.track(body)
 	Ragdoll.watch(body)
@@ -105,6 +118,9 @@ return {
 	unlink = Integrity.unlink,
 	damageLimb = Integrity.damageLimb,
 	explode = Integrity.explode,
+	blastLimb = function(body: Model, key: string, power: number)
+		Integrity.damageLimb(body, key, power, "explosion")
+	end,
 	hurt = Integrity.hurt,
 	bleed = Bleeding.tick,
 	stateOf = Integrity.stateOf,

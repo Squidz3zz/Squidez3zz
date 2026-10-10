@@ -7,7 +7,8 @@
 --                  (flesh, plus bone for Variant2), each piece welded within 0.2 studs of part.CFrame * Offset, unanchored,
 --                  massless and not colliding. Its linked partner (copyState, then link) shows the same
 --   F-B torso      a torso torn by a "hit" wears Sealed: TorsoFilling (Layer "flesh") and no Ribcage; an explosion with
---                  TORSO_OPEN_CHANCE 1 opens it: exactly the Open set, with a Ribcage (Layer "deep") and no TorsoFilling
+--                  TORSO_OPEN_CHANCE 1 opens it: exactly the Open set, with a Ribcage (Layer "deep") and no TorsoFilling (the
+--                  open torso kills: the pieces go into the corpse with their torso)
 --   F-C legs       both legs severed (SEVER_CHANCE 1) with the torso intact: no torso pieces, no Ribcage, the torso visible,
 --                  a stub for each leg, and each flying leg wears its flesh
 --   F-D head       a destroyed head with SKULL_BLAST_CHANCE 0 ("shown") wears HeadFlesh and Skull, its face hidden; with 1
@@ -16,7 +17,8 @@
 --   F-E stub       a severed LeftArm leaves one Stub1 welded to the Torso within 0.2 studs of where the arm rests (the shoulder
 --                  joint's C0 * C1:Inverse() * Offset). A body built from it (copyState) arrives without its left arm, stub on
 --   F-F all six    all six limbs torn: every R6 part is hidden and each wears its own whole variant set (none lost a deep piece),
---                  with at least one deep piece (bone or skull) among them; the seed is reset afterwards
+--                  with at least one deep piece (bone or skull) among them; the seed is reset afterwards. The head tears last,
+--                  since a torn head kills (the parts are found before, as they move into the corpse)
 --   F-G level 1    with GORE_LEVEL 1 a torn LeftArm gets no pieces and stays visible; a severed one leaves a plain dark-red
 --                  GoreStump on the Torso and no Stub1
 --   F-H no pieces  with ServerStorage.Gore.Pieces renamed (always put back): a torn LeftArm stays skin (visible, no pieces), an
@@ -195,6 +197,9 @@ cases.B = function()
 		local ribcage = find(list, "Ribcage")
 		assert(ribcage and ribcage:GetAttribute("Layer") == "deep", "F-B: the open torso needs a Ribcage with Layer deep")
 		assert(not find(list, "TorsoFilling"), "F-B: the open torso still has its TorsoFilling")
+		local corpse = corpseOf(torso)
+		assert(corpse, "F-B: the open torso did not kill")
+		table.insert(made, corpse)
 	end)
 end
 
@@ -277,8 +282,12 @@ end
 -- F-F all six torn.
 cases.F = function()
 	local body = newBody()
-	gore("seed", 14) -- variants: Head 2, LeftArm 2, RightArm 2, LeftLeg 1, RightLeg 2 (bone and skull showing)
+	local parts = {}
 	for _, key in KEYS do
+		parts[key] = body[PART[key]]
+	end
+	gore("seed", 14) -- variants: Torso 2, LeftArm 1, RightArm 2, LeftLeg 2, RightLeg 1, Head 2 (bone and skull showing)
+	for _, key in { "Torso", "LeftArm", "RightArm", "LeftLeg", "RightLeg", "Head" } do
 		gore("damageLimb", body, key, 50, "hit")
 	end
 	gore("seed", Random.new():NextInteger(1, 2 ^ 30))
@@ -286,7 +295,7 @@ cases.F = function()
 	local variants = {}
 	for _, key in KEYS do
 		assert(body:GetAttribute("Gore_" .. key) == "Torn", "F-F: " .. key .. " should be torn")
-		local part = body[PART[key]]
+		local part = parts[key]
 		assert(part.Transparency == 1, "F-F: " .. key .. " is still visible")
 		local setName = if key == "Torso" then "Sealed" else "Variant" .. body:GetAttribute("GoreVariant_" .. key)
 		wears(part, key, setName, "F-F")
@@ -294,11 +303,14 @@ cases.F = function()
 	end
 	local deep = 0
 	for _, key in KEYS do
-		for _, piece in piecesOf(body, key) do
+		for _, piece in piecesOf(parts[key], key) do
 			deep += if piece:GetAttribute("Layer") == "deep" then 1 else 0
 		end
 	end
 	assert(deep > 0, "F-F: no limb wears a deep piece (the seed's variants changed?)")
+	local corpse = corpseOf(parts.Torso)
+	assert(corpse, "F-F: the torn head did not kill")
+	table.insert(made, corpse)
 	print("gore_flesh F-F sets: " .. table.concat(variants, " ") .. "; deep pieces " .. deep)
 end
 

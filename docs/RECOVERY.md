@@ -249,11 +249,12 @@ what he is doing on `Room1.BobTheInjector` as attributes (`State`, `Target`, `Ha
 game animates him from those, so do not delete those attributes. As the needle comes out, `HardDriveEffects` (which goes
 straight into `ServerScriptService`, next to `LabServer`, not inside it) does what the Harddrive does, to the copy and the
 owner at once. Explosive: the limb glows red and beeps faster and faster for `LabConfig.FUSE_SECONDS`, then blows with your
-boom and its blood on both bodies (see `Booms` above). The blast itself is the gore system's (`GoreConfig.EXPLOSIVE_POWER` and
-`BLAST_RADIUS`), set off once at the copy's limb, and the link gives the owner exactly the same: the injected arm or leg always
-breaks and dangles, or (one time in four, `SEVER_CHANCE`) is ripped off and flung; the torso and the head next to it tear. Both
-lose `LabConfig.LIMB_DAMAGE` health; the head or the torso kills both. A dangling limb can be injected again (the second blast
-is likely to finish the torso). A broken or ripped-off right arm takes the tablet away until the owner respawns. At
+boom and its blood on both bodies (see `Booms` above). The blast itself is the gore system's, aimed: `Gore.blastLimb` hits only
+the injected limb of the copy with `GoreConfig.EXPLOSIVE_POWER` (no radius: the torso, the head and the other limbs are
+untouched), and the link gives the owner exactly the same: the injected arm or leg always breaks and dangles, or (one time in
+four, `SEVER_CHANCE`) is ripped off and flung. Both lose `LabConfig.LIMB_DAMAGE` health; the head or the torso kills both. A
+dangling limb can be injected again, and blowing up two arms or legs does not kill. A broken or ripped-off right arm takes the
+tablet away until the owner respawns. At
 `GORE_LEVEL` 0, or without `Gore`, the Explosive works as it did before the gore system: the arm or leg is flung off both
 bodies (`FLING_SPEED` and `FLING_SPIN` at the top of `HardDriveEffects`) and nothing else is hurt. A limb that comes off lies
 on the floor for `LabConfig.LOST_LIMB_SECONDS`. If the room is freed or the owner dies before the blast, Bob goes home and
@@ -297,7 +298,9 @@ but injections still happen.
 (`GoreServer` tracks each one as it spawns) and Room 1's copy and Explosive (`LabServer` and `HardDriveEffects` use it; without
 `Gore` the lab works as it did before it). Every limb of a body it tracks has 100 integrity. Damage tears a limb at 60 or less, and at 0 or
 less it breaks an arm or a leg, or destroys the head or the torso (which kills). An explosion can also rip a broken arm or leg
-off, open a torn torso and blow a destroyed skull apart, each by chance. A single loss of 30 health or more from anything else
+off, open a torn torso and blow a destroyed skull apart, each by chance. At `GORE_LEVEL` 1 and 2 a head that tears (shows any
+flesh) or a torso that is ripped open kills at once; a torn torso that stays sealed does not. Room 1's injections are aimed
+(`Gore.blastLimb`, only the injected limb); every other explosion (`Gore.explode`) still spreads to the limbs near it. A single loss of 30 health or more from anything else
 (a big hit) damages a random limb, or both legs after a fall. A player and their copy are linked so they always come out
 the same, and the link carries on to their corpses (a blast on one corpse shows on the other). The results are written on the body as attributes (`Gore_<limb>`, `GoreHP_<limb>`, `GoreVariant_<limb>`,
 `GoreTorsoOpen`, `GoreSkull`), and the body gets the tag `GoreBody`. `GoreConfig` (a ModuleScript straight in

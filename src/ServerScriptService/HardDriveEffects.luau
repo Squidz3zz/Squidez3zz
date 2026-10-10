@@ -91,9 +91,10 @@ end
 -- (Booms.at with blood, spraying away from the body) at each body's limb centre (taken before anything comes off; no Explosion
 -- instance). An arm or a leg
 -- costs the body LIMB_DAMAGE health; the head or the torso kills.
--- Through Gore (GORE_LEVEL 1 or 2) the blast is Gore.explode(EXPLOSIVE_POWER, BLAST_RADIUS) at the first body's limb (the
--- copy's) and nowhere else: it tears every tracked limb near it, the injected one always breaks (dangling, or ripped off by
--- chance), and the copy's link to its owner gives the owner exactly the same (blasting both bodies would hit the owner twice).
+-- Through Gore (GORE_LEVEL 1 or 2) the blast is Gore.blastLimb(EXPLOSIVE_POWER) on the first body's (the copy's) injected limb
+-- and nothing else: no radius, so the torso, the head and the other limbs are untouched; the injected arm or leg always
+-- breaks (dangling, or ripped off by chance), and the copy's link to its owner gives the owner exactly the same (blasting both
+-- bodies would hit the owner twice).
 -- Without Gore, or at GORE_LEVEL 0, it is the blast from before Gore: each body's arm or leg is flung off and nothing else is hurt.
 function HardDriveEffects.Explosive(bodies: { Model }, limbKey: string, stillLinked: () -> boolean)
 	local fused: { Model } = {}
@@ -170,7 +171,7 @@ function HardDriveEffects.Explosive(bodies: { Model }, limbKey: string, stillLin
 		and GoreConfig.get("GORE_LEVEL") ~= 0
 		and first ~= nil
 		and centres[first] ~= nil
-		and gore("explode", centres[first], GoreConfig.get("EXPLOSIVE_POWER"), GoreConfig.get("BLAST_RADIUS"))
+		and gore("blastLimb", first, limbKey, GoreConfig.get("EXPLOSIVE_POWER"))
 	for _, body in fused do
 		local humanoid = body:FindFirstChildOfClass("Humanoid")
 		if centres[body] and humanoid then
