@@ -3,10 +3,14 @@
 -- ragdolls and leaves a corpse (Gore and its Ragdoll do the rest, including removing old corpses). A character Gore fails to
 -- track only warns (once) and plays on without gore. Every BLEED_TICK seconds it bleeds every open body (Gore.bleed, with the
 -- time since the last tick); a failed tick only warns (once).
+-- ReplicatedStorage.GoreReset: a RemoteEvent this makes, which each player's GoreReset.client fires from the Reset Character
+-- button. It kills the sender's own character, only while it is alive, through Gore.hurt (so the reset is no hit and no limb
+-- is damaged); it reads nothing else the client sends.
 -- TestHook: a BindableFunction inside this script, made only in Studio. A test that requires Gore gets a separate copy of it
--- (its own Random, links and big-hit watchers), so the tests reach the game's own Gore through this instead:
+-- (its own Random, links and hit watchers), so the tests reach the game's own Gore through this instead:
 -- TestHook:Invoke("call", fnName, ...) calls Gore[fnName](...) here and returns what it returns.
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local Gore = require(script.Parent:WaitForChild("Gore"))
@@ -34,6 +38,20 @@ Players.PlayerAdded:Connect(onPlayer)
 for _, player in Players:GetPlayers() do
 	onPlayer(player)
 end
+
+local reset = Instance.new("RemoteEvent")
+reset.Name = "GoreReset"
+reset.OnServerEvent:Connect(function(player)
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.Health > 0 then
+		local ok = pcall(Gore.hurt, character, math.huge)
+		if not ok then
+			humanoid.Health = 0
+		end
+	end
+end)
+reset.Parent = ReplicatedStorage
 
 task.spawn(function()
 	local bleedWarned = false

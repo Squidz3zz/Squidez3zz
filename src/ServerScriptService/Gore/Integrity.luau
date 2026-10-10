@@ -1,5 +1,5 @@
 -- Integrity: the gore system's rules (it sits inside Gore, which is how other scripts reach it; Gore's comments say what each
--- function does). It keeps each limb's integrity and state, makes the chance rolls, watches for big hits and keeps the link
+-- function does). It keeps each limb's integrity and state, makes the chance rolls, lands hits on limbs and keeps the link
 -- between a player and their copy. Everything it decides goes on the body as attributes, so every client and every later part
 -- of the gore system (dangling limbs, flesh, bleeding) reads the same thing. The numbers are GoreConfig's, read through
 -- GoreConfig.get. It only decides and publishes: it never moves, detaches or welds anything (listeners on onStateChanged do).
@@ -27,10 +27,11 @@ local listeners: { Listener } = {}
 -- Linked bodies, both ways round. Not weak: an Instance's Lua wrapper can be collected while the Instance lives, which would
 -- drop a link nothing else in Lua holds. A link goes on unlink, or when either body is destroyed.
 local partner: { [Model]: Model } = {}
--- Per watched humanoid: the health it last had, the health the gore system took that the watcher has not seen yet, and when
--- it was last in Freefall. Weak is safe here: the watcher's own connections keep the humanoid's wrapper alive until it is
--- destroyed.
-local watches: { [Humanoid]: { last: number, pending: number, fellAt: number } } = setmetatable({}, { __mode = "k" }) :: any
+-- Per watched humanoid: the health it last had, the health the gore system took that the watcher has not seen yet, when it
+-- was last in Freefall, and which limb was last touched by something loose (and when). Weak is safe here: the watcher's own
+-- connections keep the humanoid's wrapper alive until it is destroyed.
+type Watch = { last: number, pending: number, fellAt: number, touchKey: string, touchedAt: number }
+local watches: { [Humanoid]: Watch } = setmetatable({}, { __mode = "k" }) :: any
 local warned = {}
 
 local function warnOnce(key: any, message: string)
@@ -72,13 +73,41 @@ local function apply(body: Model, key: string, outcome: Outcome, cause: string)
 	end
 end
 
--- The big-hit watcher for one humanoid (see GoreConfig.BIG_HIT).
-local function watch(humanoid: Humanoid)
-	local w = { last = humanoid.Health, pending = 0, fellAt = -math.huge }
+-- One external hit of `damage` landing on one limb: GoreHit marks it, and the limb loses damage * HIT_SCALE (not at
+-- GORE_LEVEL 0, where hits only take health).
+local function land(body: Model, key: string, damage: number, cause: string)
+	Integrity.markHit(body, key, damage)
+	if GoreConfig.get("GORE_LEVEL") >= 1 then
+		Integrity.damageLimb(body, key, damage * GoreConfig.get("HIT_SCALE"), cause)
+	end
+end
+
+-- The hit watcher for one humanoid: every health drop not made by hurt is a hit. It lands on both legs during or just after a
+-- fall, else on the limb something loose touched within TOUCH_WINDOW seconds, else on the Torso.
+local function watch(humanoid: Humanoid, body: Model)
+	local w: Watch = { last = humanoid.Health, pending = 0, fellAt = -math.huge, touchKey = "Torso", touchedAt = -math.huge }
 	watches[humanoid] = w
 	humanoid.StateChanged:Connect(function(old, new)
 		if old == Enum.HumanoidStateType.Freefall or new == Enum.HumanoidStateType.Freefall then
 			w.fellAt = os.clock()
+		end
+	end)
+	-- One Touched per limb part. The world (anchored or grounded parts: floors, walls) and the body's own parts, tools and
+	-- accessories never count. Destroying a part ends its connection; dying ends them all.
+	local touches = {}
+	for _, key in LabConfig.LIMB_KEYS do
+		local part = LabConfig.limbParts(body, key)[1]
+		if part then
+			table.insert(touches, part.Touched:Connect(function(other)
+				if not other.Anchored and part.Parent == body and not other:IsDescendantOf(body) and not other:IsGrounded() then
+					w.touchKey, w.touchedAt = key, os.clock()
+				end
+			end))
+		end
+	end
+	humanoid.Died:Once(function()
+		for _, connection in touches do
+			connection:Disconnect()
 		end
 	end)
 	humanoid.HealthChanged:Connect(function(health)
@@ -88,26 +117,70 @@ local function watch(humanoid: Humanoid)
 		local credit = math.clamp(drop, 0, w.pending)
 		w.pending -= credit
 		drop -= credit
-		local body = humanoid.Parent
-		if drop < GoreConfig.get("BIG_HIT") or not (body and body:IsA("Model")) then
+		if drop <= 0 then
 			return
 		end
 		if humanoid:GetState() == Enum.HumanoidStateType.Freefall or os.clock() - w.fellAt <= FALL_WINDOW then
-			-- Twice the health lost, split across both legs.
-			Integrity.damageLimb(body, "LeftLeg", drop, "fall")
-			Integrity.damageLimb(body, "RightLeg", drop, "fall")
+			land(body, "LeftLeg", drop, "fall")
+			land(body, "RightLeg", drop, "fall")
 		else
-			local keys = {}
-			for _, key in LabConfig.LIMB_KEYS do
-				if body:GetAttribute("Gore_" .. key) ~= "Severed" then
-					table.insert(keys, key)
-				end
-			end
-			if #keys > 0 then
-				Integrity.damageLimb(body, keys[random:NextInteger(1, #keys)], 2 * drop, "hit")
-			end
+			land(body, if os.clock() - w.touchedAt <= GoreConfig.get("TOUCH_WINDOW") then w.touchKey else "Torso", drop, "hit")
 		end
 	end)
+end
+
+-- The tracked body and limb key a part belongs to, or nil. A part inside an Accessory counts as its Handle; a part that is not
+-- a limb (nor inside one), such as a Handle or the HumanoidRootPart, counts as the limb its joint or weld holds it to.
+-- ponytail: follows one joint, parented under the part itself (as AccessoryWeld and RootJoint are); a weld kept elsewhere
+-- (under the limb, say) is not found and the hit does nothing.
+local function limbOf(part: BasePart): (Model?, string?)
+	local body = part:FindFirstAncestorWhichIsA("Model")
+	while body and not CollectionService:HasTag(body, TAG) do
+		body = body:FindFirstAncestorWhichIsA("Model")
+	end
+	if not body then
+		return nil, nil
+	end
+	local accessory = part:FindFirstAncestorWhichIsA("Accessory")
+	local at: Instance? = if accessory then accessory:FindFirstChild("Handle") else part
+	for _ = 1, 2 do
+		if not at then
+			break
+		end
+		for _, key in LabConfig.LIMB_KEYS do
+			local limb = LabConfig.limbParts(body, key)[1]
+			if limb and (at == limb or at:IsDescendantOf(limb)) then
+				return body, key
+			end
+		end
+		local joint = nil
+		for _, child in at:GetChildren() do
+			if child:IsA("JointInstance") or child:IsA("WeldConstraint") then
+				joint = child :: any
+				break
+			end
+		end
+		at = if joint then (if joint.Part0 == at then joint.Part1 else joint.Part0) else nil
+	end
+	return nil, nil
+end
+
+function Integrity.hit(part: BasePart, damage: number)
+	if not (typeof(part) == "Instance" and part:IsA("BasePart") and type(damage) == "number" and damage > 0) then
+		return
+	end
+	local body, key = limbOf(part)
+	if body and key then
+		-- The limb first: a hit that kills moves the body's parts into a corpse, which would miss the damage.
+		land(body, key, damage, "hit")
+		Integrity.hurt(body, damage)
+	end
+end
+
+-- GoreHit = "<Limb>|<damage>|<n>", n counting up per body, so every hit changes it (clients spurt blood from it).
+function Integrity.markHit(body: Model, key: string, damage: number)
+	local n = tonumber(string.match(tostring(body:GetAttribute("GoreHit") or ""), "|(%d+)$")) or 0
+	body:SetAttribute("GoreHit", key .. "|" .. damage .. "|" .. (n + 1))
 end
 
 function Integrity.track(body: Model)
@@ -125,7 +198,7 @@ function Integrity.track(body: Model)
 	if humanoid then
 		humanoid.BreakJointsOnDeath = false
 		if not watches[humanoid] then
-			watch(humanoid)
+			watch(humanoid, body)
 		end
 	end
 end

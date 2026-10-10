@@ -6,20 +6,22 @@
 -- the link and the hurt marks are the game's. Only the onStateChanged check in I-A uses this test's own copy (a function
 -- cannot go through the hook).
 --   I-A thresholds  39 damage leaves an arm Intact (61), 1 more tears it (60), 60 more breaks it (0); "hit" never severs and
---                   integrity goes below 0; a torso at 0 is Destroyed (and open), Health 0, and that death is no big hit
---   I-B falloff     one blast at a left arm's centre: 150 to it (0 studs), 84.4 to the torso (1.5), 37.5 to the right arm (3)
+--                   integrity goes below 0; a torso at 0 is Destroyed (and open), Health 0, and that death is no hit
+--   I-B falloff     one blast of 60 at a left arm's centre: 60 to it (0 studs), 33.75 to the torso (1.5), 15 to the right arm
+--                   (3); small enough that the head and the torso stay Intact (a torn head would kill)
 --   I-C sever       a 150 explosion on an arm: Severed with HIT_SEED, Broken with MISS_SEED, the same again on a repeat; a
 --                   Broken arm hit by another explosion rolls again; a Severed one takes no more damage
 --   I-D torso       a torn torso hit by a blast opens with HIT_SEED and stays sealed with MISS_SEED; "hit" never opens it;
 --                   severed legs leave it alone
 --   I-E skull       a destroyed head: "blasted" with HIT_SEED, "shown" with MISS_SEED
---   I-F link        a blast at a's left arm lands identically on b (states, integrity, variants, torso, skull), the link
---                   works both ways, and unlink stops it
+--   I-F link        a blast at a's left arm (radius 3: it breaks the arm, the torso and head stay Intact and both live) lands
+--                   identically on b (states, integrity, variants, torso, skull), the link works both ways, and unlink stops it
 --   I-G copyState   a fresh body takes on every Gore attribute of a damaged one
---   I-H big hits    a 30-health drop not made by Gore.hurt damages one limb by 60; the same drop while falling (Freefall)
---                   takes 30 from each leg, and so does one right after landing (Freefall ended under 0.5 s ago), on a
---                   body dropped onto a floor of its own; on that body, a drop more than 0.5 s after landing is one hit of
---                   60 again; Gore.hurt(b, 40) damages no limb
+--   I-H unknown     a 30-health drop not made by Gore.hurt, with nothing touching the body, damages the Torso by 15
+--                   (HIT_SCALE); the same drop while falling (Freefall) takes 15 from each leg, and so does one right after
+--                   landing (Freefall ended under 0.5 s ago), on a body dropped onto a floor of its own; on that body, a drop
+--                   more than 0.5 s after landing lands on the Torso again (15: the floor is no touch); Gore.hurt(b, 40)
+--                   damages no limb
 -- It removes its bodies at the end and returns "PASS gore_integrity".
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -46,7 +48,8 @@ local VALUES = {
 	SKULL_BLAST_CHANCE = 0.4,
 	EXPLOSIVE_POWER = 150,
 	BLAST_RADIUS = 6,
-	BIG_HIT = 30,
+	HIT_SCALE = 0.5,
+	TOUCH_WINDOW = 0.2,
 	LIMP_SPEED = 8,
 	CRAWL_SPEED = 3,
 	CORPSE_LIFE = 120,
@@ -162,7 +165,7 @@ do
 	assert(b:GetAttribute("GoreTorsoOpen") == true, "I-A: a destroyed torso should be open")
 	assert(b.Humanoid.Health == 0, "I-A: a destroyed torso should leave Health 0, got " .. b.Humanoid.Health)
 	task.wait(0.3)
-	untouched(b, { "Head", "RightArm", "LeftLeg", "RightLeg" }, "I-A (the gore death is no big hit)")
+	untouched(b, { "Head", "RightArm", "LeftLeg", "RightLeg" }, "I-A (the gore death is no hit)")
 
 	-- onStateChanged, through this test's own copy of Gore (it changes the same attributes).
 	local Own = require(ServerScriptService:FindFirstChild("Gore"))
@@ -190,18 +193,20 @@ do
 	for _, key in LIMB_KEYS do
 		distance[key] = (LabConfig.limbParts(b, key)[1].Position - centre).Magnitude
 	end
-	gore("explode", centre, 150, 6)
-	for key, want in { LeftArm = 150, Torso = 84.4, RightArm = 37.5 } do
+	gore("explode", centre, 60, 6)
+	for key, want in { LeftArm = 60, Torso = 33.75, RightArm = 15 } do
 		local took = 100 - hp(b, key)
 		assert(math.abs(took - want) <= 0.5, ("I-B: %s took %.2f, expected %.1f"):format(key, took, want))
 	end
 	for _, key in LIMB_KEYS do
 		local d = distance[key]
-		local want = if d < 6 then 150 * (1 - d / 6) ^ 2 else 0
+		local want = if d < 6 then 60 * (1 - d / 6) ^ 2 else 0
 		local took = 100 - hp(b, key)
 		assert(math.abs(took - want) < 0.01, ("I-B: %s at %.2f studs took %.2f, expected %.2f"):format(key, d, took, want))
 	end
-	expect(b, "Torso", "Torn", nil, "I-B")
+	expect(b, "Torso", "Intact", nil, "I-B")
+	expect(b, "Head", "Intact", nil, "I-B")
+	assert(b.Humanoid.Health == 100, "I-B: the blast should not kill")
 	untouched(far, LIMB_KEYS, "I-B (a body 30 studs away)")
 end
 
@@ -291,9 +296,12 @@ do
 	end
 	gore("link", a, b)
 	gore("seed", HIT_SEED)
-	gore("explode", a["Left Arm"].Position, 150, 6)
+	gore("explode", a["Left Arm"].Position, 150, 3)
 	assert(state(a, "LeftArm") == "Broken" or state(a, "LeftArm") == "Severed", "I-F: the blast should break or sever a's arm")
-	expect(a, "Torso", "Torn", nil, "I-F")
+	expect(a, "Torso", "Intact", nil, "I-F")
+	assert(math.abs(hp(a, "Torso") - 62.5) < 0.01, "I-F: the torso should take 37.5, it is at " .. tostring(hp(a, "Torso")))
+	expect(a, "Head", "Intact", nil, "I-F")
+	assert(a.Humanoid.Health == 100 and b.Humanoid.Health == 100, "I-F: the blast should kill neither body")
 	same("I-F explode")
 	gore("damageLimb", b, "RightArm", 30, "hit")
 	same("I-F a hit on b")
@@ -312,7 +320,7 @@ do
 	end
 end
 
--- I-H big hits.
+-- I-H unknown hits.
 do
 	local b = newBody()
 	task.wait(1) -- out of any Freefall from being built (a drop counts as a fall for 0.5 s)
@@ -331,8 +339,8 @@ do
 	end, 2), "I-H: a 30-health drop damaged no limb")
 	task.wait(0.2)
 	local hit = changed(b)
-	assert(#hit == 1, "I-H: a 30-health drop should damage one limb, it damaged " .. table.concat(hit, ", "))
-	assert(hp(b, hit[1]) == 40, ("I-H: %s should take 60, it is at %s"):format(hit[1], tostring(hp(b, hit[1]))))
+	assert(#hit == 1 and hit[1] == "Torso", "I-H: a 30-health drop should damage the Torso only, it damaged " .. table.concat(hit, ", "))
+	expect(b, "Torso", "Intact", 85, "I-H")
 
 	local falling = newBody(true)
 	pcall(falling.HumanoidRootPart.SetNetworkOwner, falling.HumanoidRootPart, nil)
@@ -344,8 +352,8 @@ do
 		return #changed(falling) > 0
 	end, 2), "I-H: a 30-health drop while falling damaged no limb")
 	task.wait(0.2)
-	expect(falling, "LeftLeg", "Intact", 70, "I-H fall")
-	expect(falling, "RightLeg", "Intact", 70, "I-H fall")
+	expect(falling, "LeftLeg", "Intact", 85, "I-H fall")
+	expect(falling, "RightLeg", "Intact", 85, "I-H fall")
 	untouched(falling, { "Head", "Torso", "LeftArm", "RightArm" }, "I-H fall")
 	falling:Destroy()
 
@@ -379,10 +387,11 @@ do
 		table.insert(after, key .. " " .. tostring(hp(landing, key)))
 	end
 	local afterText = table.concat(after, ", ")
-	assert(hp(landing, "LeftLeg") == 70 and hp(landing, "RightLeg") == 70, ("I-H: a drop %.3f s after landing (%s) should take 30 from each leg, got %s"):format(dropAfter, landedState, afterText))
+	assert(hp(landing, "LeftLeg") == 85 and hp(landing, "RightLeg") == 85, ("I-H: a drop %.3f s after landing (%s) should take 15 from each leg, got %s"):format(dropAfter, landedState, afterText))
 	untouched(landing, { "Head", "Torso", "LeftArm", "RightArm" }, "I-H right after landing")
 
-	-- More than 0.5 s after Freefall ended, a drop is a hit again: one limb takes 60, the legs share nothing.
+	-- More than 0.5 s after Freefall ended, a drop is a hit again: it lands on the Torso (15); the floor under the legs is no
+	-- touch.
 	task.wait(1)
 	local standing = humanoid:GetState()
 	assert(standing ~= Enum.HumanoidStateType.Freefall, "I-H: the landed body is falling again")
@@ -405,8 +414,8 @@ do
 	end, 2), "I-H: a 30-health drop long after landing damaged no limb")
 	task.wait(0.2)
 	local late = hits()
-	assert(#late == 1, ("I-H: a drop long after landing (%s) should damage one limb, it damaged %s"):format(standing.Name, table.concat(late, ", ")))
-	assert(before[late[1]] - hp(landing, late[1]) == 60, ("I-H: %s should take 60 long after landing, it took %s"):format(late[1], tostring(before[late[1]] - hp(landing, late[1]))))
+	assert(#late == 1 and late[1] == "Torso", ("I-H: a drop long after landing (%s) should damage the Torso only, it damaged %s"):format(standing.Name, table.concat(late, ", ")))
+	expect(landing, "Torso", "Intact", 85, "I-H long after landing")
 	landing:Destroy()
 	floor:Destroy()
 
@@ -415,7 +424,7 @@ do
 	gore("hurt", k, 40)
 	assert(k.Humanoid.Health == 60, "I-H: Gore.hurt(b, 40) should leave Health 60, got " .. k.Humanoid.Health)
 	task.wait(0.3)
-	untouched(k, LIMB_KEYS, "I-H (Gore.hurt is no big hit)")
+	untouched(k, LIMB_KEYS, "I-H (Gore.hurt is no hit)")
 end
 
 folder:Destroy()

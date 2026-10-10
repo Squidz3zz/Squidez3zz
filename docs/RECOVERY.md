@@ -113,7 +113,7 @@ then run the script again. It refuses to run while there is a chart in both `Wor
 
 ### d) Put the scripts back
 
-There are thirty-five scripts. The file names are in `src/`.
+There are thirty-seven scripts. The file names are in `src/`.
 
 **Easy way, with Rojo** (a free tool, https://rojo.space; version 7.3 or newer):
 
@@ -145,6 +145,7 @@ scripts (and the menu's ScreenGuis in `ReplicatedStorage`) alone.
 | `Bleeding` | ModuleScript | `Gore` | `.../Gore/Bleeding.luau` |
 | `GoreServer` | Script | `ServerScriptService` | `src/ServerScriptService/GoreServer.server.luau` |
 | `GoreClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/GoreClient.client.luau` |
+| `GoreReset` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/GoreReset.client.luau` |
 | `BoomClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/BoomClient.client.luau` |
 | `MainMenuClient` | LocalScript | `StarterPlayer` -> `StarterPlayerScripts` | `src/StarterPlayer/StarterPlayerScripts/MainMenuClient/init.client.luau` |
 | `ButtonEffects` | ModuleScript | `MainMenuClient` | `.../MainMenuClient/ButtonEffects.luau` |
@@ -300,8 +301,10 @@ but injections still happen.
 less it breaks an arm or a leg, or destroys the head or the torso (which kills). An explosion can also rip a broken arm or leg
 off, open a torn torso and blow a destroyed skull apart, each by chance. At `GORE_LEVEL` 1 and 2 a head that tears (shows any
 flesh) or a torso that is ripped open kills at once; a torn torso that stays sealed does not. Room 1's injections are aimed
-(`Gore.blastLimb`, only the injected limb); every other explosion (`Gore.explode`) still spreads to the limbs near it. A single loss of 30 health or more from anything else
-(a big hit) damages a random limb, or both legs after a fall. A player and their copy are linked so they always come out
+(`Gore.blastLimb`, only the injected limb); every other explosion (`Gore.explode`) still spreads to the limbs near it. Any other loss of health is a hit, and
+it also costs one limb half as much (`HIT_SCALE`): the limb a weapon hit (`Gore.hit`, see "Calling the gore system from a
+weapon" below), else the limb something loose (a projectile, another player's tool) touched in the last `TOUCH_WINDOW`
+seconds, else the torso; after a fall, both legs. A hit never rips a limb off; it breaks it. A player and their copy are linked so they always come out
 the same, and the link carries on to their corpses (a blast on one corpse shows on the other). The results are written on the body as attributes (`Gore_<limb>`, `GoreHP_<limb>`, `GoreVariant_<limb>`,
 `GoreTorsoOpen`, `GoreSkull`), and the body gets the tag `GoreBody`. `GoreConfig` (a ModuleScript straight in
 `ReplicatedStorage`) holds every number and `GORE_LEVEL` (how gory the game is: 2, 1 or 0), each explained at its top. In
@@ -328,13 +331,56 @@ system still works and the Output window warns once. `Bleeding` (a fourth Module
 `Workspace.GorePools`, which the game makes; it stays with a corpse, or `SPLAT_LIFE` seconds after a living body stops
 dripping).
 `GoreServer` (a Script next to `Gore`) tracks the characters and runs the bleeding every quarter second; in Studio it also
-makes a `TestHook` for the tests.
+makes a `TestHook` for the tests. It also makes `ReplicatedStorage.GoreReset` (a RemoteEvent; do not build it by hand):
+`GoreReset` (a LocalScript in `StarterPlayerScripts`) points Roblox's Reset Character button at it, so a reset is a plain
+death (ragdoll, corpse, death screen) with no limb hurt. The server only ever kills the sender's own living character.
 
 The twelve ModuleScripts under `MainMenuClient` sit **inside** it (drag them onto it in the Explorer). `MenuAssets` and
 `LoadingScreen` go straight into `ReplicatedFirst`, not into `MainMenuClient`, and `LabConfig` (the settings of Room 1's injection lab) goes straight into `ReplicatedStorage`. `MenuAudio` plays the menu's music (one looping track per scene, on the Music slider). `RoomLighting` turns the outdoor light off while Settings or Credits shows, so the room is meant to look dark and amber from its first frame instead of after a few seconds (checked by eye in Studio and approved on 2026-10-06), and puts it back on the way out and on Play. The settled rooms come out somewhat darker with it on. `MenuAssets` is the one place to change the
 menu's look (`THEME`, see below), its sound ids (a plain number works too), the loading screen's title (`GAME_TITLE`) and tips, and its timings. The main
 menu's own title is a different thing: it is the `Title` label inside `ReplicatedStorage.MainMenu`, which you edit in Studio. The names must match exactly.
 `MenuTheme` paints the theme on the menu when it opens (see "Themes").
+
+### Calling the gore system from a weapon
+
+A weapon's `Humanoid:TakeDamage` only tells the game how much health went, not where, so the gore system has to guess the
+limb (something that just touched it, else the torso). To land the hit where it really hit, a server script calls
+`Gore.hit(part, damage)` **in place of** `TakeDamage`, with the exact part that was hit. It takes the health itself (through
+`Gore.hurt`), so **never also call `TakeDamage`**: the hit would count twice. A hat or other accessory counts as the limb it
+is worn on, and a corpse's limbs still take the hit. A part on no character does nothing. Every call into the gore system
+from other code should be wrapped in `pcall`, so an error inside the gore system does not break the weapon.
+
+A hitscan gun (server side, after the server has checked the shot):
+
+```lua
+local Gore = require(game:GetService("ServerScriptService").Gore)
+
+local params = RaycastParams.new()
+params.FilterDescendantsInstances = { shooterCharacter }
+local result = workspace:Raycast(muzzle.Position, direction * 300, params)
+if result and result.Instance:IsA("BasePart") then
+	pcall(Gore.hit, result.Instance, 25)
+end
+```
+
+A sword or projectile (server side):
+
+```lua
+local Gore = require(game:GetService("ServerScriptService").Gore)
+
+local hitOnce = {}
+blade.Touched:Connect(function(part)
+	local character = part:FindFirstAncestorWhichIsA("Model")
+	if character and character ~= tool.Parent and not hitOnce[character] and character:FindFirstChildOfClass("Humanoid") then
+		hitOnce[character] = true
+		pcall(Gore.hit, part, 30)
+	end
+end)
+```
+
+`Gore` lives in `ServerScriptService`, which clients cannot see. A weapon whose hits are detected on the client must send
+them to the server through a RemoteEvent, and the server must check them (who fired, that the shooter is alive, the
+distance, the rate of fire) before it calls `Gore.hit`. Never let a client name the damage or the target unchecked.
 
 ### Themes: changing how the menu looks
 

@@ -1,8 +1,8 @@
 -- Run in the Server datamodel of a running playtest (no player needed: start the playtest, then run this). It builds pairs of
 -- linked R6 bodies (a "copy" and its "owner", as the lab links them) here, far from the rooms (x 8030 and up, y 300, z 8000,
 -- root anchored, each on a floor of its own), and drives the game's own Gore through ServerScriptService.GoreServer.TestHook
--- ("call", fnName, ...). Chances and the gore level are fixed with GoreConfig overrides (attributes on the module, Studio
--- only), removed however the case ends.
+-- ("call", fnName, ...). Chances and the gore level (2, except in A-G) are fixed with GoreConfig overrides (attributes on the
+-- module, Studio only), removed however the case ends.
 --   A-A aimed     Gore.blastLimb(copy, "LeftArm", 150): the left arm is Broken or Severed on both bodies, and the Torso, Head,
 --                 RightArm, LeftLeg and RightLeg are Intact at 100 on both
 --   A-B explode   Gore.explode at the copy's left arm (150, radius 6) still tears the Torso: the radius blast is unchanged
@@ -184,7 +184,8 @@ end
 local order = if CASE == "all" then { "A", "B", "C", "D", "E", "F", "G" } else { CASE }
 local results, failed = {}, false
 for _, name in order do
-	local ok, err = pcall(cases[name])
+	-- A-A to A-F run at GORE_LEVEL 2, whatever the module says (A-G sets its own).
+	local ok, err = pcall(withOverrides, if name == "G" then {} else { GORE_LEVEL = 2 }, cases[name])
 	failed = failed or not ok
 	table.insert(results, name .. (if ok then " ok" else ": " .. tostring(err)))
 end

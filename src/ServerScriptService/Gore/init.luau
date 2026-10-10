@@ -29,11 +29,20 @@
 --
 --   Gore.track(body)                    starts tracking an R6 body: every limb Intact at 100, GoreTorsoOpen false (a body
 --                                       already tracked keeps what it has), the GoreBody tag, Humanoid.BreakJointsOnDeath off,
---                                       the death ragdoll, and the big-hit watcher: one drop of GoreConfig.BIG_HIT health or
---                                       more, made by anything but Gore.hurt, damages a random limb (not a severed one) by twice
---                                       the health lost ("hit"), or both legs by the health lost each when the humanoid was in
---                                       Freefall within the last 0.5 s ("fall"). ServerScriptService.GoreServer tracks every
---                                       player's character as it spawns.
+--                                       the death ragdoll, and the hit watcher: every drop of health made by anything but
+--                                       Gore.hurt (a weapon's TakeDamage, a script) is an unknown hit of that much. It lands
+--                                       (as Gore.hit does, but without taking health again) on both legs ("fall") when the
+--                                       humanoid was in Freefall within the last 0.5 s; else ("hit") on the limb most recently
+--                                       touched, within GoreConfig TOUCH_WINDOW seconds, by a part that is not anchored, not
+--                                       grounded and not the body's own (a projectile, another character's tool); else on the
+--                                       Torso. ServerScriptService.GoreServer tracks every player's character as it spawns.
+--   Gore.hit(part, damage)              an external hit (a weapon's, in place of TakeDamage) on the exact part it hit: a part
+--                                       of an Accessory counts as the limb its Handle is welded to, any other part as the limb
+--                                       it is in or joined to (the HumanoidRootPart is the Torso). That limb loses damage *
+--                                       GoreConfig HIT_SCALE ("hit"; never at GORE_LEVEL 0), and a living body loses damage
+--                                       health through Gore.hurt (a corpse's limbs still take it). Every hit, this or an
+--                                       unknown one, sets GoreHit = "<Limb>|<damage>|<n>" on the body (n counts up). Nothing
+--                                       happens for a part on no tracked body, or damage not above 0.
 --   Gore.link(a, b), Gore.unlink(body)  links two bodies (a player's character and their copy) so every gore change on
 --                                       either is decided once and lands identically on both; unlink (or destroying either
 --                                       body) ends it. The change is worked out on the body it happens to and copied onto the
@@ -48,7 +57,7 @@
 --                                       by power * (1 - distance / radius)^2, as "explosion".
 --   Gore.blastLimb(body, key, power)    an aimed blast (Bob's injections): damageLimb(body, key, power, "explosion") on that
 --                                       one limb only, no radius, nothing else hurt (the link gives the partner the same).
---   Gore.hurt(body, amount)             takes health from the body as gore damage, which the big-hit watcher ignores. Any
+--   Gore.hurt(body, amount)             takes health from the body as gore damage, which the hit watcher ignores. Any
 --                                       health the gore system or the lab takes should go through this. It is not carried
 --                                       across a link: whatever hurts one linked body hurts the other itself if it should.
 --   Gore.bleed(dt)                      dt seconds of bleeding (Bleeding, inside Gore): every living tracked body with n >= 2
@@ -67,7 +76,7 @@
 --   Gore.seed(n)                        Studio only (nil in the live game): reseeds the Random behind every chance roll, so
 --                                       a test's rolls repeat.
 -- A script that requires Gore from Studio's command bar (or a test) gets its own copy: its own Random, links, listeners,
--- big-hit watchers and death watchers. Tests reach the game's copy through ServerScriptService.GoreServer.TestHook.
+-- hit watchers and death watchers. Tests reach the game's copy through ServerScriptService.GoreServer.TestHook.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
@@ -121,6 +130,7 @@ return {
 	blastLimb = function(body: Model, key: string, power: number)
 		Integrity.damageLimb(body, key, power, "explosion")
 	end,
+	hit = Integrity.hit,
 	hurt = Integrity.hurt,
 	bleed = Bleeding.tick,
 	stateOf = Integrity.stateOf,

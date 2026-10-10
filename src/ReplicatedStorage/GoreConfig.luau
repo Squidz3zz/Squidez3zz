@@ -1,5 +1,5 @@
 -- GoreConfig: the one place to edit the gore system: how much a limb takes before it tears or breaks, the chances of a limb
--- ripping off, the torso opening and the skull blowing apart, how hard blasts and big hits are, how broken legs slow a body
+-- ripping off, the torso opening and the skull blowing apart, how hard blasts and hits are, how broken legs slow a body
 -- down, how long corpses, pools and splats of blood stay, and how gory the game is (GORE_LEVEL). It lives in ReplicatedStorage
 -- because both sides read it: the server (the damage rules, broken limbs, corpses and bleeding, in ServerScriptService.Gore)
 -- and every player's client (the skin chunks, drips, pools, spray and splats).
@@ -20,8 +20,12 @@
 --   BLAST_RADIUS        how far (studs) a blast reaches. A limb whose centre is d studs from the blast takes
 --                       power * (1 - d / radius)^2: with 150 and 6 that is 150 at 0 studs, about 84 at 1.5 and 37.5 at 3, so the
 --                       injected limb always breaks and the torso next to it tears.
---   BIG_HIT             one drop of health this big or bigger, from anything except the gore system itself, also hurts a limb
---                       by twice the health lost: one random limb, or both legs (half each) when the body was falling.
+--   HIT_SCALE           every other hit (a weapon, a fall, any health lost to something but the gore system) also takes this
+--                       much of its damage from one limb: the limb it hit (Gore.hit), the one something loose just touched, or
+--                       the Torso; after a fall, each leg. With 0.5 a 30 hit takes 15: flesh shows on the 3rd, the limb breaks
+--                       around the 7th; a 100 hit tears it at once.
+--   TOUCH_WINDOW        seconds a touch by something loose (not anchored, not part of the world or of the body) counts: a
+--                       health drop this soon after lands on the limb it touched.
 --
 -- Broken legs:
 --   LIMP_SPEED          walk speed (studs per second) with one leg broken or gone; no jumping.
@@ -67,7 +71,8 @@ local GoreConfig = {
 
 	EXPLOSIVE_POWER = 150,
 	BLAST_RADIUS = 6,
-	BIG_HIT = 30,
+	HIT_SCALE = 0.5,
+	TOUCH_WINDOW = 0.2,
 
 	LIMP_SPEED = 8,
 	CRAWL_SPEED = 3,
