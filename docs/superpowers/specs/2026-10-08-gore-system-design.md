@@ -144,7 +144,7 @@ clothing covers the part.
   - It stops at death.
 - **Drips (client):**
   - Every open limb drips dark-red drops while the body is alive, and for 30 s after death.
-  - Drops landing below grow a glossy pool under the body, up to 4 studs across.
+  - Drops landing below grow a wet pool (Foil, R17) under the body, up to 4 studs across.
 - **Spray (client):**
   - A limb blast fires a forceful jet: about 2× the current droplets at 40–90 studs/s, in a cone pointing away from the body.
     The direction is limb centre minus torso centre; a torso or head blast uses the body's facing.
@@ -152,12 +152,12 @@ clothing covers the part.
   - The user's blood sounds play as now.
   - `Booms.at(position, blood, direction?)` gains the direction.
 - **Splats (client):**
-  - About 12 rays in a 60° cone along the spray, up to 14 studs, plus 4 downward rays.
+  - About 12 rays in a 60° cone along the spray, up to 24 studs (24, not 14: the seated copy's head is about 19 studs from the glass; Task 8), plus 4 downward rays.
   - Wherever they hit a fixed surface, a splat sticks: the floor, the walls, the chair, or the observation glass from inside.
     A fixed surface is `IsGrounded()`, excluding bodies, Bob, the Shutter and the boom.
   - On walls and glass the splats are stretched 1.5–2.5× downward along the surface, like running blood.
-  - Each splat is a glossy, wet, dark-red base (glass-like or reflective material, chosen by eye) with one of
-    no decal (decals are left out for now), rotated randomly.
+  - Each splat is a wet, dark-red base (Foil, chosen by eye: glass and reflective plastic go purple in sunlight; ruling R17)
+    with no decal (decals are left out for now), rotated randomly.
   - Splats are lifted slightly with a small random offset so overlapping ones don't flicker.
   - SPLAT_LIFE 90 s, SPLAT_MAX 150 (oldest first).
 
@@ -233,7 +233,7 @@ results repeat.
 - a blast near a wall puts splats on it, stretched downward;
 - a head blast in the chair puts splats on the observation glass;
 - the caps;
-- the splat base is glossy (its material or reflectance as chosen).
+- the splat base is Foil (as chosen, R17) and drawn as a disc or oval, not a rod.
 
 **Human checks:** the look of the flesh, the chunks and the blood; the sounds; the phone emulator.
 

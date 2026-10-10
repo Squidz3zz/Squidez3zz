@@ -218,7 +218,7 @@ the blood part of `GoreClient`). Every Sound in the folder plays with the burst,
 live there, `BloodSquirt` (rbxassetid://91834483567891) and `Blood Splatter Sound Effect ` (rbxassetid://127991013927235; the
 name ends in a space), both at volume 0.5. They were made by hand and are **only in the place file**; any Sound you drop into
 the folder plays too. The blood also leaves splats: 12 rays in a 60 degree cone along the spray and 4 more downward, each up
-to 24 studs, put a glossy, wet, dark-red oval wherever they meet a fixed surface: the floor, the walls, the chair or the
+to 24 studs, put a wet dark-red oval (Foil, which reads wet red in sun and shade) wherever they meet a fixed surface: the floor, the walls, the chair or the
 observation glass (never a body, a corpse, Bob, the Shutter, a loose part such as a blown-off limb, skin chunks or pools). On a
 wall or the glass a splat runs down it, 1.5 to 2.5 times longer than it is wide. Splats are parts named `BloodSplat` in
 `Workspace.GoreSplats` (the game makes it), only on each player's own screen; each fades out over its last 5 seconds and goes
@@ -321,7 +321,7 @@ system still works and the Output window warns once. `Bleeding` (a fourth Module
 (torn, broken or ripped-off limbs) bleed: with two or more, a living body loses `BLEED_PER_OPEN_LIMB` health a second for each
 (about a minute to death with two), at `GORE_LEVEL` 1 and 2; a player and their copy bleed the same. On each player's screen
 `GoreClient` makes every open limb drip (a ripped-off one from its stump), on the living and on corpses for
-`DRIP_AFTER_DEATH` seconds, and a glossy pool of blood grows under the body up to `POOL_MAX` studs across (in
+`DRIP_AFTER_DEATH` seconds, and a wet pool of blood (Foil) grows under the body up to `POOL_MAX` studs across (in
 `Workspace.GorePools`, which the game makes; it stays with a corpse, or `SPLAT_LIFE` seconds after a living body stops
 dripping).
 `GoreServer` (a Script next to `Gore`) tracks the characters and runs the bleeding every quarter second; in Studio it also
@@ -413,7 +413,7 @@ Press **Play** in Studio (the Test tab) and check each of these:
    left of the screen). CONFIRM stays grey ("PICK A HARDDRIVE AND A LIMB") until you pick EXPLOSIVE and a limb, then reads
    e.g. "CONFIRM: EXPLOSIVE INTO LEFT ARM". Press it: the menu closes and Bob goes to work. Open the tablet again while he
    moves: it is read-only and the top bar shows MOVING, INJECTING or RETURNING. The limb blows with your explosion, a spray
-   of blood with a thick red mist and the two blood sounds, and paints glossy dark-red splats on the floor, the walls and the
+   of blood with a thick red mist and the two blood sounds, and paints wet dark-red splats on the floor, the walls and the
    observation glass (running down the walls and glass) that fade after about 90 seconds. The
    copy's limb and your own then dangle limp, or (sometimes) are ripped off and fly away. A ripped-off limb reads LOST and
    cannot be picked; a dangling one can. The X, putting the tablet away, and (on a controller) B all close the menu, and so does dying. On a

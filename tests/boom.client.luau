@@ -13,13 +13,15 @@
 --   C-1  Client, CASE = "C-1": arms it, with GoreConfig SPLAT_LIFE set to SPLAT_LIFE below (an override on this client's
 --        GoreConfig only, removed by C-2 however it ends). For each of the next two booms it records the names of the
 --        ParticleEmitters in GoreClient's "BloodBurst" attachment at its position (found within 0.5 s), the BloodSplat Parts
---        added anywhere in Workspace within 0.5 s, whether each lies flat on a floor (a ray straight down through it from 1 stud
---        above, past every character, the copy and Bob, hits a surface whose normal is within 10 degrees of the splat's axis,
---        and the splat's centre is within 0.2 studs of it), and how many are left SPLAT_LIFE + 1 s after the boom.
+--        added anywhere in Workspace within 0.5 s, whether each lies flat on the surface under it (it is a cylinder drawn along
+--        its X, so X must be its thinnest side; a ray into it along X from 0.1 studs above, past every character, the copy and
+--        Bob, hits a surface whose normal is within 10 degrees of X, and the splat's centre is within 0.2 studs of it; most land
+--        on the floor, but a ray can meet a low edge, such as the SpawnLocation pad's side), and how many are left
+--        SPLAT_LIFE + 1 s after the boom.
 --   C    Server: tests/boom.server.luau, CASE = "C" (a blood boom near the character with no direction, so the blood goes down,
 --        then 1 s later a plain one)
 --   C-2  Client, CASE = "C-2": the blood boom has a BloodBurst with the Blood emitters (Spray, Mist) and made at least one splat,
---        every one flat on the floor and all gone after SPLAT_LIFE + 1 s; the plain boom has no BloodBurst and made no splat.
+--        every one flat on its surface and all gone after SPLAT_LIFE + 1 s; the plain boom has no BloodBurst and made no splat.
 local CASE = "A-1"
 local FIND_WINDOW = 0.5
 local SHAKE_WINDOW = 0.6
@@ -209,7 +211,7 @@ elseif CASE == "C-1" then
 		end
 	end)
 
-	-- A ray straight down through the splat from 1 stud above, past every character, the copy and Bob: the surface it lies on.
+	-- A ray into the splat along its axis, from just above it, past every character, the copy and Bob: the surface it lies on.
 	local function flatOnFloor(splat: BasePart): string?
 		local params = RaycastParams.new()
 		params.FilterType = Enum.RaycastFilterType.Exclude
@@ -221,20 +223,23 @@ elseif CASE == "C-1" then
 		table.insert(skip, room and room:FindFirstChild("Subject"))
 		table.insert(skip, room and room:FindFirstChild("BobTheInjector"))
 		params.FilterDescendantsInstances = skip
-		local hit = workspace:Raycast(splat.Position + Vector3.yAxis, Vector3.yAxis * -2, params)
-		if not hit then
-			return ("a splat at %s has no floor under it"):format(tostring(splat.Position))
-		end
-		-- Its thin axis (the smallest of its sizes).
+		-- A splat is a cylinder drawn along its X: that is its axis, and it must be its thinnest side (or it draws a rod).
 		local size = splat.Size
-		local axis = if size.X <= size.Y and size.X <= size.Z then splat.CFrame.RightVector elseif size.Y <= size.Z then splat.CFrame.UpVector else splat.CFrame.LookVector
-		local angle = math.deg(math.acos(math.clamp(math.abs(axis:Dot(hit.Normal)), 0, 1)))
+		if size.X > math.min(size.Y, size.Z) then
+			return ("a splat's X (its cylinder axis) is not its thinnest side (Size %s): it draws a rod"):format(tostring(size))
+		end
+		local axis = splat.CFrame.RightVector
+		local hit = workspace:Raycast(splat.Position + axis * 0.1, axis * -0.6, params)
+		if not hit then
+			return ("a splat at %s has no surface under it"):format(tostring(splat.Position))
+		end
+		local angle = math.deg(math.acos(math.clamp(axis:Dot(hit.Normal), -1, 1)))
 		if angle > FLAT_DEGREES then
-			return ("a splat's axis is %.1f degrees off the floor normal"):format(angle)
+			return ("a splat's axis is %.1f degrees off its surface's normal"):format(angle)
 		end
 		local off = math.abs((splat.Position - hit.Position):Dot(hit.Normal))
 		if off > 0.2 then
-			return ("a splat's centre is %.2f studs off the floor (%s)"):format(off, hit.Instance:GetFullName())
+			return ("a splat's centre is %.2f studs off its surface (%s)"):format(off, hit.Instance:GetFullName())
 		end
 		return nil
 	end
@@ -303,7 +308,7 @@ elseif CASE == "C-2" then
 		assert(playerGui:GetAttribute("BT_1_Left") == 0, ("blood boom: %d splat(s) still there %g s after the boom"):format(playerGui:GetAttribute("BT_1_Left"), life + 1))
 		assert(playerGui:GetAttribute("BT_2_Found") < 0, "plain boom: it has a BloodBurst")
 		assert(playerGui:GetAttribute("BT_2_Splats") == 0, ("plain boom: %d splat(s)"):format(playerGui:GetAttribute("BT_2_Splats")))
-		return ("blood boom: %d splats, all flat on the floor and gone after %g s; plain boom: no blood"):format(splats, life + 1)
+		return ("blood boom: %d splats, all flat on their surface and gone after %g s; plain boom: no blood"):format(splats, life + 1)
 	end)
 	clear()
 	ReplicatedStorage.GoreConfig:SetAttribute("SPLAT_LIFE", nil)

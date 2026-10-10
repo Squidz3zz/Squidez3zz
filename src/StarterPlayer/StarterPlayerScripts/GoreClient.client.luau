@@ -15,7 +15,7 @@
 -- Attachment GoreDrip_<Limb> on the Torso where the limb hung (the flying limb drips no more). Once a body stops dripping its
 -- emitters are switched off. The emptied character a death leaves behind (no Torso) is skipped.
 -- While a body drips and its Torso is nearly still (slower than POOL_STILL studs a second: a body walking, falling or
--- slumping only drips until it settles), a pool grows under it: a glossy dark-red disc (a part named GorePool in
+-- slumping only drips until it settles), a pool grows under it: a wet dark-red disc (Foil; a part named GorePool in
 -- Workspace.GorePools) where a ray straight down from the Torso (POOL_REACH studs, past bodies and chunks; pools can't be
 -- hit) meets something that collides. It starts POOL_START studs across and widens by POOL_GROW studs a second for each
 -- dripping limb, up to GoreConfig POOL_MAX. A body that settles POOL_MOVE studs from its pool starts a new one there. A
@@ -32,7 +32,7 @@
 -- they and the sounds are over. Then the splats: SPLAT_RAYS rays in a cone SPLAT_CONE degrees across along the direction and
 -- SPLAT_DOWN_RAYS more downward, each up to SPLAT_REACH studs. Where one meets a fixed surface (grounded, colliding; never a
 -- body, a corpse, Bob, Room1.Shutter, a chunk, a pool or another splat; the floor, the walls, the chair and the observation
--- glass are) a splat sticks: a thin glossy dark-red ellipse (SmoothPlastic, Reflectance 0.2, a SpecialMesh Cylinder, no
+-- glass are) a splat sticks: a thin wet dark-red ellipse (Foil, which reads wet in sun and shade, a SpecialMesh Cylinder, no
 -- decal; a part named BloodSplat in Workspace.GoreSplats) SPLAT_SIZE studs across and up to 1.4 times that long, turned at
 -- random, lifted a random hair off the surface so overlapping ones don't flicker. On a wall or the glass it runs down:
 -- SPLAT_STRETCH times longer down the surface. Each fades out over its
@@ -191,7 +191,7 @@ end
 local OPEN = { Torn = true, Broken = true, Severed = true }
 local DRIP_TICK = 0.25
 local DRIP_COLOR = Color3.fromRGB(95, 0, 0)
-local POOL_COLOR = Color3.fromRGB(70, 0, 0)
+local POOL_COLOR = Color3.fromRGB(100, 3, 3)
 local POOL_START = 0.5
 local POOL_GROW = 0.15
 local POOL_REACH = 20
@@ -268,8 +268,7 @@ local function pour(torso: BasePart, grow: number, params: RaycastParams)
 		part.CanQuery = false
 		part.CanTouch = false
 		part.CastShadow = false
-		part.Material = Enum.Material.Glass
-		part.Reflectance = 0.2
+		part.Material = Enum.Material.Foil -- Glass and reflective plastic go purple in sunlight
 		part.Color = POOL_COLOR
 		-- The disc's axis (X) along the surface normal, lifted a little (a random bit more, so overlapping pools don't flicker).
 		local normal = hit.Normal
@@ -366,7 +365,7 @@ local SPLAT_SIZE = NumberRange.new(1, 2.4)
 local SPLAT_STRETCH = NumberRange.new(1.5, 2.5)
 local SPLAT_THICK = 0.04
 local SPLAT_FADE = 5
-local SPLAT_COLOR = Color3.fromRGB(70, 0, 0)
+local SPLAT_COLOR = Color3.fromRGB(100, 3, 3)
 
 local splats: { BasePart } = {} -- oldest first
 local splatFolder: Folder? = nil
@@ -420,7 +419,7 @@ local function splatAt(hit: RaycastResult)
 	local splat = Instance.new("Part")
 	splat.Name = "BloodSplat"
 	-- An ellipse: a cylinder mesh fills the part's whole box (a Cylinder part's face is always round; a squashed sphere mesh
-	-- shades like a ball). Its axis is its Y.
+	-- shades like a ball). Its axis is its X.
 	local mesh = Instance.new("SpecialMesh")
 	mesh.MeshType = Enum.MeshType.Cylinder
 	mesh.Parent = splat
@@ -429,14 +428,13 @@ local function splatAt(hit: RaycastResult)
 	splat.CanQuery = false
 	splat.CanTouch = false
 	splat.CastShadow = false
-	splat.Material = Enum.Material.SmoothPlastic -- Glass renders these pale; a reflective smooth surface stays dark red
-	splat.Reflectance = 0.2
+	splat.Material = Enum.Material.Foil -- Glass and reflective plastic go purple in sunlight; Foil reads wet red everywhere
 	splat.Color = SPLAT_COLOR:Lerp(Color3.new(), random:NextNumber(0, 0.3))
-	splat.Size = Vector3.new(size, SPLAT_THICK, length)
-	-- Its thin axis (Y) along the normal, its long side (Z) along `along`, centred where the blood hit. Lifted a random little
+	splat.Size = Vector3.new(SPLAT_THICK, length, size)
+	-- Its thin axis (X) along the normal, its long side (Y) along `along`, centred where the blood hit. Lifted a random little
 	-- bit, so overlapping splats don't flicker.
 	local centre = hit.Position + normal * (SPLAT_THICK / 2 + random:NextNumber(0.005, 0.03))
-	splat.CFrame = CFrame.fromMatrix(centre, normal:Cross(along), normal)
+	splat.CFrame = CFrame.fromMatrix(centre, normal, along)
 	splat.Parent = splatFolder
 	table.insert(splats, splat)
 	splat.Destroying:Once(function()

@@ -288,7 +288,7 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
 - **Bleeding (server, level ≥ 1):** for a living tracked body with n ≥ 2 open limbs, `Gore.hurt(body, BLEED_PER_OPEN_LIMB * n * dt)`. A linked pair is hurt identically.
 - **GoreClient (level ≥ 1):** every open limb of a living body, and of a corpse until `GoreDiedAt + DRIP_AFTER_DEATH`, emits drips:
   - a ParticleEmitter in the limb, dark red, falling under gravity;
-  - a pool under the body (a raycast down from the torso) as a glossy dark-red disc, growing to `POOL_MAX` studs while the body drips;
+  - a pool under the body (a raycast down from the torso) as a wet dark-red disc (Foil since Task 8, R17), growing to `POOL_MAX` studs while the body drips;
   - the pool stays with the corpse's life, or for `SPLAT_LIFE` for living bodies after the dripping stops.
 
 - [ ] **Step 1: Write the tests.**
@@ -318,9 +318,9 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
 **Interfaces:**
 - **Spray:** `LabAssets.Blood.Spray` is emitted at about 2× its EmitCount, with speed 40–90, aimed in a 45° cone along the direction. Mist is bigger, more opaque and lasts about 3 s. The user's blood sounds play.
 - **Splats:**
-  - about 12 rays in a 60° cone along the direction, up to 14 studs, plus 4 downward;
+  - about 12 rays in a 60° cone along the direction, up to 24 studs (24, not 14: the seated copy's head is about 19 studs from the glass; Task 8), plus 4 downward;
   - a hit counts only on `IsGrounded()` parts, excluding bodies, corpses, Bob, `Room1.Shutter` and the boom;
-  - each splat is a glossy dark-red base (glass-like or reflective, chosen by eye), rotated randomly, with no decal;
+  - each splat is a wet dark-red base (Foil, Reflectance 0, about RGB(100, 3, 3); ruling R17), rotated randomly, with no decal;
   - on near-vertical surfaces it's stretched 1.5–2.5× along the surface's downward direction;
   - it gets a small random lift;
   - it lasts `SPLAT_LIFE`, with at most `SPLAT_MAX`, oldest first.
@@ -329,7 +329,7 @@ Branch `feature/gore`. End every commit message with a blank line and `Co-Author
   - **S-A:** a blood boom 3 studs from a wall, aimed at it, puts ≥2 splats on the wall, flat on it, each longer vertically than wide.
   - **S-B:** a head blast on the seated copy, aimed at the window (−X), puts ≥1 splat on the observation glass.
   - **S-C:** the spray droplet speed range is 40–90.
-  - **S-D:** each splat is glossy (its Material is Glass, or its Reflectance is at least 0.2) and has no Decal.
+  - **S-D:** each splat is Foil (R17), has no Decal, and is drawn as a disc (its cylinder axis X is its thinnest side).
   - **S-E:** nothing lands on the Shutter or on a body.
   - **S-F:** 200 splats requested leave at most 150.
 - [ ] **Step 2: Run it.** Expected: FAIL.
