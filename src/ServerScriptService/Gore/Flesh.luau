@@ -21,7 +21,9 @@
 --                           arm's or leg's top 35%, the torso's top edge for the Shirt and bottom edge for the Pants), just
 --                           outside the part, each showing a patch of the limb's own front region of the classic template,
 --                           tinted red. No clothing, or an empty template, means no scraps. They are cosmetic and use their
---                           own Random, so they never shift Gore's seeded chance rolls.
+--                           own Random, so they never shift Gore's seeded chance rolls. Scraps that fail are dropped (with a
+--                           warning, once) and the flesh goes on without them. In Studio, the attribute TestFailScraps on this
+--                           module makes them fail after the first one, for tests.
 --   Flesh.stub(body, key)   for an arm or a leg being severed: its Death set (the bone stub, Stub1) is welded to the Torso where
 --                           the limb rests (from the joint, a Motor6D's C0 * C1:Inverse(), or a dangling limb's socket). Call it
 --                           before the joint goes.
@@ -29,6 +31,7 @@
 -- at the joint instead of the stub; at 0 nothing at all. A body that has lost its parts (a dead body emptied into its corpse)
 -- is skipped.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local ServerStorage = game:GetService("ServerStorage")
 
 local GoreConfig = require(ReplicatedStorage:WaitForChild("GoreConfig", 5) or error("Gore: GoreConfig is missing"))
@@ -46,7 +49,7 @@ local STUMP_COLOR = Color3.fromRGB(95, 12, 12)
 -- end of the part the scraps sit at (1 top, -1 bottom), and the X sign of its outer side (0 for the torso). Region coordinates:
 -- the standard classic Shirt/Pants template.
 local SCRAP_COLOR = Color3.fromRGB(60, 10, 10)
-local SCRAP_TINT = Color3.fromRGB(150, 40, 40)
+local SCRAP_TINT = Color3.fromRGB(215, 130, 130) -- light enough that the fabric's pattern shows through the red (ruling R1)
 local PIXELS_PER_STUD = 64
 local TILE_U, TILE_V = 585 / PIXELS_PER_STUD, 559 / PIXELS_PER_STUD
 local SCRAP_MAX = 0.7
@@ -58,6 +61,7 @@ local COVERS = {
 	Torso = { { "Shirt", 231, 74, 128, 1, 0 }, { "Pants", 231, 157, 128, -1, 0 } },
 }
 local rng = Random.new()
+local scrapsWarned = false
 
 local Flesh = {}
 
@@ -188,6 +192,9 @@ local function scraps(body: Model, key: string, part: BasePart, parent: Instance
 		joint.C0 = place
 		joint.Parent = scrap
 		scrap.Parent = parent
+		if RunService:IsStudio() and script:GetAttribute("TestFailScraps") then
+			error("TestFailScraps is set")
+		end
 	end
 end
 
@@ -201,7 +208,19 @@ function Flesh.dress(body: Model, key: string)
 	local folder = Instance.new("Folder")
 	folder.Name = FOLDER
 	weld(setNamed(key, setName), part, CFrame.identity, folder, skip)
-	scraps(body, key, part, folder)
+	-- Scraps are trim: if they fail, the flesh still goes on, without any of them.
+	local ok, err = pcall(scraps, body, key, part, folder)
+	if not ok then
+		for _, child in folder:GetChildren() do
+			if child.Name == "GoreScrap" then
+				child:Destroy()
+			end
+		end
+		if not scrapsWarned then
+			scrapsWarned = true
+			warn("Gore: torn cloth scraps failed, the flesh goes on without them: " .. tostring(err))
+		end
+	end
 	local old = part:FindFirstChild(FOLDER)
 	if old then
 		old:Destroy()

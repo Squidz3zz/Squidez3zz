@@ -330,7 +330,8 @@ blown apart, and a ripped-off arm or leg flies away with its flesh while a bone 
 worn on a hidden part (a hat on the head) is hidden with it. A torn limb under clothing (a Shirt covers the arms and torso,
 Pants the legs and torso; the head never) also keeps 3 to 5 bloodied scraps of it (`GoreScrap` parts in the same `GoreFlesh`
 folder) near the shoulder or hip, or the torso's top and bottom edges: each shows a patch of that limb's own part of the
-clothing image, tinted dark red, and they go wherever the limb goes. A body with no clothing gets none. At
+clothing image, tinted red (light enough that its pattern still shows), and they go wherever the limb goes. A body with no
+clothing gets none, and if the scraps ever fail the flesh still goes on without them (the Output window warns once). At
 `GORE_LEVEL` 1 none of that shows (a ripped-off limb leaves a plain dark-red stump); without the pieces the rest of the gore
 system still works and the Output window warns once. `Bleeding` (a fourth ModuleScript **inside** `Gore`) makes open wounds
 (torn, broken or ripped-off limbs) bleed: with two or more, a living body loses `BLEED_PER_OPEN_LIMB` health a second for each

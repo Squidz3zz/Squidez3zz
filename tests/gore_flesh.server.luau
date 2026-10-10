@@ -27,15 +27,22 @@
 --   F-I scraps     a body wearing a Shirt has its LeftArm torn: its GoreFlesh holds 3-5 GoreScrap parts beside the exact
 --                  variant set, each thin (0.05 one way, 0.3-0.7 the others), welded to the arm, massless, not colliding,
 --                  queried or touched, its centre in the arm's top 35% and 0.05-0.15 studs outside its surface (never on the
---                  inner side, against the torso), with
---                  Textures showing the ShirtTemplate. The intact torso (also under the Shirt) gets none
+--                  inner side, against the torso), with Textures showing the ShirtTemplate tinted RGB 215, 130, 130. The
+--                  intact torso (also under the Shirt) gets none. A second hit (Torn -> Broken) rebuilds the set: one GoreFlesh
+--                  with 3-5 new scraps and none of the old
 --   F-J bare       no clothing, or a Shirt with an empty template: a torn LeftArm gets no scraps and wears exactly its set
 --   F-K severed    a severed LeftArm (SEVER_CHANCE 1) on a clothed body flies off with its scraps still welded to it; the
 --                  Torso, with the stub, gets none
 --   F-L level 1    with GORE_LEVEL 1 a clothed torn LeftArm gets no scraps
+--   F-M legs/torso a body in a Shirt and Pants: a torn LeftLeg gets 3-5 scraps showing the PantsTemplate, in its top 35%; a
+--                  torn torso's scraps show the Shirt on its top edge and the Pants on its bottom edge (torsos are torn, up
+--                  to 6, until both kinds have shown)
+--   F-N failing    with the Studio-only attribute TestFailScraps on ServerScriptService.Gore.Flesh (always removed), a
+--                  clothed torn LeftArm is still hidden and wears exactly its set, with no scraps left on it, and the output
+--                  has the "scraps failed" warning (Flesh warns once per server, so it may come from an earlier run)
 -- Every case runs (one failing does not stop the rest); the error lists each case's result. It removes its bodies and
 -- corpses, and returns "PASS gore_flesh".
-local CASE = "all" -- or one letter, "A" to "L"
+local CASE = "all" -- or one letter, "A" to "N"
 
 local CollectionService = game:GetService("CollectionService")
 local LogService = game:GetService("LogService")
@@ -419,6 +426,7 @@ cases.I = function()
 		for _, texture in textures do
 			if texture:IsA("Texture") then
 				assert(texture.Texture == shirt.ShirtTemplate, label .. " shows " .. texture.Texture)
+				assert(texture.Color3:ToHex() == "d78282", label .. "'s tint is #" .. texture.Color3:ToHex() .. ", expected RGB 215, 130, 130")
 				shown += 1
 			end
 		end
@@ -430,6 +438,19 @@ cases.I = function()
 		assert(at.X < arm.Size.X / 2, label .. " is on the arm's inner side, against the torso")
 	end
 	assert(#scrapsOf(body.Torso) == 0, "F-I: the intact torso got scraps")
+	-- Torn -> Broken rebuilds the set: one GoreFlesh with 3-5 new scraps, none of the old ones left over.
+	gore("damageLimb", body, "LeftArm", 50, "hit")
+	assert(body:GetAttribute("Gore_LeftArm") == "Broken", "F-I: the second hit should break the arm")
+	task.wait()
+	local folders = 0
+	for _, child in arm:GetChildren() do
+		folders += if child.Name == "GoreFlesh" then 1 else 0
+	end
+	local rebuilt = scrapsOf(arm)
+	assert(folders == 1 and #rebuilt >= 3 and #rebuilt <= 5, ("F-I: the broken arm has %d GoreFlesh and %d scraps"):format(folders, #rebuilt))
+	for _, scrap in rebuilt do
+		assert(not table.find(scraps, scrap), "F-I: an old scrap survived the rebuild")
+	end
 end
 
 -- F-J no clothing, or an empty template.
@@ -477,8 +498,81 @@ cases.L = function()
 	end)
 end
 
+-- F-M legs and torso.
+local PANTS = "rbxassetid://10625576025" -- the user's suit trousers
+cases.M = function()
+	local body = newBody()
+	local shirt = clothe(body, SHIRT)
+	local pants = Instance.new("Pants")
+	pants.PantsTemplate = PANTS
+	pants.Parent = body
+	gore("damageLimb", body, "LeftLeg", 50, "hit")
+	task.wait()
+	local leg = body["Left Leg"]
+	local legScraps = scrapsOf(leg)
+	assert(#legScraps >= 3 and #legScraps <= 5, "F-M: the torn leg has " .. #legScraps .. " scraps")
+	for _, scrap in legScraps do
+		assert(scrap:FindFirstChildOfClass("Texture").Texture == pants.PantsTemplate, "F-M: a leg scrap does not show the Pants")
+		assert(leg.CFrame:PointToObjectSpace(scrap.Position).Y >= 0.3, "F-M: a leg scrap is below the leg's top 35%")
+	end
+	-- Each torso scrap shows the Shirt on the top edge or the Pants on the bottom one; which it is, is random, so torsos are torn
+	-- until both kinds have shown (each body has a 1 in 4 or less chance of only one kind).
+	local top, bottom = 0, 0
+	for _ = 1, 6 do
+		gore("damageLimb", body, "Torso", 50, "hit")
+		task.wait()
+		assert(body:GetAttribute("Gore_Torso") == "Torn" and body:GetAttribute("GoreTorsoOpen") == false, "F-M: the torso should tear, sealed")
+		for _, scrap in scrapsOf(body.Torso) do
+			local y = body.Torso.CFrame:PointToObjectSpace(scrap.Position).Y
+			local shown = scrap:FindFirstChildOfClass("Texture").Texture
+			if y > 0 then
+				assert(y >= 0.3 and shown == shirt.ShirtTemplate, ("F-M: a top-edge torso scrap at %.2f shows %s"):format(y, shown))
+				top += 1
+			else
+				assert(y <= -0.3 and shown == pants.PantsTemplate, ("F-M: a bottom-edge torso scrap at %.2f shows %s"):format(y, shown))
+				bottom += 1
+			end
+		end
+		if top > 0 and bottom > 0 then
+			break
+		end
+		body = newBody()
+		shirt = clothe(body, SHIRT)
+		pants = pants:Clone()
+		pants.Parent = body
+	end
+	assert(top > 0 and bottom > 0, ("F-M: torso scraps: %d Shirt on top, %d Pants at the bottom; expected both"):format(top, bottom))
+end
+
+-- F-N scraps that fail.
+cases.N = function()
+	local flesh = ServerScriptService.Gore.Flesh
+	local body = newBody()
+	clothe(body, SHIRT)
+	expectWarnings = true
+	flesh:SetAttribute("TestFailScraps", true)
+	local ok, err = pcall(function()
+		gore("damageLimb", body, "LeftArm", 50, "hit")
+	end)
+	flesh:SetAttribute("TestFailScraps", nil)
+	task.wait(0.1)
+	expectWarnings = false
+	if not ok then
+		error(err, 0)
+	end
+	local arm = body["Left Arm"]
+	assert(body:GetAttribute("Gore_LeftArm") == "Torn" and arm.Transparency == 1, "F-N: the arm should be torn and hidden")
+	wears(arm, "LeftArm", "Variant" .. body:GetAttribute("GoreVariant_LeftArm"), "F-N")
+	assert(#scrapsOf(arm) == 0, "F-N: failed scraps were left on the arm: " .. #scrapsOf(arm))
+	local warned = false
+	for _, entry in LogService:GetLogHistory() do
+		warned = warned or (entry.messageType == Enum.MessageType.MessageWarning and string.find(entry.message, "scraps failed", 1, true) ~= nil)
+	end
+	assert(warned, "F-N: the output has no warning about the failed scraps")
+end
+
 local results = {}
-for _, name in if CASE == "all" then { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L" } else { CASE } do
+for _, name in if CASE == "all" then { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N" } else { CASE } do
 	local ok, err = pcall(cases[name])
 	table.insert(results, "F-" .. name .. " " .. (if ok then "ok" else "FAIL: " .. tostring(err)))
 end
@@ -497,4 +591,4 @@ for _, line in results do
 end
 assert(#failed == 0, table.concat(results, " | "))
 assert(#problems == 0, "Gore complained: " .. table.concat(problems, " | "))
-return "PASS gore_flesh (F-A to F-L)"
+return "PASS gore_flesh (F-A to F-N)"

@@ -48,8 +48,9 @@ an arm also hits the torso with about 84, which tears it; a second injection des
     of the limb (shoulder or hip; the torso's top and bottom edges), slightly outside the flesh, at random angles. Massless,
     non-colliding, welded to the R6 part like the flesh pieces.
   - Look: a `Texture` on its outward faces showing the ShirtTemplate or PantsTemplate image, offset so the patch comes from
-    that limb's own region of the standard R6 clothing template (a left-arm scrap shows the left sleeve), tinted dark red
-    (Texture.Color3 about RGB 150, 40, 40) over a dark red part, so it reads as blood-soaked fabric.
+    that limb's own region of the standard R6 clothing template (a left-arm scrap shows the left sleeve), tinted red
+    (Texture.Color3 RGB 215, 130, 130, ruling R1: light enough that the fabric's pattern shows through) over a dark red part,
+    so it reads as blood-soaked fabric.
 - Scraps are part of the dressed set, so they are rebuilt with it (Torn -> Broken), fly off with a severed limb and move into
   the corpse. The bone stub gets none.
 - Made on the server, so everyone sees the same scraps. Positions are random per body; a linked copy gets its own (cosmetic).
