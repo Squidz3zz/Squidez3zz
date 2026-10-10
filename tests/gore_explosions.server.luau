@@ -2,13 +2,15 @@
 -- tracked R6 bodies standing on test floors of their own, far from the rooms (x 12030 and up, y 300, z 12000), and parents a
 -- real Roblox Explosion (Instance.new("Explosion")) to Workspace, so the game's own ExplosionReplacer and Gore handle it. Cases
 -- with no sever check fix SEVER_CHANCE at 0, so a broken limb stays on (a severed one would leave the body on purpose).
---   E-A kill     an Explosion 2 studs from the Torso with the defaults (BlastRadius 4, DestroyJointRadiusPercent 1): the body
+-- E-A and E-C check the push, so their Explosions have BlastPressure 0 (Roblox shoves nothing: the speed is BLAST_PUSH's
+-- alone), with EXPLOSIVE_POWER overridden to 500 so the gore power is still 150 (500 * the 0.3 floor), as with the defaults.
+--   E-A kill     an Explosion 2 studs from the Torso (BlastRadius 4, DestroyJointRadiusPercent 1, the defaults): the body
 --                dies and leaves a corpse; every limb part is in the corpse, still on its joint (no plain flung limbs); at
 --                least one limb is Torn or worse; on the frame after the corpse appears, its Torso moves away from the blast
 --                at more than 5 studs/s
 --   E-B alive    DestroyJointRadiusPercent 0 and BlastRadius 8, 5 studs away: the body lives and its nearest limb is Torn
---   E-C corpse   an existing (settled) corpse 3 studs from a default Explosion: its limbs lose integrity and it is pushed
---                away at more than 5 studs/s
+--   E-C corpse   an existing (settled) corpse 3 studs from an Explosion: its limbs lose integrity and it is pushed away at
+--                more than 5 studs/s
 --   E-D GoreHit  a blast between two bodies sets GoreHit "<Limb>|<damage>|<n>" on both; a body out of reach gets none
 --   E-E level 0  at GORE_LEVEL 0, the E-A blast leaves every joint (a Motor6D or a socket) in place
 -- Every case runs (one failing does not stop the rest); the error lists each case's result. It removes its bodies, floors,
@@ -128,13 +130,13 @@ local function awaySpeed(part: BasePart, from: Vector3): number
 	return part.AssemblyLinearVelocity:Dot((part.Position - from).Unit)
 end
 
--- The E-A blast (also E-E's): 2 studs from the Torso, the defaults. Returns the corpse and the blast position.
-local function killingBlast(label: string): (Model, Vector3)
+-- The E-A blast (also E-E's): 2 studs from the Torso, the defaults but for props. Returns the corpse and the blast position.
+local function killingBlast(label: string, props: { [string]: any }?): (Model, Vector3)
 	local body = newBody()
 	task.wait(1) -- standing on its floor
 	local torso = body.Torso
 	local at = torso.Position + Vector3.new(2, 0, 0)
-	boom(at)
+	boom(at, props)
 	local corpse = waitFor(function()
 		return corpseOf(torso)
 	end, 3)
@@ -146,7 +148,7 @@ end
 local cases = {}
 
 cases.A = function()
-	local corpse, at = killingBlast("E-A")
+	local corpse, at = killingBlast("E-A", { BlastPressure = 0 })
 	RunService.Heartbeat:Wait()
 	RunService.Heartbeat:Wait()
 	local speed = awaySpeed(corpse.Torso, at)
@@ -193,7 +195,7 @@ cases.C = function()
 		before += corpse:GetAttribute("GoreHP_" .. key)
 	end
 	local at = torso.Position + Vector3.new(3, 0, 0)
-	boom(at)
+	boom(at, { BlastPressure = 0 })
 	RunService.Heartbeat:Wait()
 	RunService.Heartbeat:Wait()
 	RunService.Heartbeat:Wait()
@@ -231,8 +233,12 @@ end
 local order = if CASE == "all" then { "A", "B", "C", "D", "E" } else { CASE }
 local results, failed = {}, false
 for _, name in order do
-	-- GORE_LEVEL 2 (E sets its own 0) and SEVER_CHANCE 0, whatever the module says.
-	local ok, err = pcall(withOverrides, if name == "E" then { SEVER_CHANCE = 0 } else { GORE_LEVEL = 2, SEVER_CHANCE = 0 }, cases[name])
+	-- GORE_LEVEL 2 (E sets its own 0) and SEVER_CHANCE 0, whatever the module says; A and C also EXPLOSIVE_POWER 500.
+	local overrides: { [string]: any } = if name == "E" then { SEVER_CHANCE = 0 } else { GORE_LEVEL = 2, SEVER_CHANCE = 0 }
+	if name == "A" or name == "C" then
+		overrides.EXPLOSIVE_POWER = 500
+	end
+	local ok, err = pcall(withOverrides, overrides, cases[name])
 	failed = failed or not ok
 	table.insert(results, name .. (if ok then " ok" else ": " .. tostring(err)))
 end
