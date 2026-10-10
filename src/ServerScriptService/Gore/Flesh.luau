@@ -16,6 +16,12 @@
 --                             a destroyed torso                           Death (open, with the Ribcage)
 --                           With all six limbs torn or worse each simply keeps its own set: FullBody.Variant1's pieces are the
 --                           same flesh as every Variant1, and swapping a Variant2 limb to it would hide its bone again.
+--                           A limb under clothing (a Shirt: arms and torso; Pants: legs and torso; never the head) also gets
+--                           3-5 GoreScrap parts in the same folder: thin dark-red rags of that clothing near the joint end (an
+--                           arm's or leg's top 35%, the torso's top edge for the Shirt and bottom edge for the Pants), just
+--                           outside the part, each showing a patch of the limb's own front region of the classic template,
+--                           tinted red. No clothing, or an empty template, means no scraps. They are cosmetic and use their
+--                           own Random, so they never shift Gore's seeded chance rolls.
 --   Flesh.stub(body, key)   for an arm or a leg being severed: its Death set (the bone stub, Stub1) is welded to the Torso where
 --                           the limb rests (from the joint, a Motor6D's C0 * C1:Inverse(), or a dangling limb's socket). Call it
 --                           before the joint goes.
@@ -32,6 +38,26 @@ local FOLDER = "GoreFlesh"
 -- Level 1's stump: a slab across the top end of the limb (an R6 arm or leg is 2 studs long), flush with the joint.
 local STUMP_SIZE = Vector3.new(1, 0.3, 1)
 local STUMP_COLOR = Color3.fromRGB(95, 12, 12)
+
+-- Scraps. The classic clothing template is 585x559 pixels and an R6 body wears it at 64 pixels a stud (an arm's 1x2 front is
+-- 64x128), so a Texture at that scale shows the fabric at its real size. A Texture's window on its face starts OffsetStuds from
+-- the image's top-left corner (checked in Studio). Each covering: the clothing class, the left edge and top of the band the
+-- patch comes from (the top 35% of the limb's front region, or the torso front's top or bottom 45 pixels), its width, and which
+-- end of the part the scraps sit at (1 top, -1 bottom), and the X sign of its outer side (0 for the torso). Region coordinates:
+-- the standard classic Shirt/Pants template.
+local SCRAP_COLOR = Color3.fromRGB(60, 10, 10)
+local SCRAP_TINT = Color3.fromRGB(150, 40, 40)
+local PIXELS_PER_STUD = 64
+local TILE_U, TILE_V = 585 / PIXELS_PER_STUD, 559 / PIXELS_PER_STUD
+local SCRAP_MAX = 0.7
+local COVERS = {
+	RightArm = { { "Shirt", 217, 355, 64, 1, 1 } },
+	LeftArm = { { "Shirt", 308, 355, 64, 1, -1 } },
+	RightLeg = { { "Pants", 217, 355, 64, 1, 1 } },
+	LeftLeg = { { "Pants", 308, 355, 64, 1, -1 } },
+	Torso = { { "Shirt", 231, 74, 128, 1, 0 }, { "Pants", 231, 157, 128, -1, 0 } },
+}
+local rng = Random.new()
 
 local Flesh = {}
 
@@ -102,6 +128,69 @@ local function restOf(torso: BasePart, key: string): CFrame?
 	return nil
 end
 
+-- Welds 3-5 GoreScrap rags of the clothing covering `key` (if any) to `part`, into `parent`.
+local function scraps(body: Model, key: string, part: BasePart, parent: Instance)
+	local worn = {}
+	for _, cover in COVERS[key] or {} do
+		local clothing = body:FindFirstChildOfClass(cover[1])
+		local template = clothing and (clothing :: any)[cover[1] .. "Template"]
+		if template and template ~= "" then
+			table.insert(worn, { template, cover })
+		end
+	end
+	if #worn == 0 then
+		return
+	end
+	local half = part.Size / 2
+	for _ = 1, rng:NextInteger(3, 5) do
+		local template, cover = table.unpack(worn[rng:NextInteger(1, #worn)])
+		local _, x, y, width, edge, outer = table.unpack(cover)
+		-- A wedge's triangles are its Left and Right faces, so it is thin along X; a block is thin along Z.
+		local wedge = rng:NextNumber() < 0.5
+		local a, b = rng:NextNumber(0.3, SCRAP_MAX), rng:NextNumber(0.3, SCRAP_MAX)
+		local scrap = Instance.new(if wedge then "WedgePart" else "Part") :: BasePart
+		scrap.Name = "GoreScrap"
+		scrap.Size = if wedge then Vector3.new(0.05, a, b) else Vector3.new(a, b, 0.05)
+		scrap.Color = SCRAP_COLOR
+		scrap.Material = Enum.Material.Fabric
+		scrap.Massless = true
+		scrap.CanCollide = false
+		scrap.CanQuery = false
+		scrap.CanTouch = false
+		scrap.CastShadow = false
+		local offsetU = (x + rng:NextNumber() * (width - SCRAP_MAX * PIXELS_PER_STUD)) / PIXELS_PER_STUD
+		for _, face in if wedge then { Enum.NormalId.Left, Enum.NormalId.Right } else { Enum.NormalId.Front, Enum.NormalId.Back } do
+			local texture = Instance.new("Texture")
+			texture.Face = face
+			texture.Texture = template
+			texture.Color3 = SCRAP_TINT
+			texture.StudsPerTileU = TILE_U
+			texture.StudsPerTileV = TILE_V
+			texture.OffsetStudsU = offsetU
+			texture.OffsetStudsV = y / PIXELS_PER_STUD
+			texture.Parent = scrap
+		end
+		-- On the front, the back or (an arm or a leg) the outer side, never a side pressed against the torso or the other leg;
+		-- near the joint end, 0.05-0.15 studs out, turned at random about the side's normal.
+		local pick = rng:NextInteger(1, if outer == 0 then 2 else 3)
+		local side = if pick == 1 then Vector3.zAxis elseif pick == 2 then -Vector3.zAxis else Vector3.xAxis * outer
+		local across = if side.X ~= 0 then Vector3.zAxis else Vector3.xAxis
+		local at = side * (math.abs(side:Dot(half)) + rng:NextNumber(0.05, 0.15))
+			+ Vector3.yAxis * (edge * half.Y * rng:NextNumber(0.45, 0.85))
+			+ across * (across:Dot(half) * rng:NextNumber(-0.6, 0.6))
+		local place = CFrame.lookAt(at, at + side)
+			* CFrame.Angles(0, 0, rng:NextNumber(0, 2 * math.pi))
+			* CFrame.Angles(0, if wedge then math.pi / 2 else 0, 0) -- the thin axis along the normal
+		scrap.CFrame = part.CFrame * place
+		local joint = Instance.new("Weld")
+		joint.Part0 = part
+		joint.Part1 = scrap
+		joint.C0 = place
+		joint.Parent = scrap
+		scrap.Parent = parent
+	end
+end
+
 function Flesh.dress(body: Model, key: string)
 	local part = LabConfig.limbParts(body, key)[1]
 	local setName, skip = setOf(body, key)
@@ -112,6 +201,7 @@ function Flesh.dress(body: Model, key: string)
 	local folder = Instance.new("Folder")
 	folder.Name = FOLDER
 	weld(setNamed(key, setName), part, CFrame.identity, folder, skip)
+	scraps(body, key, part, folder)
 	local old = part:FindFirstChild(FOLDER)
 	if old then
 		old:Destroy()

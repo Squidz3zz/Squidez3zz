@@ -24,9 +24,18 @@
 --   F-H no pieces  with ServerStorage.Gore.Pieces renamed (always put back): a torn LeftArm stays skin (visible, no pieces), an
 --                  arm already wearing its flesh keeps it when it breaks, and the output has the warning about the missing set
 --                  (Integrity warns once per server, so it may come from an earlier run in the same playtest)
+--   F-I scraps     a body wearing a Shirt has its LeftArm torn: its GoreFlesh holds 3-5 GoreScrap parts beside the exact
+--                  variant set, each thin (0.05 one way, 0.3-0.7 the others), welded to the arm, massless, not colliding,
+--                  queried or touched, its centre in the arm's top 35% and 0.05-0.15 studs outside its surface (never on the
+--                  inner side, against the torso), with
+--                  Textures showing the ShirtTemplate. The intact torso (also under the Shirt) gets none
+--   F-J bare       no clothing, or a Shirt with an empty template: a torn LeftArm gets no scraps and wears exactly its set
+--   F-K severed    a severed LeftArm (SEVER_CHANCE 1) on a clothed body flies off with its scraps still welded to it; the
+--                  Torso, with the stub, gets none
+--   F-L level 1    with GORE_LEVEL 1 a clothed torn LeftArm gets no scraps
 -- Every case runs (one failing does not stop the rest); the error lists each case's result. It removes its bodies and
 -- corpses, and returns "PASS gore_flesh".
-local CASE = "all" -- or one letter, "A" to "H"
+local CASE = "all" -- or one letter, "A" to "L"
 
 local CollectionService = game:GetService("CollectionService")
 local LogService = game:GetService("LogService")
@@ -362,8 +371,114 @@ cases.H = function()
 	assert(warned, "F-H: the output has no warning about the missing pieces")
 end
 
+local SHIRT = "rbxassetid://10625577147" -- the user's suit
+local function clothe(body: Model, template: string): Shirt
+	local shirt = Instance.new("Shirt")
+	shirt.ShirtTemplate = template
+	shirt.Parent = body
+	return shirt
+end
+local function scrapsOf(root: Instance?): { BasePart }
+	local list = {}
+	for _, thing in if root then root:GetDescendants() else {} do
+		if thing:IsA("BasePart") and thing.Name == "GoreScrap" then
+			table.insert(list, thing)
+		end
+	end
+	return list
+end
+local function weldedTo(scrap: BasePart, part: BasePart): boolean
+	for _, joint in scrap:GetChildren() do
+		if joint:IsA("Weld") and joint.Part0 == part and joint.Part1 == scrap then
+			return true
+		end
+	end
+	return false
+end
+
+-- F-I scraps on a torn sleeve.
+cases.I = function()
+	local body = newBody()
+	local shirt = clothe(body, SHIRT)
+	gore("damageLimb", body, "LeftArm", 50, "hit")
+	task.wait()
+	local arm = body["Left Arm"]
+	local scraps = scrapsOf(arm:FindFirstChild("GoreFlesh"))
+	assert(#scraps >= 3 and #scraps <= 5, "F-I: expected 3-5 scraps in the arm's GoreFlesh, found " .. #scraps)
+	assert(#scrapsOf(arm) == #scraps, "F-I: a scrap sits outside GoreFlesh")
+	wears(arm, "LeftArm", "Variant" .. body:GetAttribute("GoreVariant_LeftArm"), "F-I")
+	for i, scrap in scraps do
+		local label = "F-I scrap " .. i
+		local size = { scrap.Size.X, scrap.Size.Y, scrap.Size.Z }
+		table.sort(size)
+		assert(math.abs(size[1] - 0.05) < 0.01 and size[2] >= 0.29 and size[3] <= 0.71, label .. " has size " .. tostring(scrap.Size))
+		assert(weldedTo(scrap, arm), label .. " is not welded to the arm")
+		assert(scrap.Massless and not scrap.Anchored and not scrap.CanCollide and not scrap.CanQuery and not scrap.CanTouch, label .. " should be massless, unanchored and not collide, query or touch")
+		local textures = scrap:GetChildren()
+		local shown = 0
+		for _, texture in textures do
+			if texture:IsA("Texture") then
+				assert(texture.Texture == shirt.ShirtTemplate, label .. " shows " .. texture.Texture)
+				shown += 1
+			end
+		end
+		assert(shown == 2, label .. " should have a Texture on each large face, has " .. shown)
+		local at = arm.CFrame:PointToObjectSpace(scrap.Position)
+		assert(at.Y >= arm.Size.Y / 2 - 0.35 * arm.Size.Y, ("%s is at %.2f along the arm, below its top 35%%"):format(label, at.Y))
+		local out = math.max(math.abs(at.X) - arm.Size.X / 2, math.abs(at.Z) - arm.Size.Z / 2)
+		assert(out >= 0.04 and out <= 0.16, ("%s is %.2f studs outside the arm"):format(label, out))
+		assert(at.X < arm.Size.X / 2, label .. " is on the arm's inner side, against the torso")
+	end
+	assert(#scrapsOf(body.Torso) == 0, "F-I: the intact torso got scraps")
+end
+
+-- F-J no clothing, or an empty template.
+cases.J = function()
+	for _, template in { false, "" } do
+		local body = newBody()
+		if template then
+			clothe(body, template)
+		end
+		gore("damageLimb", body, "LeftArm", 50, "hit")
+		task.wait()
+		assert(#scrapsOf(body) == 0, "F-J: a bare arm got scraps (template " .. tostring(template) .. ")")
+		wears(body["Left Arm"], "LeftArm", "Variant" .. body:GetAttribute("GoreVariant_LeftArm"), "F-J")
+	end
+end
+
+-- F-K the scraps fly off with a severed arm.
+cases.K = function()
+	withOverrides({ SEVER_CHANCE = 1 }, function()
+		local body = newBody()
+		clothe(body, SHIRT)
+		local arm = body["Left Arm"]
+		gore("damageLimb", body, "LeftArm", 150, "explosion")
+		assert(body:GetAttribute("Gore_LeftArm") == "Severed" and not arm:IsDescendantOf(body), "F-K: SEVER_CHANCE 1 should sever the left arm")
+		task.wait()
+		local scraps = scrapsOf(arm)
+		assert(#scraps >= 3 and #scraps <= 5, "F-K: the flying arm has " .. #scraps .. " scraps")
+		for _, scrap in scraps do
+			assert(weldedTo(scrap, arm), "F-K: a scrap came loose from the flying arm")
+		end
+		assert(#stubsOf(body, "LeftArm") == 1, "F-K: expected the stub on the Torso")
+		assert(#scrapsOf(body.Torso) == 0, "F-K: the Torso (with the stub) got scraps")
+	end)
+end
+
+-- F-L level 1.
+cases.L = function()
+	withOverrides({ GORE_LEVEL = 1 }, function()
+		local body = newBody()
+		clothe(body, SHIRT)
+		gore("damageLimb", body, "LeftArm", 50, "hit")
+		task.wait()
+		assert(body:GetAttribute("Gore_LeftArm") == "Torn", "F-L: the arm should still tear at level 1")
+		assert(#scrapsOf(body) == 0, "F-L: level 1 made scraps")
+	end)
+end
+
 local results = {}
-for _, name in if CASE == "all" then { "A", "B", "C", "D", "E", "F", "G", "H" } else { CASE } do
+for _, name in if CASE == "all" then { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L" } else { CASE } do
 	local ok, err = pcall(cases[name])
 	table.insert(results, "F-" .. name .. " " .. (if ok then "ok" else "FAIL: " .. tostring(err)))
 end
@@ -382,4 +497,4 @@ for _, line in results do
 end
 assert(#failed == 0, table.concat(results, " | "))
 assert(#problems == 0, "Gore complained: " .. table.concat(problems, " | "))
-return "PASS gore_flesh (F-A to F-H)"
+return "PASS gore_flesh (F-A to F-L)"
