@@ -151,10 +151,6 @@ Don't touch WelderPart or NukeRocketLauncher; the user is checking them.
   4. Kill each collected body with `Gore.hurt(body, math.huge)`.
   5. On the next Heartbeat, push every corpse (in `Workspace.Corpses`) with a part within `BlastRadius`: set each of its parts' `AssemblyLinearVelocity += unit(part.Position - Position) * BLAST_PUSH * (1 - d / BlastRadius)`.
 - ExplosionReplacer keeps its current boom behaviour for visible explosions. `Gore.roblox` runs for every Explosion, visible or not.
-- Produces: blast zones in `Integrity.explode`.
-  - On each body, find the limb nearest the blast. Damage only the limbs in that limb's zone: legs = {LeftLeg, RightLeg}, upper = {Torso, Head, LeftArm, RightArm}.
-  - The falloff is unchanged. Put the zones in one table in Integrity.
-  - Update gore_integrity cases that relied on a leg blast hitting the torso, if any.
 
 - [ ] **Step 1: Write `tests/gore_explosions.server.luau`.** Each case uses a tracked R6 test body standing on a test floor, with an `Instance.new("Explosion")` parented to Workspace.
   - **E-A:** an Explosion 2 studs from the body with the defaults (BlastRadius 4, DestroyJointRadiusPercent 1):
@@ -166,12 +162,6 @@ Don't touch WelderPart or NukeRocketLauncher; the user is checking them.
   - **E-C:** an existing corpse 3 studs from an Explosion has its limbs damaged further and is pushed.
   - **E-D:** `GoreHit` is set on each body that had a limb hit.
   - **E-E:** at GORE_LEVEL 0, every body's Motor6Ds or sockets are still in place after an E-A blast.
-  - **E-F (zones):** `Gore.explode` 1 stud below the feet with power 150 and radius 6 leaves:
-    - Torso, Head, LeftArm and RightArm Intact at 100;
-    - `GoreTorsoOpen` false;
-    - health above 0;
-    - at least one leg Torn or worse.
-  - **E-G (zones):** `Gore.explode` at the LeftArm leaves both legs Intact at 100.
 - [ ] **Step 2: Run it.** Expected: FAIL. A Roblox Explosion snaps the joints and limbs fly plain.
 - [ ] **Step 3: Implement.**
 - [ ] **Step 4: Run** gore_explosions, the boom tests (A-1/B/A-2, X, Y, C-1/C/C-2), gore_ragdoll, gore_aim and lab_inject A. Expected: PASS. Take one capture of a corpse thrown by an Explosion and describe it.

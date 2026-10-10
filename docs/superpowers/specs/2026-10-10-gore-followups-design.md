@@ -131,17 +131,6 @@ take.
   `Explosion.Hit` handler does.
 - Leaves its BlastPressure physics alone, so bodies are still shoved.
 
-**Blast zones** (the user's rule, 2026-10-10: blowing off the legs must not affect the parts above them):
-- Every body has two zones:
-  - **legs:** LeftLeg and RightLeg.
-  - **upper:** Torso, Head, LeftArm and RightArm.
-- `Gore.explode` damages, on each body, only the limbs in the same zone as the limb nearest the blast. The falloff is unchanged.
-- A blast at the feet can tear, break or sever one or both legs. It never touches the arms, torso or head, so it never opens the
-  torso and never kills through the instant-death rule. Bleeding from the open legs still applies.
-- A blast at the upper body can still spread across the arms, torso and head, but never to the legs.
-- The joint-radius kill above still applies: a body whose Torso is within `BlastRadius * DestroyJointRadiusPercent` dies,
-  whichever zone the limb damage went to.
-
 After the blast:
 - Death from a blast always ragdolls (the gore death).
 - Right after, the corpse's parts get a push away from the blast, and so does every other corpse within the radius. The push
