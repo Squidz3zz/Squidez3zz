@@ -1,7 +1,7 @@
 # Gore follow-ups: aimed injections, instant deaths, cloth scraps, colliding limbs, no-bone legs
 
 An addition to `2026-10-08-gore-system-design.md` (the "gore spec"). Everything there still holds unless this file says otherwise.
-Approved section by section with the user on 2026-10-10.
+Approved section by section with the user on 2026-10-10 (sections 1-5, then 6-8 after their multiplayer tests).
 
 ## What the user asked for
 
@@ -71,6 +71,93 @@ an arm also hits the torso with about 84, which tears it; a second injection des
 - Both unsupporting, in any mix: `GoreDowned` and the crawl, as two broken legs do today.
 - Variant2 legs (with bone) and Intact legs support. The no-bone leg variants stay in the game.
 
+## 6. External damage lands where it hit (added 2026-10-10 after the user's multiplayer tests)
+
+There are two kinds of damage:
+- **Internal:** the game's own mechanic, Bob's injections. They hit only the injected limb (section 1).
+- **External:** everything else (weapons, explosions, falls, scripts). Covered by sections 6-8.
+
+Causes found in the code:
+- A weapon's `Humanoid:TakeDamage` only tells the server "health dropped by N", not where. So the big-hit watcher picks a
+  random limb, and only for drops of 30 or more.
+- Resetting drops health to 0, which counts as a 100 hit, so a random limb tears.
+
+### `Gore.hit(part, damage)`
+New and server-only, for the user's own weapons, called in place of `TakeDamage`:
+- `part` is the exact part hit. An accessory's Handle, or any part welded under a limb, is traced back to that limb. A part
+  not on a tracked body does nothing.
+- The body loses `damage` health through `Gore.hurt`, so the watcher does not count it twice. A body that is already dead
+  loses no health; a corpse still takes the limb damage.
+- That limb, and only that limb, takes `damage * HIT_SCALE` integrity, with cause "hit".
+- RECOVERY.md documents it with a server example (raycast and Touched). It also says never to call TakeDamage as well, and
+  that a client weapon must go through a RemoteEvent the server validates.
+
+### Unknown hits
+These are any other health drop not made by the gore system. The limb is chosen in this order:
+1. During or just after a fall (the existing window): both legs, as today.
+2. Otherwise, the limb most recently touched (within 0.2 s) by a part that is not anchored, not grounded and not part of the
+   same body. This catches projectiles, thrown things and another character's held tool.
+3. Otherwise, the Torso.
+
+The limb is never random. There is no minimum any more: every drop counts, so BIG_HIT is removed.
+
+### Toughness ("Tough", the user's choice)
+- New GoreConfig `HIT_SCALE = 0.5`, so a limb loses half the damage.
+- A 30-damage hit takes 15: flesh shows on the 3rd hit and the limb breaks around the 7th.
+- A 100-damage sniper hit takes 50, which tears the limb in one.
+- Falls use it too.
+
+### Severing
+Only explosions roll SEVER_CHANCE. A hit that breaks a limb leaves it Broken (dangling); a hit never drops a limb off plain.
+
+### Reset
+- A client script sets `StarterGui:SetCore("ResetButtonCallback", ...)` to fire a RemoteEvent.
+- The server kills that player's own living character through `Gore.hurt`, with no limb damage.
+- The ragdoll and death screen run as usual.
+- The server only acts on the sender's own character, and only while it is alive.
+
+### Dead bodies
+`Gore.hit` and explosions still damage a corpse's limbs: flesh, dangling, and severing by explosions. There is no health to
+take.
+
+## 7. Explosions (external)
+
+`ExplosionReplacer` already adds the user's boom to every server Explosion. Now, the moment one is added, it also:
+- Sets its `DestroyJointRadiusPercent` to 0, so Roblox never snaps joints: no plain limbs flying, no head knocked off.
+- Runs `Gore.explode(position, power, BlastRadius)`, with `power = EXPLOSIVE_POWER * clamp(BlastPressure / 500000, 0.3, 2)`.
+  Limbs near it tear, show flesh, break, or sever by chance, with chunks and spray.
+- Keeps the kill Roblox would have done. A living body whose Torso is within `BlastRadius * DestroyJointRadiusPercent` (the
+  maker's original value) dies through `Gore.hurt`. Other bodies take only the limb damage, plus whatever the maker's own
+  `Explosion.Hit` handler does.
+- Leaves its BlastPressure physics alone, so bodies are still shoved.
+
+After the blast:
+- Death from a blast always ragdolls (the gore death).
+- Right after, the corpse's parts get a push away from the blast, and so does every other corpse within the radius. The push
+  is a velocity of `BLAST_PUSH * (1 - d / radius)`, with a new GoreConfig `BLAST_PUSH = 60` (tuned by eye). So whole
+  ragdolls are thrown, not limbs.
+- Corpses take the blast's limb damage too.
+- Bob's injections stay aimed (section 1) and never make an Explosion.
+
+## 8. Blood on every external hit
+
+- Every external hit sets the attribute `GoreHit` on the body. That covers `Gore.hit`, an unknown hit, an explosion's limb
+  hit and a fall.
+- The value is `"<Limb>|<damage>|<n>"`. `n` counts up, so two equal hits still change the attribute.
+- GoreClient watches `GoreHit` on every GoreBody and spurts blood from that limb, aimed away from the body, sized by damage:
+
+  | Damage | Blood |
+  |---|---|
+  | under 20 | a small puff and a drip |
+  | 20-60 | a short spray and a splat |
+  | over 60 | a full Task 8 spray with splats |
+
+- The same splat cap, timers and gore-level rules apply. Level 0 gets a small plain spurt and no splats.
+- No new RemoteEvent: attributes replicate to every player.
+- Bob's injections keep their own blood burst and do not set `GoreHit`.
+- Parked for the user's next update, not built now: new bleeding particles based on the user's YouTube reference
+  (https://www.youtube.com/watch?v=c92Al_PPr7M).
+
 ## Testing
 
 - Aimed injection: an arm injection leaves the torso, head and other limbs at 100 integrity and Intact; the copy and owner
@@ -83,7 +170,22 @@ an arm also hits the torso with about 84, which tears it; a second injection des
 - Collider: a dangling arm of a body lying on the floor rests on the floor, not inside it.
 - Legs: one Variant1 torn leg limps and does not crawl; two Variant1 legs, or Variant1 + Broken, are downed; a Variant2 leg
   alone changes nothing.
-- The existing gore, lab and boom tests are updated where they assumed the radius blast (lab_gore, lab_inject).
+- Gore.hit:
+  - 30-damage hits on a torso part leave the torso Intact, then Intact, then Torn; no other limb changes.
+  - An accessory Handle maps to its limb.
+  - Health drops by exactly the damage.
+  - A corpse's limb still takes the damage.
+- Unknown hits: a TakeDamage with a projectile touching the left leg damages the left leg. With nothing touching, the Torso.
+- Reset: no limb changes state, and the body ragdolls.
+- Explosions: a default Roblox Explosion next to a body:
+  - leaves every Motor6D or socket in place (no plain flung limbs);
+  - tears the nearest limbs;
+  - kills a body inside the maker's joint radius and ragdolls it;
+  - pushes its corpse away.
+- Blood: an external hit sets GoreHit, and the client spurts from that limb.
+- Update the existing tests that assumed:
+  - the radius blast for injections (lab_gore, lab_inject);
+  - the big-hit watcher's random limb and 30 minimum (gore_integrity).
 
 ## Out of scope
 
